@@ -11,6 +11,7 @@
     "convex:deploy": "convex deploy"
   },
   "dependencies": {
+    "@convex-dev/auth": "^0.0.94",
     "@mantine/core": "^7.13.0",
     "@mantine/hooks": "^7.13.0",
     "cheerio": "^1.0.0",

@@ -1,7 +1,22 @@
+import { authTables } from '@convex-dev/auth/server'
 import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
 
 export default defineSchema({
+  ...authTables,
+
+  userProfiles: defineTable({
+    tokenIdentifier: v.string(),
+    name: v.string(),
+    email: v.union(v.string(), v.null()),
+    fantasyProsSessionCookie: v.union(v.string(), v.null()),
+    fantasyProsUsername: v.union(v.string(), v.null()),
+    fantasyProsConnectedAt: v.union(v.number(), v.null()),
+    fantasyProsEnabled: v.boolean(),
+    role: v.union(v.literal('super-admin'), v.literal('user')),
+    createdAt: v.number(),
+  }).index('by_token_identifier', ['tokenIdentifier']),
+
   projections: defineTable({
     position: v.union(
       v.literal('QB'),

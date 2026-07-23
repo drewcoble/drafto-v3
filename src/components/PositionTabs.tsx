@@ -4,9 +4,10 @@ import { POSITIONS, type Position, type TabValue } from "../types";
 interface PositionTabsProps {
   value: TabValue;
   onChange: (tab: TabValue) => void;
+  showScraperTab: boolean;
 }
 
-export function PositionTabs({ value, onChange }: PositionTabsProps) {
+export function PositionTabs({ value, onChange, showScraperTab }: PositionTabsProps) {
   return (
     <Tabs
       value={value}
@@ -27,7 +28,7 @@ export function PositionTabs({ value, onChange }: PositionTabsProps) {
             {pos}
           </Tabs.Tab>
         ))}
-        <Tabs.Tab value="scraper">Scraper</Tabs.Tab>
+        {showScraperTab && <Tabs.Tab value="scraper">Scraper</Tabs.Tab>}
       </Tabs.List>
     </Tabs>
   );
