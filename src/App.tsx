@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Container, Title, Stack, Center, Loader, Text, Button, Group } from "@mantine/core";
+import {
+  Container,
+  Title,
+  Stack,
+  Center,
+  Loader,
+  Text,
+  Button,
+  Group,
+} from "@mantine/core";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useMutation, useQuery } from "convex/react";
@@ -19,7 +28,10 @@ export default function App() {
   const currentUser = useQuery(api.users.getCurrentUser);
   const canRunScraper = currentUser?.role === "super-admin";
   const showScraperTab = isAuthenticated;
-  const configuredSuperAdminEmails = useMemo(() => getConfiguredSuperAdminEmails(), []);
+  const configuredSuperAdminEmails = useMemo(
+    () => getConfiguredSuperAdminEmails(),
+    [],
+  );
   const week = "draft";
 
   useEffect(() => {
@@ -59,7 +71,8 @@ export default function App() {
         </Group>
         {!canRunScraper && isAuthenticated && (
           <Text c="dimmed" size="sm">
-            The scraper tab is available to signed-in users. Running it requires super-admin access.
+            The scraper tab is available to signed-in users. Running it requires
+            super-admin access.
           </Text>
         )}
         <PositionTabs

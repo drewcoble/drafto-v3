@@ -69,7 +69,11 @@ async function authenticateWithFantasyPros(auth: FantasyAuth | undefined) {
     auth?.password?.trim() || processEnv?.FANTASYPROS_PASSWORD?.trim();
 
   if (!username || !password) {
-    return { cookieHeader: "", success: false, reason: "No credentials provided" };
+    return {
+      cookieHeader: "",
+      success: false,
+      reason: "No credentials provided",
+    };
   }
 
   const payloads: Array<Array<[string, string]>> = [
@@ -119,7 +123,11 @@ async function authenticateWithFantasyPros(auth: FantasyAuth | undefined) {
     }
   }
 
-  return { cookieHeader: "", success: false, reason: "FantasyPros login did not return a session cookie" };
+  return {
+    cookieHeader: "",
+    success: false,
+    reason: "FantasyPros login did not return a session cookie",
+  };
 }
 
 async function fetchFantasyProsPage(
@@ -133,7 +141,12 @@ async function fetchFantasyProsPage(
     ? { cookieHeader: sessionCookie, success: true }
     : await authenticateWithFantasyPros(auth);
 
-  if (auth?.username || auth?.password || processEnv?.FANTASYPROS_USERNAME || processEnv?.FANTASYPROS_PASSWORD) {
+  if (
+    auth?.username ||
+    auth?.password ||
+    processEnv?.FANTASYPROS_USERNAME ||
+    processEnv?.FANTASYPROS_PASSWORD
+  ) {
     if (!authResult.success) {
       throw new Error(
         authResult.reason ||
@@ -258,15 +271,18 @@ export const scrapePosition = action({
   ): Promise<{ upserted: number; removed: number }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error('Please sign in before scraping.');
+      throw new Error("Please sign in before scraping.");
     }
 
     const urlPosition = args.position.toLowerCase();
     const url = `${BASE_URL}/${urlPosition}.php?week=${args.week}`;
 
-    const currentUser = await ctx.runQuery(api.users.getCurrentUserForScrape, {});
-    if (currentUser?.role !== 'super-admin') {
-      throw new Error('Only super-admins can run the scraper.');
+    const currentUser = await ctx.runQuery(
+      api.users.getCurrentUserForScrape,
+      {},
+    );
+    if (currentUser?.role !== "super-admin") {
+      throw new Error("Only super-admins can run the scraper.");
     }
 
     const auth = currentUser?.fantasyProsSessionCookie
@@ -301,12 +317,15 @@ export const scrapeAllPositions = action({
   handler: async (ctx, args): Promise<void> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error('Please sign in before scraping.');
+      throw new Error("Please sign in before scraping.");
     }
 
-    const currentUser = await ctx.runQuery(api.users.getCurrentUserForScrape, {});
-    if (currentUser?.role !== 'super-admin') {
-      throw new Error('Only super-admins can run the scraper.');
+    const currentUser = await ctx.runQuery(
+      api.users.getCurrentUserForScrape,
+      {},
+    );
+    if (currentUser?.role !== "super-admin") {
+      throw new Error("Only super-admins can run the scraper.");
     }
 
     const positions = ["QB", "RB", "WR", "TE", "DST"] as const;

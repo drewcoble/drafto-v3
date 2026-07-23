@@ -1,13 +1,6 @@
 import { useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
-import {
-  Alert,
-  Button,
-  Group,
-  Stack,
-  Text,
-  TextInput,
-} from "@mantine/core";
+import { Alert, Button, Group, Stack, Text, TextInput } from "@mantine/core";
 import { api } from "../../convex/_generated/api";
 
 interface ScraperPanelProps {
@@ -51,11 +44,13 @@ export function ScraperPanel({ week }: ScraperPanelProps) {
     <Stack gap="md" py="sm">
       <Text c="dimmed">
         Pull fresh projection data for QB, RB, WR, TE, and DST from FantasyPros.
-        Store your FantasyPros session cookie here and the signed-in account will reuse it for future scrapes.
+        Store your FantasyPros session cookie here and the signed-in account
+        will reuse it for future scrapes.
       </Text>
       {!canAccessScraper && (
         <Alert color="yellow" variant="light">
-          Running the scraper requires super-admin access. Update your role in the Convex dashboard.
+          Running the scraper requires super-admin access. Update your role in
+          the Convex dashboard.
         </Alert>
       )}
       {currentUser && (
@@ -76,17 +71,27 @@ export function ScraperPanel({ week }: ScraperPanelProps) {
               await saveConnection({
                 sessionCookie,
                 ...(currentUser?.email ? { username: currentUser.email } : {}),
-              })
-              setStatus({ kind: "success", message: "FantasyPros connection saved for this account." })
+              });
+              setStatus({
+                kind: "success",
+                message: "FantasyPros connection saved for this account.",
+              });
             } catch (error) {
-              const message = error instanceof Error ? error.message : "Unable to save the connection.";
-              setStatus({ kind: "error", message })
+              const message =
+                error instanceof Error
+                  ? error.message
+                  : "Unable to save the connection.";
+              setStatus({ kind: "error", message });
             }
           }}
         >
           Save FantasyPros connection
         </Button>
-        <Button onClick={handleRun} loading={isRunning} disabled={!canAccessScraper}>
+        <Button
+          onClick={handleRun}
+          loading={isRunning}
+          disabled={!canAccessScraper}
+        >
           Run scraper
         </Button>
       </Group>

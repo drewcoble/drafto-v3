@@ -7,7 +7,11 @@ interface PositionTabsProps {
   showScraperTab: boolean;
 }
 
-export function PositionTabs({ value, onChange, showScraperTab }: PositionTabsProps) {
+export function PositionTabs({
+  value,
+  onChange,
+  showScraperTab,
+}: PositionTabsProps) {
   return (
     <Tabs
       value={value}
