@@ -3,12 +3,13 @@ import { api } from './_generated/api'
 
 const crons = cronJobs()
 
-// Re-scrape draft projections for all positions once a day.
-// Adjust `week` to a specific week number ("1", "2", ...) once the season starts.
-crons.daily(
-  'scrape draft projections',
-  { hourUTC: 12, minuteUTC: 0 },
-  api.scrape.scrapeAllPositions,
+// Refetch draft projections + players/rankings/news/injuries/player-points
+// once a day. Adjust `week` to a specific week number ("1", "2", ...) once
+// the season starts.
+crons.cron(
+  'fetch draft data',
+  '0 12 * * *',
+  api.fetchAllData.fetchAll,
   { week: 'draft' },
 )
 

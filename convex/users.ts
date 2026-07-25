@@ -1,5 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { Doc, Id } from "./_generated/dataModel";
+import { MutationCtx, QueryCtx } from "./_generated/server";
 
 const processEnv = (
   globalThis as typeof globalThis & {
@@ -33,14 +36,11 @@ function getAllowedSuperAdminEmails(overrideEmails?: string[] | null) {
 }
 
 function getRoleForIdentity(
-  identity: { email?: string | null },
-  existingRole?: string | null,
+  email: string | null | undefined,
+  existingRole: string | null | undefined,
   overrideEmails?: string[] | null,
-  profileEmail?: string | null,
 ) {
-  const normalizedEmail = normalizeEmail(
-    identity.email ?? profileEmail ?? null,
-  );
+  const normalizedEmail = normalizeEmail(email);
   const allowedEmails = getAllowedSuperAdminEmails(overrideEmails);
 
   if (allowedEmails.includes(normalizedEmail)) {
@@ -52,22 +52,42 @@ function getRoleForIdentity(
     : ("user" as const);
 }
 
-async function getAuthUserEmail(ctx: any, tokenIdentifier: string) {
-  const authUser = await ctx.db
-    .query("users")
-    .filter((q: any) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
-    .first();
-  return authUser?.email ?? null;
+// The users table (from authTables) is the source of truth for email/name.
+// The JWT identity itself carries no email/name claims (no jwt.customClaims
+// configured in convex/auth.ts), so identity.email/identity.name are never
+// populated - always read profile fields off the users row instead.
+async function getAuthUser(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+): Promise<Doc<"users"> | null> {
+  return await ctx.db.get(userId);
 }
 
+// identity.tokenIdentifier embeds a session id that rotates on every sign-in
+// (@convex-dev/auth JWT `sub` is `${userId}|${sessionId}`), so it cannot key
+// long-lived profile data. userId (from getAuthUserId) is the stable anchor;
+// the tokenIdentifier/email lookups below are legacy fallbacks for profiles
+// created before userId was tracked, and self-heal via the patch in callers.
 async function getCurrentUserDoc(
-  ctx: any,
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
   tokenIdentifier: string,
   email?: string | null,
 ) {
+  const byUserId = await ctx.db
+    .query("userProfiles")
+    .withIndex("by_user_id", (q) => q.eq("userId", userId))
+    .unique();
+
+  if (byUserId) {
+    return byUserId;
+  }
+
   const byTokenIdentifier = await ctx.db
     .query("userProfiles")
-    .filter((q: any) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
+    .withIndex("by_token_identifier", (q) =>
+      q.eq("tokenIdentifier", tokenIdentifier),
+    )
     .first();
 
   if (byTokenIdentifier) {
@@ -77,7 +97,7 @@ async function getCurrentUserDoc(
   if (email) {
     const byEmail = await ctx.db
       .query("userProfiles")
-      .filter((q: any) => q.eq(q.field("email"), email))
+      .withIndex("by_email", (q) => q.eq("email", email))
       .first();
 
     if (byEmail) {
@@ -91,13 +111,23 @@ async function getCurrentUserDoc(
 export const getCurrentUser = query({
   args: {},
   handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return null;
+    }
+
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       return null;
     }
 
-    const authEmail = await getAuthUserEmail(ctx, identity.tokenIdentifier);
-    return await getCurrentUserDoc(ctx, identity.tokenIdentifier, authEmail);
+    const authUser = await getAuthUser(ctx, userId);
+    return await getCurrentUserDoc(
+      ctx,
+      userId,
+      identity.tokenIdentifier,
+      authUser?.email ?? null,
+    );
   },
 });
 
@@ -106,36 +136,46 @@ export const ensureCurrentUser = mutation({
     allowlistedEmails: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("You must be signed in.");
+    }
+
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("You must be signed in.");
     }
 
-    const authEmail = await getAuthUserEmail(ctx, identity.tokenIdentifier);
+    const authUser = await getAuthUser(ctx, userId);
+    const email = authUser?.email ?? null;
+    const name = authUser?.name ?? email ?? "User";
+
     const existing = await getCurrentUserDoc(
       ctx,
+      userId,
       identity.tokenIdentifier,
-      authEmail,
+      email,
     );
     const role = getRoleForIdentity(
-      identity,
+      email,
       existing?.role ?? null,
       args.allowlistedEmails,
-      existing?.email ?? authEmail ?? null,
     );
 
     if (existing) {
       const needsUpdate =
-        existing.name !==
-          (identity.name ?? identity.email ?? authEmail ?? "User") ||
-        existing.email !== (identity.email ?? authEmail ?? null) ||
+        existing.userId !== userId ||
+        existing.tokenIdentifier !== identity.tokenIdentifier ||
+        existing.name !== name ||
+        existing.email !== email ||
         existing.role !== role;
 
       if (needsUpdate) {
         await ctx.db.patch(existing._id, {
+          userId,
           tokenIdentifier: identity.tokenIdentifier,
-          name: identity.name ?? identity.email ?? authEmail ?? "User",
-          email: identity.email ?? authEmail ?? null,
+          name,
+          email,
           role,
         });
       }
@@ -144,13 +184,10 @@ export const ensureCurrentUser = mutation({
     }
 
     const newUserId = await ctx.db.insert("userProfiles", {
+      userId,
       tokenIdentifier: identity.tokenIdentifier,
-      name: identity.name ?? identity.email ?? authEmail ?? "User",
-      email: identity.email ?? authEmail ?? null,
-      fantasyProsSessionCookie: null,
-      fantasyProsUsername: null,
-      fantasyProsConnectedAt: null,
-      fantasyProsEnabled: false,
+      name,
+      email,
       role,
       createdAt: Date.now(),
     });
@@ -159,16 +196,26 @@ export const ensureCurrentUser = mutation({
   },
 });
 
-export const getCurrentUserForScrape = query({
+export const getCurrentUserForDataFetch = query({
   args: {},
   handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return null;
+    }
+
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       return null;
     }
 
-    const authEmail = await getAuthUserEmail(ctx, identity.tokenIdentifier);
-    return await getCurrentUserDoc(ctx, identity.tokenIdentifier, authEmail);
+    const authUser = await getAuthUser(ctx, userId);
+    return await getCurrentUserDoc(
+      ctx,
+      userId,
+      identity.tokenIdentifier,
+      authUser?.email ?? null,
+    );
   },
 });
 
@@ -177,20 +224,25 @@ export const promoteCurrentUserToSuperAdmin = mutation({
     allowlistedEmails: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("You must be signed in.");
+    }
+
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("You must be signed in.");
     }
 
-    const authEmail = await getAuthUserEmail(ctx, identity.tokenIdentifier);
+    const authUser = await getAuthUser(ctx, userId);
+    const email = authUser?.email ?? null;
     const currentUser = await getCurrentUserDoc(
       ctx,
+      userId,
       identity.tokenIdentifier,
-      authEmail,
+      email,
     );
-    const normalizedEmail = normalizeEmail(
-      identity.email ?? currentUser?.email ?? null,
-    );
+    const normalizedEmail = normalizeEmail(email ?? currentUser?.email);
     const allowedEmails = getAllowedSuperAdminEmails(args.allowlistedEmails);
 
     if (
@@ -204,13 +256,10 @@ export const promoteCurrentUserToSuperAdmin = mutation({
 
     if (!currentUser) {
       const newUserId = await ctx.db.insert("userProfiles", {
+        userId,
         tokenIdentifier: identity.tokenIdentifier,
-        name: identity.name ?? identity.email ?? "User",
-        email: identity.email ?? null,
-        fantasyProsSessionCookie: null,
-        fantasyProsUsername: null,
-        fantasyProsConnectedAt: null,
-        fantasyProsEnabled: false,
+        name: authUser?.name ?? email ?? "User",
+        email,
         role: "super-admin",
         createdAt: Date.now(),
       });
@@ -218,65 +267,13 @@ export const promoteCurrentUserToSuperAdmin = mutation({
     }
 
     await ctx.db.patch(currentUser._id, {
+      userId,
       tokenIdentifier: identity.tokenIdentifier,
-      email: identity.email ?? authEmail ?? currentUser.email,
-      name: identity.name ?? identity.email ?? authEmail ?? currentUser.name,
+      email: email ?? currentUser.email,
+      name: authUser?.name ?? email ?? currentUser.name,
       role: "super-admin",
     });
 
     return await ctx.db.get(currentUser._id);
-  },
-});
-
-export const saveFantasyProsConnection = mutation({
-  args: {
-    sessionCookie: v.string(),
-    username: v.optional(v.string()),
-    allowlistedEmails: v.optional(v.array(v.string())),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("You must be signed in.");
-    }
-
-    const authEmail = await getAuthUserEmail(ctx, identity.tokenIdentifier);
-    const existing = await getCurrentUserDoc(
-      ctx,
-      identity.tokenIdentifier,
-      authEmail,
-    );
-    const role = getRoleForIdentity(
-      identity,
-      existing?.role ?? null,
-      args.allowlistedEmails,
-      existing?.email ?? authEmail ?? null,
-    );
-
-    if (!existing) {
-      const newUserId = await ctx.db.insert("userProfiles", {
-        tokenIdentifier: identity.tokenIdentifier,
-        name: identity.name ?? identity.email ?? authEmail ?? "User",
-        email: identity.email ?? authEmail ?? null,
-        fantasyProsSessionCookie: args.sessionCookie.trim() || null,
-        fantasyProsUsername: args.username?.trim() || null,
-        fantasyProsConnectedAt: Date.now(),
-        fantasyProsEnabled: Boolean(args.sessionCookie.trim()),
-        role,
-        createdAt: Date.now(),
-      });
-      return await ctx.db.get(newUserId);
-    }
-
-    await ctx.db.patch(existing._id, {
-      tokenIdentifier: identity.tokenIdentifier,
-      fantasyProsSessionCookie: args.sessionCookie.trim() || null,
-      fantasyProsUsername: args.username?.trim() || null,
-      fantasyProsConnectedAt: Date.now(),
-      fantasyProsEnabled: Boolean(args.sessionCookie.trim()),
-      role,
-    });
-
-    return await ctx.db.get(existing._id);
   },
 });
