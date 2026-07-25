@@ -12,22 +12,22 @@ import {
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useMutation, useQuery } from "convex/react";
-import { PositionTabs } from "./components/PositionTabs";
-import { ProjectionsTable } from "./components/ProjectionsTable";
-import { ScraperPanel } from "./components/ScraperPanel";
+import { NavTabs } from "./components/NavTabs";
+import { LeagueDetails } from "./components/LeagueDetails";
+import { PlayersTable } from "./components/PlayersTable";
+import { DataPanel } from "./components/DataPanel";
 import { AuthPanel } from "./components/AuthPanel";
 import { api } from "../convex/_generated/api";
 import { getConfiguredSuperAdminEmails } from "./lib/superAdmin";
 import type { TabValue } from "./types";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabValue>("QB");
+  const [activeTab, setActiveTab] = useState<TabValue>("players");
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { signOut } = useAuthActions();
   const ensureUser = useMutation(api.users.ensureCurrentUser);
   const currentUser = useQuery(api.users.getCurrentUser);
-  const canRunScraper = currentUser?.role === "super-admin";
-  const showScraperTab = isAuthenticated;
+  const canFetchData = currentUser?.role === "super-admin";
   const configuredSuperAdminEmails = useMemo(
     () => getConfiguredSuperAdminEmails(),
     [],
@@ -69,22 +69,15 @@ export default function App() {
             Sign out
           </Button>
         </Group>
-        {!canRunScraper && isAuthenticated && (
+        {!canFetchData && (
           <Text c="dimmed" size="sm">
-            The scraper tab is available to signed-in users. Running it requires
-            super-admin access.
+            Fetching data requires super-admin access.
           </Text>
         )}
-        <PositionTabs
-          value={activeTab}
-          onChange={setActiveTab}
-          showScraperTab={showScraperTab}
-        />
-        {activeTab === "scraper" ? (
-          <ScraperPanel week={week} />
-        ) : (
-          <ProjectionsTable position={activeTab} week={week} />
-        )}
+        <NavTabs value={activeTab} onChange={setActiveTab} />
+        {activeTab === "league" && <LeagueDetails />}
+        {activeTab === "players" && <PlayersTable week={week} />}
+        {activeTab === "data" && <DataPanel week={week} />}
       </Stack>
     </Container>
   );

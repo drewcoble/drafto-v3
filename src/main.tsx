@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import { ConvexQueryClient } from "@convex-dev/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MantineProvider } from "@mantine/core";
 import "@mantine/core/styles.css";
 import App from "./App";
@@ -17,6 +19,22 @@ if (!convexUrl) {
 
 const convex = new ConvexReactClient(convexUrl);
 
+// Lets components use TanStack Query's useQuery (via convexQuery()) for
+// Convex queries where its caching semantics - especially
+// placeholderData/isFetching - are useful, e.g. keeping a table's previous
+// results visible while its args change instead of flashing to a loading
+// state. Still backed by Convex's live/reactive subscriptions under the hood.
+const convexQueryClient = new ConvexQueryClient(convex);
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      queryKeyHashFn: convexQueryClient.hashFn(),
+      queryFn: convexQueryClient.queryFn(),
+    },
+  },
+});
+convexQueryClient.connect(queryClient);
+
 const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Root element #root not found");
@@ -25,9 +43,11 @@ if (!rootElement) {
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <ConvexAuthProvider client={convex}>
-      <MantineProvider defaultColorScheme="dark">
-        <App />
-      </MantineProvider>
+      <QueryClientProvider client={queryClient}>
+        <MantineProvider defaultColorScheme="dark">
+          <App />
+        </MantineProvider>
+      </QueryClientProvider>
     </ConvexAuthProvider>
   </React.StrictMode>,
 );
