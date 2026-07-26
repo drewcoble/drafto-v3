@@ -17,12 +17,16 @@ const API_BASE_URL = "https://api.sleeper.com";
 
 // Sleeper uses "DEF" for team defense; our schema/UI use "DST" everywhere -
 // translate only at this fetch boundary.
-export const POSITION_SLUGS: Record<"QB" | "RB" | "WR" | "TE" | "DST", string> = {
+export const POSITION_SLUGS: Record<
+  "QB" | "RB" | "WR" | "TE" | "DST" | "K",
+  string
+> = {
   QB: "QB",
   RB: "RB",
   WR: "WR",
   TE: "TE",
   DST: "DEF",
+  K: "K",
 };
 
 // Sleeper's DEF player_id is a team abbreviation string (e.g. "ARI"), not a
@@ -42,12 +46,18 @@ export const DEF_TEAM_FPIDS: Record<string, number> = Object.fromEntries(
   DEF_TEAMS.map((team, index) => [team, 90001 + index]),
 );
 
+// "projections" -> pre-game estimates (category: "proj" in the response).
+// "stats" -> actual results after games are played (category: "stat").
+// Same query shape either way, just a different path prefix.
 export async function fetchSleeper(
+  endpoint: "projections" | "stats",
   season: string,
   week: string | undefined,
   positions: string[],
 ): Promise<any> {
-  const path = week ? `/projections/nfl/${season}/${week}` : `/projections/nfl/${season}`;
+  const path = week
+    ? `/${endpoint}/nfl/${season}/${week}`
+    : `/${endpoint}/nfl/${season}`;
   const url = new URL(`${API_BASE_URL}${path}`);
   url.searchParams.set("season_type", "regular");
   for (const position of positions) {

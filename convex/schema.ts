@@ -131,6 +131,7 @@ export default defineSchema({
   // One row per draft config; only one is seeded for now, but this is
   // designed to be user-configurable per-draft later.
   draftSettings: defineTable({
+    ownerId: v.id("users"),
     name: v.string(),
     teamCount: v.number(),
     salaryCap: v.number(),
@@ -143,15 +144,89 @@ export default defineSchema({
       WR: v.number(),
       TE: v.number(),
       DST: v.number(),
+      K: v.number(),
       FLEX: v.number(),
+      SUPERFLEX: v.number(),
       BENCH: v.number(),
     }),
     // Which positions are eligible for the FLEX slot(s), e.g. ["RB","WR","TE"]
     flexPositions: v.array(positionValidator),
-    // When the actual replacement-rank player isn't in our data yet (e.g. we
-    // need RB25 but only have 10 RBs), use this % of the last available
-    // player's points instead.
-    replacementFallbackPct: v.number(),
+    // Which positions are eligible for the SUPERFLEX slot(s), e.g.
+    // ["QB","RB","WR","TE"]
+    superflexPositions: v.array(positionValidator),
     createdAt: v.number(),
-  }),
+  }).index("by_owner", ["ownerId"]),
+
+  // One team per participant in a live draft, including the owner's own team
+  // (isSelf: true) - keeping "me" as a real row makes budget math and the
+  // League tab symmetric across every team instead of special-casing one.
+  draftTeams: defineTable({
+    draftSettingsId: v.id("draftSettings"),
+    name: v.string(),
+    isSelf: v.boolean(),
+    order: v.number(),
+    createdAt: v.number(),
+  }).index("by_draft", ["draftSettingsId"]),
+
+  // A completed auction result - one row per player won. `sequence` is
+  // monotonic per draft and is the sole source of truth for "last pick"
+  // (undo) and "pick N of M"; nothing stores a running budget balance
+  // anywhere, so REMAINING is always salaryCap - sum(picks.price) and undo
+  // is a plain delete.
+  draftPicks: defineTable({
+    draftSettingsId: v.id("draftSettings"),
+    sequence: v.number(),
+    fpid: v.number(),
+    position: positionValidator,
+    teamId: v.id("draftTeams"),
+    price: v.number(),
+    // Which roster slot this fills, e.g. "RB2" - only set for the self
+    // team's picks, since only self has a budget plan to reconcile against.
+    planSlotKey: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_draft", ["draftSettingsId"])
+    .index("by_draft_sequence", ["draftSettingsId", "sequence"])
+    .index("by_draft_fpid", ["draftSettingsId", "fpid"]),
+
+  // The single live "on the block" nomination for a draft, if any. Kept as
+  // its own table rather than a field on draftSettings so that fast-changing
+  // bid-stepper clicks don't re-render every subscriber of the draftSettings
+  // row (e.g. App.tsx's league selector). At most one row per
+  // draftSettingsId.
+  draftNominations: defineTable({
+    draftSettingsId: v.id("draftSettings"),
+    fpid: v.number(),
+    position: positionValidator,
+    nominatingTeamId: v.id("draftTeams"),
+    currentBid: v.number(),
+    createdAt: v.number(),
+  }).index("by_draft", ["draftSettingsId"]),
+
+  // The self team's planned $ allocation per roster slot (keys from
+  // expandRosterSlots, e.g. "RB1"/"FLEX"/"BN3") - one row per draft, edited
+  // as a unit on the Budget tab.
+  draftBudgetPlans: defineTable({
+    draftSettingsId: v.id("draftSettings"),
+    amounts: v.record(v.string(), v.number()),
+    overspendBehavior: v.union(
+      v.literal("bench"),
+      v.literal("spread"),
+      v.literal("ask"),
+    ),
+    updatedAt: v.number(),
+  }).index("by_draft", ["draftSettingsId"]),
+
+  // A manual "target"/"avoid" annotation on a player, scoped to one draft -
+  // pure user preference, not derived from anything, so (unlike tiers) this
+  // genuinely needs to be stored rather than computed. One row per
+  // (draftSettingsId, fpid); absence of a row means "no opinion".
+  draftPlayerTags: defineTable({
+    draftSettingsId: v.id("draftSettings"),
+    fpid: v.number(),
+    tag: v.union(v.literal("target"), v.literal("avoid")),
+    updatedAt: v.number(),
+  })
+    .index("by_draft", ["draftSettingsId"])
+    .index("by_draft_fpid", ["draftSettingsId", "fpid"]),
 });

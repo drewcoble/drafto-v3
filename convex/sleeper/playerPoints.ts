@@ -1,0 +1,125 @@
+import { v } from "convex/values";
+import { action } from "../_generated/server";
+import { api } from "../_generated/api";
+import { POSITIONS } from "../positions";
+import {
+  currentSeason,
+  DEF_TEAM_FPIDS,
+  fetchSleeper,
+  POSITION_SLUGS,
+  requireSuperAdmin,
+} from "./client";
+
+type Position = (typeof POSITIONS)[number];
+
+interface SleeperStatsRecord {
+  player_id: string;
+  team: string | null;
+  stats?: Record<string, number | undefined>;
+  player?: { position?: string };
+}
+
+const SLEEPER_TO_OUR_POSITION: Record<string, Position> = {
+  QB: "QB",
+  RB: "RB",
+  WR: "WR",
+  TE: "TE",
+  DEF: "DST",
+  K: "K",
+};
+
+const WEEKS = Array.from({ length: 18 }, (_, i) => String(i + 1));
+
+/**
+ * Actual (not projected) weekly fantasy points, from Sleeper's stats
+ * endpoint (the sibling of /projections/... - same shape, category "stat").
+ * Unlike projections, there's no season-long bulk mode here, so this loops
+ * weeks 1-18, one combined-position call per week. Each call already returns
+ * all three scoring formats, so no separate per-scoring fetches are needed
+ * (unlike the FantasyPros version this replaces, which needed 3x the calls).
+ */
+export const fetchAllPlayerPoints = action({
+  args: {
+    year: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<Record<string, { inserted: number; updated: number }>> => {
+    await requireSuperAdmin(ctx);
+
+    const year = args.year ?? currentSeason();
+    const totals: Record<string, { inserted: number; updated: number }> = {};
+
+    for (const week of WEEKS) {
+      const records: SleeperStatsRecord[] = await fetchSleeper(
+        "stats",
+        year,
+        week,
+        Object.values(POSITION_SLUGS),
+      );
+
+      // Games not yet played for this week - expected, not an error.
+      if (records.length === 0) {
+        continue;
+      }
+
+      const rows: Array<{
+        fpid: number;
+        position: Position;
+        ptsStd: number;
+        ptsPpr: number;
+        ptsHalf: number;
+      }> = [];
+
+      for (const record of records) {
+        const sleeperPosition = record.player?.position;
+        if (!sleeperPosition || !(sleeperPosition in SLEEPER_TO_OUR_POSITION)) {
+          continue;
+        }
+        // Guarded by the `in` check above; noUncheckedIndexedAccess still
+        // widens the index signature's result to include `undefined`.
+        const position: Position = SLEEPER_TO_OUR_POSITION[sleeperPosition]!;
+        const fpid =
+          position === "DST"
+            ? DEF_TEAM_FPIDS[record.team ?? ""]
+            : Number(record.player_id);
+        if (!fpid) {
+          continue;
+        }
+
+        const stats = record.stats ?? {};
+        rows.push({
+          fpid,
+          position,
+          ptsStd: stats.pts_std ?? 0,
+          ptsPpr: stats.pts_ppr ?? 0,
+          ptsHalf: stats.pts_half_ppr ?? 0,
+        });
+      }
+
+      const scoringVariants: Array<{
+        scoring: "STD" | "PPR" | "HALF";
+        pick: (row: (typeof rows)[number]) => number;
+      }> = [
+        { scoring: "STD", pick: (row) => row.ptsStd },
+        { scoring: "PPR", pick: (row) => row.ptsPpr },
+        { scoring: "HALF", pick: (row) => row.ptsHalf },
+      ];
+
+      for (const { scoring, pick } of scoringVariants) {
+        const result = await ctx.runMutation(api.playerPoints.upsertPlayerPoints, {
+          season: year,
+          scoring,
+          rows: rows.map((row) => ({
+            fpid: row.fpid,
+            position: row.position,
+            week,
+            points: pick(row),
+          })),
+        });
+        const key = `week${week}-${scoring}`;
+        totals[key] = result;
+      }
+    }
+
+    return totals;
+  },
+});

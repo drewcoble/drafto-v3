@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-export const POSITIONS = ["QB", "RB", "WR", "TE", "DST"] as const;
+export const POSITIONS = ["QB", "RB", "WR", "TE", "DST", "K"] as const;
 
 export const positionValidator = v.union(
   v.literal("QB"),
@@ -8,4 +8,5 @@ export const positionValidator = v.union(
   v.literal("WR"),
   v.literal("TE"),
   v.literal("DST"),
+  v.literal("K"),
 );

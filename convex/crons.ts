@@ -3,9 +3,9 @@ import { api } from './_generated/api'
 
 const crons = cronJobs()
 
-// Refetch draft projections + players/rankings/news/injuries/player-points
-// once a day. Adjust `week` to a specific week number ("1", "2", ...) once
-// the season starts.
+// Refetch draft projections + players/rankings/injuries/player-points (all
+// Sleeper) and news (FantasyPros) once a day. Adjust `week` to a specific
+// week number ("1", "2", ...) once the season starts.
 crons.cron(
   'fetch draft data',
   '0 12 * * *',

@@ -4,8 +4,9 @@ import { api } from "./_generated/api";
 import { requireSuperAdmin } from "./fantasyPros/client";
 
 // Runs every working data-fetch across both providers. players/projections/
-// rankings come from Sleeper (see convex/sleeper/); news/injuries/player
-// points still come from FantasyPros, which works fine for those.
+// rankings/injuries/player-points all come from Sleeper (see convex/sleeper/);
+// news still comes from FantasyPros, the only remaining reason
+// FANTASYPROS_API_KEY is needed.
 export const fetchAll = action({
   args: {
     week: v.string(),
@@ -19,9 +20,7 @@ export const fetchAll = action({
       ...(args.season ? { season: args.season } : {}),
     });
     await ctx.runAction(api.fantasyPros.news.fetchNews, {});
-    await ctx.runAction(api.fantasyPros.injuries.fetchInjuries, {});
-    await ctx.runAction(api.fantasyPros.playerPoints.fetchAllPlayerPoints, {
-      scoring: "PPR",
+    await ctx.runAction(api.sleeper.playerPoints.fetchAllPlayerPoints, {
       ...(args.season ? { year: args.season } : {}),
     });
   },

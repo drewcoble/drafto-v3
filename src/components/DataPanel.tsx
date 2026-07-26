@@ -7,7 +7,7 @@ interface DataPanelProps {
   week: string;
 }
 
-type ActionKey = "projections" | "news" | "injuries" | "playerPoints";
+type ActionKey = "projections" | "news" | "playerPoints";
 
 interface ActionState {
   isRunning: boolean;
@@ -19,9 +19,8 @@ const IDLE_STATE: ActionState = { isRunning: false, status: null };
 export function DataPanel({ week }: DataPanelProps) {
   const fetchProjections = useAction(api.sleeper.projections.fetchProjections);
   const fetchNews = useAction(api.fantasyPros.news.fetchNews);
-  const fetchInjuries = useAction(api.fantasyPros.injuries.fetchInjuries);
   const fetchPlayerPoints = useAction(
-    api.fantasyPros.playerPoints.fetchAllPlayerPoints,
+    api.sleeper.playerPoints.fetchAllPlayerPoints,
   );
   const currentUser = useQuery(api.users.getCurrentUser);
   const canFetchData = currentUser?.role === "super-admin";
@@ -29,7 +28,6 @@ export function DataPanel({ week }: DataPanelProps) {
   const [states, setStates] = useState<Record<ActionKey, ActionState>>({
     projections: IDLE_STATE,
     news: IDLE_STATE,
-    injuries: IDLE_STATE,
     playerPoints: IDLE_STATE,
   });
 
@@ -44,7 +42,7 @@ export function DataPanel({ week }: DataPanelProps) {
       key: "projections",
       label: "Fetch projections",
       description:
-        "Players + season/weekly projections and ADP/rankings for QB, RB, WR, TE, and DST, from Sleeper.",
+        "Players + season/weekly projections, ADP/rankings, and injury statuses for QB, RB, WR, TE, DST, and K, from Sleeper.",
       run: () => fetchProjections({ week }),
       successMessage: `Projections refreshed for week "${week}".`,
     },
@@ -56,17 +54,11 @@ export function DataPanel({ week }: DataPanelProps) {
       successMessage: "News refreshed.",
     },
     {
-      key: "injuries",
-      label: "Fetch injuries",
-      description: "Current league-wide injury statuses.",
-      run: () => fetchInjuries({}),
-      successMessage: "Injuries refreshed.",
-    },
-    {
       key: "playerPoints",
       label: "Fetch player points",
-      description: "Actual (not projected) fantasy points scored.",
-      run: () => fetchPlayerPoints({ scoring: "PPR" }),
+      description:
+        "Actual (not projected) fantasy points scored, from Sleeper.",
+      run: () => fetchPlayerPoints({}),
       successMessage: "Player points refreshed.",
     },
   ];
@@ -99,10 +91,11 @@ export function DataPanel({ week }: DataPanelProps) {
   return (
     <Stack gap="md" py="sm">
       <Text c="dimmed">
-        Pull fresh data from Sleeper (players/projections/rankings) and
-        FantasyPros (news/injuries/player points, requires FANTASYPROS_API_KEY
-        in the Convex environment). Each button only fetches its own data, so
-        you don't need to refresh everything just to pull one update.
+        Pull fresh data from Sleeper (players/projections/rankings/injuries/
+        player points) and FantasyPros (news only, requires
+        FANTASYPROS_API_KEY in the Convex environment). Each button only
+        fetches its own data, so you don't need to refresh everything just to
+        pull one update.
       </Text>
       {!canFetchData && (
         <Alert color="yellow" variant="light">

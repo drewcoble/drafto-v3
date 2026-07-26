@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
   Badge,
@@ -17,6 +17,7 @@ import {
   Title,
 } from "@mantine/core";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { POSITIONS, type Position, type ScoringFormat } from "../types";
 
 const ROSTER_SLOT_KEYS = [
@@ -25,7 +26,9 @@ const ROSTER_SLOT_KEYS = [
   "WR",
   "TE",
   "DST",
+  "K",
   "FLEX",
+  "SUPERFLEX",
   "BENCH",
 ] as const;
 
@@ -42,7 +45,7 @@ interface SettingsForm {
   scoring: ScoringFormat;
   rosterSlots: Record<(typeof ROSTER_SLOT_KEYS)[number], number>;
   flexPositions: Position[];
-  replacementFallbackPctPercent: number; // 0-100 in the UI, stored as 0-1
+  superflexPositions: Position[];
 }
 
 const DEFAULT_FORM: SettingsForm = {
@@ -50,20 +53,82 @@ const DEFAULT_FORM: SettingsForm = {
   teamCount: 12,
   salaryCap: 200,
   scoring: "PPR",
-  rosterSlots: { QB: 1, RB: 2, WR: 2, TE: 1, DST: 1, FLEX: 1, BENCH: 8 },
+  rosterSlots: {
+    QB: 1,
+    RB: 2,
+    WR: 2,
+    TE: 1,
+    DST: 1,
+    K: 0,
+    FLEX: 1,
+    SUPERFLEX: 0,
+    BENCH: 8,
+  },
   flexPositions: ["RB", "WR", "TE"],
-  replacementFallbackPctPercent: 90,
+  superflexPositions: ["QB", "RB", "WR", "TE"],
 };
 
-export function LeagueDetails() {
+interface LeagueDetailsProps {
+  selectedLeagueId: Id<"draftSettings"> | undefined;
+  isCreatingLeague: boolean;
+  onLeagueSaved: (id: Id<"draftSettings">) => void;
+  onDoneCreating: () => void;
+}
+
+export function LeagueDetails({
+  selectedLeagueId,
+  isCreatingLeague,
+  onLeagueSaved,
+  onDoneCreating,
+}: LeagueDetailsProps) {
   const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
   const createSettings = useMutation(api.draftSettings.createDraftSettings);
   const updateSettings = useMutation(api.draftSettings.updateDraftSettings);
+  const draftTeams = useQuery(
+    api.draft.teams.listDraftTeams,
+    selectedLeagueId ? { draftSettingsId: selectedLeagueId } : "skip",
+  );
+  const initializeDraftTeams = useMutation(
+    api.draft.teams.initializeDraftTeams,
+  );
 
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<SettingsForm>(DEFAULT_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [selfName, setSelfName] = useState("Me");
+  const [opponentNames, setOpponentNames] = useState<string[]>([]);
+  const [isSavingTeams, setIsSavingTeams] = useState(false);
+  const [teamsError, setTeamsError] = useState<string | null>(null);
+
+  // Triggered by the "+ New League" option in the header dropdown, which can
+  // fire regardless of which tab is currently active.
+  useEffect(() => {
+    if (isCreatingLeague) {
+      setForm(DEFAULT_FORM);
+      setError(null);
+      setIsEditing(true);
+    }
+  }, [isCreatingLeague]);
+
+  const settings = settingsList?.find(
+    (league) => league._id === selectedLeagueId,
+  );
+
+  // Size the opponent-name inputs to this league's team count once it's
+  // known - only relevant while no teams have been set up yet.
+  useEffect(() => {
+    if (!settings || draftTeams === undefined || draftTeams.length > 0) {
+      return;
+    }
+    const opponentCount = Math.max(settings.teamCount - 1, 0);
+    setOpponentNames((current) =>
+      current.length === opponentCount
+        ? current
+        : Array.from({ length: opponentCount }, () => ""),
+    );
+  }, [settings, draftTeams]);
 
   if (settingsList === undefined) {
     return (
@@ -72,8 +137,6 @@ export function LeagueDetails() {
       </Center>
     );
   }
-
-  const settings = settingsList[0];
 
   const startEditing = () => {
     setForm(
@@ -85,9 +148,7 @@ export function LeagueDetails() {
             scoring: settings.scoring,
             rosterSlots: { ...settings.rosterSlots },
             flexPositions: [...settings.flexPositions],
-            replacementFallbackPctPercent: Math.round(
-              settings.replacementFallbackPct * 100,
-            ),
+            superflexPositions: [...settings.superflexPositions],
           }
         : DEFAULT_FORM,
     );
@@ -106,13 +167,16 @@ export function LeagueDetails() {
         scoring: form.scoring,
         rosterSlots: form.rosterSlots,
         flexPositions: form.flexPositions,
-        replacementFallbackPct: form.replacementFallbackPctPercent / 100,
+        superflexPositions: form.superflexPositions,
       };
-      if (settings) {
-        await updateSettings({ id: settings._id, ...payload });
+      if (isCreatingLeague || !settings) {
+        const newId = await createSettings(payload);
+        onLeagueSaved(newId);
       } else {
-        await createSettings(payload);
+        await updateSettings({ id: settings._id, ...payload });
+        onLeagueSaved(settings._id);
       }
+      onDoneCreating();
       setIsEditing(false);
     } catch (err) {
       setError(
@@ -120,6 +184,25 @@ export function LeagueDetails() {
       );
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveTeams = async () => {
+    if (!settings) return;
+    setIsSavingTeams(true);
+    setTeamsError(null);
+    try {
+      await initializeDraftTeams({
+        draftSettingsId: settings._id,
+        selfName,
+        opponentNames,
+      });
+    } catch (err) {
+      setTeamsError(
+        err instanceof Error ? err.message : "Failed to save teams.",
+      );
+    } finally {
+      setIsSavingTeams(false);
     }
   };
 
@@ -211,20 +294,26 @@ export function LeagueDetails() {
             </Group>
           </Chip.Group>
         </Stack>
-        <NumberInput
-          label="Replacement fallback %"
-          description="Used when the real replacement-rank player isn't in the data yet"
-          min={0}
-          max={100}
-          suffix="%"
-          value={form.replacementFallbackPctPercent}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              replacementFallbackPctPercent: Number(value) || 0,
-            })
-          }
-        />
+        <Stack gap={6}>
+          <Text size="sm" fw={500}>
+            SUPERFLEX eligible positions
+          </Text>
+          <Chip.Group
+            multiple
+            value={form.superflexPositions}
+            onChange={(value) =>
+              setForm({ ...form, superflexPositions: value as Position[] })
+            }
+          >
+            <Group gap="xs">
+              {POSITIONS.map((pos) => (
+                <Chip key={pos} value={pos}>
+                  {pos}
+                </Chip>
+              ))}
+            </Group>
+          </Chip.Group>
+        </Stack>
         {error && (
           <Text c="red" size="sm">
             {error}
@@ -236,7 +325,10 @@ export function LeagueDetails() {
           </Button>
           <Button
             variant="default"
-            onClick={() => setIsEditing(false)}
+            onClick={() => {
+              setIsEditing(false);
+              onDoneCreating();
+            }}
             disabled={isSaving}
           >
             Cancel
@@ -310,11 +402,70 @@ export function LeagueDetails() {
         FLEX eligible: {settings.flexPositions.join(", ")}
       </Text>
       <Text size="sm" c="dimmed">
-        Replacement fallback:{" "}
-        {Math.round(settings.replacementFallbackPct * 100)}% of the last
-        available player, used when the real replacement-rank player isn't in
-        the data yet
+        SUPERFLEX eligible: {settings.superflexPositions.join(", ")}
       </Text>
+      <Stack gap={6}>
+        <Text size="sm" fw={500}>
+          Draft Teams
+        </Text>
+        {draftTeams === undefined ? (
+          <Loader size="sm" />
+        ) : draftTeams.length === 0 ? (
+          <Stack gap="sm" maw={420}>
+            <Text size="sm" c="dimmed">
+              Enter your team name and the other {opponentNames.length} teams
+              in this draft before entering the Draft Room. You can rename
+              teams later.
+            </Text>
+            <TextInput
+              label="Your team name"
+              value={selfName}
+              onChange={(event) => setSelfName(event.currentTarget.value)}
+            />
+            {opponentNames.map((name, index) => (
+              <TextInput
+                key={index}
+                placeholder={`Team ${index + 1}`}
+                value={name}
+                onChange={(event) => {
+                  const next = [...opponentNames];
+                  next[index] = event.currentTarget.value;
+                  setOpponentNames(next);
+                }}
+              />
+            ))}
+            {teamsError && (
+              <Text c="red" size="sm">
+                {teamsError}
+              </Text>
+            )}
+            <Button
+              onClick={handleSaveTeams}
+              loading={isSavingTeams}
+              disabled={
+                !selfName.trim() ||
+                opponentNames.some((name) => !name.trim())
+              }
+              w="fit-content"
+            >
+              Save Teams
+            </Button>
+          </Stack>
+        ) : (
+          <Group gap="xs">
+            {draftTeams.map((team) => (
+              <Badge
+                key={team._id}
+                variant={team.isSelf ? "filled" : "light"}
+                size="lg"
+              >
+                {team.name}
+                {team.isSelf ? " (you)" : ""}
+              </Badge>
+            ))}
+          </Group>
+        )}
+      </Stack>
     </Stack>
   );
 }

@@ -17,6 +17,9 @@ interface SleeperPlayer {
   last_name?: string;
   position?: string;
   team?: string | null;
+  injury_status?: string;
+  injury_body_part?: string;
+  injury_notes?: string;
 }
 
 interface SleeperProjectionRecord {
@@ -32,6 +35,19 @@ const SLEEPER_TO_OUR_POSITION: Record<string, Position> = {
   WR: "WR",
   TE: "TE",
   DEF: "DST",
+  K: "K",
+};
+
+// Sleeper's injury_status values, mapped to the short badge codes the UI
+// already renders (see convex/injuries.ts / PlayersTable.tsx).
+const INJURY_STATUS_SHORT: Record<string, string> = {
+  Questionable: "Q",
+  Doubtful: "D",
+  Out: "O",
+  IR: "IR",
+  PUP: "PUP",
+  Suspended: "SUS",
+  "Non-Football Injury": "NFI",
 };
 
 export const fetchProjections = action({
@@ -60,6 +76,7 @@ export const fetchProjections = action({
     const apiWeek = args.week === "draft" ? undefined : args.week;
 
     const records: SleeperProjectionRecord[] = await fetchSleeper(
+      "projections",
       season,
       apiWeek,
       Object.values(POSITION_SLUGS),
@@ -90,6 +107,24 @@ export const fetchProjections = action({
       >
     > = {};
 
+    // Collected across every position (the injuries table has no
+    // position/week partition), derived for free from the same player
+    // objects this fetch already parses - no separate injuries call needed.
+    const injuryRows: Array<{
+      fpid: number;
+      status: string;
+      statusShort: string;
+      injuryType: string;
+      comment: string;
+      irWeeks: number[];
+      probabilityOfPlaying: number | null;
+      practice1: string | null;
+      practice2: string | null;
+      practice3: string | null;
+      practiceReportInjuryType: string | null;
+      updatedAt: number;
+    }> = [];
+
     for (const position of POSITIONS) {
       const sleeperSlug = POSITION_SLUGS[position];
       const positionRecords = bySleeperPosition.get(sleeperSlug) ?? [];
@@ -114,6 +149,24 @@ export const fetchProjections = action({
           // No known synthetic id for this team abbreviation - skip rather
           // than store a bogus fpid of 0/NaN.
           continue;
+        }
+
+        const status = record.player?.injury_status;
+        if (status) {
+          injuryRows.push({
+            fpid,
+            status,
+            statusShort: INJURY_STATUS_SHORT[status] ?? status,
+            injuryType: record.player?.injury_body_part ?? "",
+            comment: record.player?.injury_notes ?? "",
+            irWeeks: [],
+            probabilityOfPlaying: null,
+            practice1: null,
+            practice2: null,
+            practice3: null,
+            practiceReportInjuryType: null,
+            updatedAt: Date.now(),
+          });
         }
 
         const name =
@@ -166,6 +219,8 @@ export const fetchProjections = action({
         rankings: rankingsResult,
       };
     }
+
+    await ctx.runMutation(api.injuries.upsertInjuries, { rows: injuryRows });
 
     return results as Record<
       Position,

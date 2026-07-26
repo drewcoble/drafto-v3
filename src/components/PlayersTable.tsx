@@ -3,7 +3,9 @@ import { useQuery } from "convex/react";
 import { useQuery as useTanStackQuery } from "@tanstack/react-query";
 import { convexQuery } from "@convex-dev/react-query";
 import {
+  Anchor,
   Badge,
+  Button,
   Center,
   Chip,
   Group,
@@ -15,50 +17,19 @@ import {
 } from "@mantine/core";
 import { StickyNote } from "lucide-react";
 import { api } from "../../convex/_generated/api";
-import { POSITIONS, type Position, type ScoringFormat } from "../types";
+import type { Id } from "../../convex/_generated/dataModel";
+import {
+  POSITIONS,
+  type DraftValueRow,
+  type Position,
+  type ScoringFormat,
+} from "../types";
+import { filterRelevantPlayers, pointsForScoring } from "../lib/relevantPlayers";
 
 interface PlayersTableProps {
   week: string;
+  selectedLeagueId: Id<"draftSettings"> | undefined;
 }
-
-interface DraftValueRow {
-  fpid: number;
-  name: string;
-  team: string | null;
-  position: Position;
-  points: number;
-  positionRank: number;
-  replacementPoints: number;
-  usedFallback: boolean;
-  valueOverReplacement: number;
-  dollarValue: number;
-}
-
-function pointsForScoring(
-  row: { pointsStd: number; pointsHalf: number; pointsPpr: number },
-  scoring: ScoringFormat,
-): number {
-  if (scoring === "STD") return row.pointsStd;
-  if (scoring === "HALF") return row.pointsHalf;
-  return row.pointsPpr;
-}
-
-function adpForScoring(
-  row: { adpStd: number; adpHalf: number; adpPpr: number },
-  scoring: ScoringFormat,
-): number {
-  if (scoring === "STD") return row.adpStd;
-  if (scoring === "HALF") return row.adpHalf;
-  return row.adpPpr;
-}
-
-// Sleeper's player pool includes thousands of practice-squad/deep-bench
-// players with no real draft relevance. Sleeper flags this itself: ADP is
-// 999 ("effectively never drafted") for the vast majority of QB/RB/WR/TE -
-// only ~245 skill-position players have a real ADP as of this writing. DST
-// never gets a real ADP from Sleeper at all, but it's already naturally
-// capped at exactly 32 (one per team), so it needs no filtering.
-const NO_REAL_ADP = 999;
 
 function injuryColor(status: string): string {
   const s = status.toUpperCase();
@@ -73,7 +44,8 @@ const POSITION_COLORS: Record<Position, string> = {
   RB: "green",
   WR: "orange",
   TE: "grape",
-  DST: "gray",
+  DST: "saddlebrown",
+  K: "gray",
 };
 
 // Raw Sleeper stat keys (e.g. "rec_yd", "pts_allow_0") aren't readable as
@@ -122,6 +94,13 @@ const STAT_LABELS: Record<string, string> = {
   pts_allow_28_34: "Pts Allowed (28-34)",
   pts_allow_35p: "Pts Allowed (35+)",
   yds_allow_0_100: "Yds Allowed (0-100)",
+  fgm_40_49: "FG Made (40-49)",
+  fgm_50p: "FG Made (50+)",
+  fgm_yds: "FG Yards",
+  fgmiss_40_49: "FG Missed (40-49)",
+  fgmiss_50p: "FG Missed (50+)",
+  xpm: "XP Made",
+  xpmiss: "XP Missed",
 };
 
 function formatStatKey(key: string): string {
@@ -131,7 +110,7 @@ function formatStatKey(key: string): string {
   );
 }
 
-export function PlayersTable({ week }: PlayersTableProps) {
+export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   const [selectedPositions, setSelectedPositions] = useState<Position[]>([
     ...POSITIONS,
   ]);
@@ -142,11 +121,27 @@ export function PlayersTable({ week }: PlayersTableProps) {
   const allRankings = useQuery(api.rankings.getAllRankings, { week });
   const injuries = useQuery(api.injuries.getInjuries, {});
   const draftSettingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const draftSettingsId = draftSettingsList?.[0]?._id;
+  const selectedSettings = draftSettingsList?.find(
+    (league) => league._id === selectedLeagueId,
+  );
+  const draftSettingsId = selectedSettings?._id;
   // Scoring format now lives on the league settings (edited on the League
   // Details tab) instead of local component state, so it's shared/persisted
   // rather than resetting per-tab-visit.
-  const scoring: ScoringFormat = draftSettingsList?.[0]?.scoring ?? "PPR";
+  const scoring: ScoringFormat = selectedSettings?.scoring ?? "PPR";
+  // A position only matters to the selected league if it fills a dedicated
+  // roster slot or is FLEX/SUPERFLEX-eligible - e.g. a 0-K league shouldn't
+  // show a K pill or any kickers. Fall back to every position while the
+  // league's settings are still loading so nothing flashes empty.
+  const activePositions = useMemo(() => {
+    if (!selectedSettings) return [...POSITIONS];
+    return POSITIONS.filter(
+      (pos) =>
+        selectedSettings.rosterSlots[pos] > 0 ||
+        selectedSettings.flexPositions.includes(pos) ||
+        selectedSettings.superflexPositions.includes(pos),
+    );
+  }, [selectedSettings]);
   // TanStack Query (via convexQuery) instead of plain Convex useQuery here:
   // switching scoring format changes this query's args, and
   // placeholderData keeps showing the previous result (with isFetching
@@ -220,19 +215,16 @@ export function PlayersTable({ week }: PlayersTableProps) {
     return map;
   }, [draftValues]);
 
-  // Trim the thousands of practice-squad/deep-bench players Sleeper returns
-  // down to actually draft-relevant ones: real ADP for skill positions (the
-  // vast majority sit at the 999 "effectively never drafted" sentinel), or
-  // any DST (already naturally capped at 32 - one per team - so no filter
-  // needed there).
   const relevantProjections = useMemo(() => {
     if (!allProjections) return [];
-    return allProjections.filter((row) => {
-      if (row.position === "DST") return true;
-      const adp = adpByFpid.get(row.fpid);
-      return adp !== undefined && adpForScoring(adp, scoring) < NO_REAL_ADP;
-    });
-  }, [allProjections, adpByFpid, scoring]);
+    return filterRelevantPlayers(
+      allProjections,
+      activePositions,
+      scoring,
+      adpByFpid,
+      (row) => pointsForScoring(row, scoring),
+    );
+  }, [allProjections, adpByFpid, scoring, activePositions]);
 
   // Only the positions currently toggled on via the pills.
   const visibleRows = useMemo(() => {
@@ -286,10 +278,28 @@ export function PlayersTable({ week }: PlayersTableProps) {
           onChange={(value) => setSelectedPositions(value as Position[])}
         >
           <Group gap="xs">
-            {POSITIONS.map((pos) => (
-              <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
-                {pos}
-              </Chip>
+            <Button
+              size="compact-xs"
+              variant="default"
+              onClick={() => setSelectedPositions(activePositions)}
+            >
+              All
+            </Button>
+            {activePositions.map((pos) => (
+              <Group key={pos} gap={4} wrap="nowrap">
+                <Chip value={pos} color={POSITION_COLORS[pos]}>
+                  {pos}
+                </Chip>
+                <Anchor
+                  component="button"
+                  type="button"
+                  size="xs"
+                  c="dimmed"
+                  onClick={() => setSelectedPositions([pos])}
+                >
+                  only
+                </Anchor>
+              </Group>
             ))}
           </Group>
         </Chip.Group>
