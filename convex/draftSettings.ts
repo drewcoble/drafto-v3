@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { positionValidator } from "./positions";
 import { scoringValidator } from "./scoring";
+import { invalidateDraftValues } from "./draftValues";
 
 const rosterSlotsValidator = v.object({
   QB: v.number(),
@@ -28,6 +29,16 @@ export const listDraftSettings = query({
       .query("draftSettings")
       .withIndex("by_owner", (q) => q.eq("ownerId", userId))
       .collect();
+  },
+});
+
+// Every league across every owner, no auth scoping - only for
+// fetchAllData's daily draftValues cache refresh (convex/fetchAllData.ts),
+// which runs as a super-admin action with no signed-in "owner" of its own.
+export const listAllDraftSettings = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("draftSettings").collect();
   },
 });
 
@@ -79,6 +90,10 @@ export const updateDraftSettings = mutation({
       throw new Error("Not authorized to edit this league.");
     }
     await ctx.db.patch(id, fields);
+    // Every field here (teamCount, salaryCap, scoring, rosterSlots,
+    // flex/superflexPositions) feeds getDraftValues' $ engine - see
+    // convex/draftValues.ts.
+    await invalidateDraftValues(ctx, id);
     return await ctx.db.get(id);
   },
 });

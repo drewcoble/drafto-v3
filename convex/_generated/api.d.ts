@@ -12,11 +12,15 @@ import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as draft_auth from "../draft/auth.js";
 import type * as draft_board from "../draft/board.js";
+import type * as draft_history from "../draft/history.js";
+import type * as draft_nominationOrder from "../draft/nominationOrder.js";
 import type * as draft_picks from "../draft/picks.js";
 import type * as draft_plan from "../draft/plan.js";
+import type * as draft_playerDetail from "../draft/playerDetail.js";
 import type * as draft_slots from "../draft/slots.js";
 import type * as draft_tags from "../draft/tags.js";
 import type * as draft_teams from "../draft/teams.js";
+import type * as draft_tiers from "../draft/tiers.js";
 import type * as draftSettings from "../draftSettings.js";
 import type * as draftValues from "../draftValues.js";
 import type * as fantasyPros_client from "../fantasyPros/client.js";
@@ -24,6 +28,7 @@ import type * as fantasyPros_news from "../fantasyPros/news.js";
 import type * as fetchAllData from "../fetchAllData.js";
 import type * as http from "../http.js";
 import type * as injuries from "../injuries.js";
+import type * as injurySnapshots from "../injurySnapshots.js";
 import type * as news from "../news.js";
 import type * as playerPoints from "../playerPoints.js";
 import type * as players from "../players.js";
@@ -34,7 +39,9 @@ import type * as scoring from "../scoring.js";
 import type * as sleeper_client from "../sleeper/client.js";
 import type * as sleeper_playerPoints from "../sleeper/playerPoints.js";
 import type * as sleeper_projections from "../sleeper/projections.js";
+import type * as sleeper_state from "../sleeper/state.js";
 import type * as users from "../users.js";
+import type * as valueGaps from "../valueGaps.js";
 
 import type {
   ApiFromModules,
@@ -47,11 +54,15 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   "draft/auth": typeof draft_auth;
   "draft/board": typeof draft_board;
+  "draft/history": typeof draft_history;
+  "draft/nominationOrder": typeof draft_nominationOrder;
   "draft/picks": typeof draft_picks;
   "draft/plan": typeof draft_plan;
+  "draft/playerDetail": typeof draft_playerDetail;
   "draft/slots": typeof draft_slots;
   "draft/tags": typeof draft_tags;
   "draft/teams": typeof draft_teams;
+  "draft/tiers": typeof draft_tiers;
   draftSettings: typeof draftSettings;
   draftValues: typeof draftValues;
   "fantasyPros/client": typeof fantasyPros_client;
@@ -59,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   fetchAllData: typeof fetchAllData;
   http: typeof http;
   injuries: typeof injuries;
+  injurySnapshots: typeof injurySnapshots;
   news: typeof news;
   playerPoints: typeof playerPoints;
   players: typeof players;
@@ -69,7 +81,9 @@ declare const fullApi: ApiFromModules<{
   "sleeper/client": typeof sleeper_client;
   "sleeper/playerPoints": typeof sleeper_playerPoints;
   "sleeper/projections": typeof sleeper_projections;
+  "sleeper/state": typeof sleeper_state;
   users: typeof users;
+  valueGaps: typeof valueGaps;
 }>;
 
 /**

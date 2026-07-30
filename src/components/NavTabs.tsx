@@ -1,23 +1,34 @@
 import { Tabs } from "@mantine/core";
-import type { TabValue } from "../types";
+import { Link, useLocation, useParams } from "@tanstack/react-router";
 
-interface NavTabsProps {
-  value: TabValue;
-  onChange: (tab: TabValue) => void;
-}
+const TABS = [
+  { value: "league", label: "League Details", to: "/setup/$leagueId/league" },
+  { value: "keepers", label: "Keepers", to: "/setup/$leagueId/keepers" },
+  { value: "budget", label: "Budget", to: "/setup/$leagueId/budget" },
+  { value: "players", label: "Players", to: "/setup/$leagueId/players" },
+  { value: "injuries", label: "Injuries", to: "/setup/$leagueId/injuries" },
+  { value: "data", label: "Data", to: "/setup/$leagueId/data" },
+] as const;
 
-export function NavTabs({ value, onChange }: NavTabsProps) {
+export function NavTabs() {
+  const { leagueId } = useParams({ from: "/setup/$leagueId" });
+  const location = useLocation();
+  const activeTab = location.pathname.split("/").pop();
+
   return (
-    <Tabs
-      value={value}
-      onChange={(next) => {
-        if (next) onChange(next as TabValue);
-      }}
-    >
+    <Tabs value={activeTab ?? null}>
       <Tabs.List>
-        <Tabs.Tab value="league">League Details</Tabs.Tab>
-        <Tabs.Tab value="players">Players</Tabs.Tab>
-        <Tabs.Tab value="data">Data</Tabs.Tab>
+        {TABS.map((tab) => (
+          <Tabs.Tab
+            key={tab.value}
+            value={tab.value}
+            renderRoot={(props) => (
+              <Link to={tab.to} params={{ leagueId }} {...props} />
+            )}
+          >
+            {tab.label}
+          </Tabs.Tab>
+        ))}
       </Tabs.List>
     </Tabs>
   );

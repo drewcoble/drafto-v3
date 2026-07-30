@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { positionValidator, POSITIONS } from "./positions";
 
 export const getProjections = query({
@@ -105,5 +106,37 @@ export const upsertProjections = mutation({
     }
 
     return { upserted: args.rows.length, removed };
+  },
+});
+
+// One-time migration: the app's season-long-dataset sentinel was renamed
+// from the non-numeric "draft" to "0" (so it sorts/compares naturally
+// alongside real week numbers "1"-"18") - this renames any rows still
+// under the old value. Paginated + self-rescheduling like
+// playerPoints.ts's backfillSeasonStats/clearSeasonStats, since this is a
+// manually-triggered maintenance job, not a hot path. Safe to run more than
+// once (a second run just finds nothing left to rename).
+export const renameDraftWeekToZero = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("projections")
+      .paginate({ cursor: args.cursor ?? null, numItems: 500 });
+
+    let renamed = 0;
+    for (const row of result.page) {
+      if (row.week === "draft") {
+        await ctx.db.patch(row._id, { week: "0" });
+        renamed += 1;
+      }
+    }
+
+    if (!result.isDone) {
+      await ctx.scheduler.runAfter(0, internal.projections.renameDraftWeekToZero, {
+        cursor: result.continueCursor,
+      });
+    }
+
+    return { renamed, isDone: result.isDone };
   },
 });

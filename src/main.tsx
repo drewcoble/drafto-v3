@@ -4,9 +4,11 @@ import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexQueryClient } from "@convex-dev/react-query";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { MantineProvider } from "@mantine/core";
 import "@mantine/core/styles.css";
-import App from "./App";
+import { routeTree } from "./routeTree.gen";
+import { theme } from "./theme";
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 
@@ -35,6 +37,14 @@ const queryClient = new QueryClient({
 });
 convexQueryClient.connect(queryClient);
 
+const router = createRouter({ routeTree });
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
+  }
+}
+
 const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Root element #root not found");
@@ -44,8 +54,8 @@ ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <ConvexAuthProvider client={convex}>
       <QueryClientProvider client={queryClient}>
-        <MantineProvider defaultColorScheme="dark">
-          <App />
+        <MantineProvider theme={theme} defaultColorScheme="dark">
+          <RouterProvider router={router} />
         </MantineProvider>
       </QueryClientProvider>
     </ConvexAuthProvider>

@@ -1,7 +1,5 @@
 export type Position = "QB" | "RB" | "WR" | "TE" | "DST" | "K";
 
-export type TabValue = "league" | "players" | "data";
-
 export const POSITIONS: readonly Position[] = [
   "QB",
   "RB",
@@ -28,10 +26,6 @@ export interface DraftValueRow {
   dollarValue: number;
 }
 
-// Sub-tabs within the live Draft Room (a separate mode from the pre-draft
-// settings app's TabValue above).
-export type DraftSubTab = "budget" | "draft" | "myTeam" | "players" | "league";
-
 // One row from draft.board.getDraftBoard - draftValues.getDraftValues plus
 // tier. Deliberately does NOT include live pick status: this query's read
 // dependencies (draftSettings + projections) are stable for the duration of
@@ -40,6 +34,10 @@ export type DraftSubTab = "budget" | "draft" | "myTeam" | "players" | "league";
 export interface DraftTierRow extends DraftValueRow {
   tier: number;
   tierLabel: string;
+  // Blended ADP + points + $ value rank within the position - the order
+  // getDraftBoard returns rows in, and what consumers should sort by to keep
+  // tiers contiguous (see PlayersLeftTab.tsx's groupByTier).
+  tierRank: number;
 }
 
 // DraftTierRow + live drafted status, joined client-side from a
@@ -49,6 +47,25 @@ export interface DraftBoardRow extends DraftTierRow {
   drafted: boolean;
   draftedByTeamId?: string;
   draftedPrice?: number;
+}
+
+// The canonical shape of one row from valueGaps.getAllValueGaps - a player
+// whose track record and current-season outlook disagree with either their
+// ADP ("undervalued"/"overvalued") or with each other ("breakout": bad last
+// season but good this season by both projection and ADP; "falloff": the
+// mirror image, good last season but bad this season on both). See
+// convex/valueGaps.ts for the full methodology.
+export interface ValueGap {
+  fpid: number;
+  position: Position;
+  direction: "undervalued" | "overvalued" | "breakout" | "falloff";
+  gap: number;
+  lastYearPpg: number;
+  lastYearGames: number;
+  lastYearRank: number;
+  projRank: number;
+  adpRank: number;
+  poolSize: number;
 }
 
 export type OverspendBehavior = "bench" | "spread" | "ask";

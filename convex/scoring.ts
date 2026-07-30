@@ -16,3 +16,12 @@ export function pointsForScoring(
   if (scoring === "HALF") return row.pointsHalf;
   return row.pointsPpr;
 }
+
+export function adpForScoring(
+  row: { adpStd: number; adpHalf: number; adpPpr: number },
+  scoring: Scoring,
+): number {
+  if (scoring === "STD") return row.adpStd;
+  if (scoring === "HALF") return row.adpHalf;
+  return row.adpPpr;
+}

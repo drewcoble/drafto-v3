@@ -67,6 +67,7 @@ export const fetchAllPlayerPoints = action({
         ptsStd: number;
         ptsPpr: number;
         ptsHalf: number;
+        stats: Record<string, number>;
       }> = [];
 
       for (const record of records) {
@@ -86,12 +87,24 @@ export const fetchAllPlayerPoints = action({
         }
 
         const stats = record.stats ?? {};
+        const numericStats: Record<string, number> = {};
+        for (const [key, value] of Object.entries(stats)) {
+          if (
+            typeof value === "number" &&
+            !key.startsWith("pts_") &&
+            !key.startsWith("adp_")
+          ) {
+            numericStats[key] = value;
+          }
+        }
+
         rows.push({
           fpid,
           position,
           ptsStd: stats.pts_std ?? 0,
           ptsPpr: stats.pts_ppr ?? 0,
           ptsHalf: stats.pts_half_ppr ?? 0,
+          stats: numericStats,
         });
       }
 
@@ -113,6 +126,7 @@ export const fetchAllPlayerPoints = action({
             position: row.position,
             week,
             points: pick(row),
+            stats: row.stats,
           })),
         });
         const key = `week${week}-${scoring}`;

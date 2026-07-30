@@ -71,9 +71,9 @@ export const fetchProjections = action({
     await requireSuperAdmin(ctx);
 
     const season = args.season ?? currentSeason();
-    // The app's "draft" (season-long) sentinel maps to omitting the week
-    // path segment entirely - that's Sleeper's season-long projections mode.
-    const apiWeek = args.week === "draft" ? undefined : args.week;
+    // The app's "0" (season-long) sentinel maps to omitting the week path
+    // segment entirely - that's Sleeper's season-long projections mode.
+    const apiWeek = args.week === "0" ? undefined : args.week;
 
     const records: SleeperProjectionRecord[] = await fetchSleeper(
       "projections",
@@ -221,6 +221,17 @@ export const fetchProjections = action({
     }
 
     await ctx.runMutation(api.injuries.upsertInjuries, { rows: injuryRows });
+    await ctx.runMutation(api.injurySnapshots.recordSnapshots, {
+      season,
+      week: args.week,
+      rows: injuryRows.map((row) => ({
+        fpid: row.fpid,
+        status: row.status,
+        statusShort: row.statusShort,
+        injuryType: row.injuryType,
+        comment: row.comment,
+      })),
+    });
 
     return results as Record<
       Position,

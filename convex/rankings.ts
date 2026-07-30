@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { positionValidator, POSITIONS } from "./positions";
 
 export const getRankings = query({
@@ -95,5 +96,33 @@ export const upsertRankings = mutation({
     }
 
     return { upserted: args.rows.length, removed };
+  },
+});
+
+// One-time migration - see projections.ts's renameDraftWeekToZero (same
+// sentinel rename, same table shape, same paginated/self-rescheduling
+// pattern). Safe to run more than once.
+export const renameDraftWeekToZero = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("rankings")
+      .paginate({ cursor: args.cursor ?? null, numItems: 500 });
+
+    let renamed = 0;
+    for (const row of result.page) {
+      if (row.week === "draft") {
+        await ctx.db.patch(row._id, { week: "0" });
+        renamed += 1;
+      }
+    }
+
+    if (!result.isDone) {
+      await ctx.scheduler.runAfter(0, internal.rankings.renameDraftWeekToZero, {
+        cursor: result.continueCursor,
+      });
+    }
+
+    return { renamed, isDone: result.isDone };
   },
 });
