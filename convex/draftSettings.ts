@@ -3,7 +3,14 @@ import { mutation, query, internalQuery } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { positionValidator } from "./positions";
 import { scoringValidator } from "./scoring";
-import { invalidateDraftValues } from "./draftValues";
+import { invalidateDraftValues, refreshDraftValuesForLeague } from "./draftValues";
+import { ensureValueGapsCached } from "./valueGaps";
+
+// Mirrors src/constants/general.ts's WEEK - the single season-long
+// draft-prep dataset every Draft Room query reads (not a real NFL week). See
+// convex/draft/tiers.ts for why convex/ duplicates rather than imports
+// frontend constants.
+const DRAFT_PREP_WEEK = "0";
 
 const rosterSlotsValidator = v.object({
   QB: v.number(),
@@ -57,11 +64,33 @@ export const createDraftSettings = mutation({
     if (!userId) {
       throw new Error("You must be signed in.");
     }
-    return await ctx.db.insert("draftSettings", {
+    const id = await ctx.db.insert("draftSettings", {
       ...args,
       ownerId: userId,
       createdAt: Date.now(),
     });
+
+    // Seed this league's draftValues cache (and valueGaps, if this scoring
+    // format hasn't been seeded by another league yet) immediately, rather
+    // than leaving it empty until the next daily cron run - an empty cache
+    // forces every Draft Room subscription onto the expensive live-compute
+    // path (see convex/draftValues.ts / convex/valueGaps.ts cache comments).
+    // A league created directly (not cloned) has no `season` set yet, so
+    // mirror the same current-year fallback the frontend uses (see
+    // DraftTab.tsx's `thisSeason`).
+    const thisSeason = String(new Date().getFullYear());
+    await refreshDraftValuesForLeague(ctx, {
+      draftSettingsId: id,
+      week: DRAFT_PREP_WEEK,
+      scoring: args.scoring,
+    });
+    await ensureValueGapsCached(ctx, {
+      week: DRAFT_PREP_WEEK,
+      scoring: args.scoring,
+      lastSeason: String(Number(thisSeason) - 1),
+    });
+
+    return id;
   },
 });
 

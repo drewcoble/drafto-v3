@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { requireDraftOwner } from "./auth";
+import { invalidateDraftValues } from "../draftValues";
 
 export const listDraftTeams = query({
   args: { draftSettingsId: v.id("draftSettings") },
@@ -77,6 +78,29 @@ export const renameDraftTeam = mutation({
     }
     await requireDraftOwner(ctx, team.draftSettingsId);
     await ctx.db.patch(args.teamId, { name: args.name });
+    return await ctx.db.get(args.teamId);
+  },
+});
+
+// null clears the override back to the league default (draftSettings.salaryCap).
+export const setTeamSalaryCap = mutation({
+  args: { teamId: v.id("draftTeams"), salaryCap: v.union(v.number(), v.null()) },
+  handler: async (ctx, args) => {
+    const team = await ctx.db.get(args.teamId);
+    if (!team) {
+      throw new Error("Team not found.");
+    }
+    await requireDraftOwner(ctx, team.draftSettingsId);
+    if (args.salaryCap !== null && args.salaryCap <= 0) {
+      throw new Error("Salary cap must be a positive number.");
+    }
+    await ctx.db.patch(args.teamId, {
+      salaryCapOverride: args.salaryCap ?? undefined,
+    });
+    // This team's override feeds the $ value engine's total auction pool
+    // size (see convex/draftValues.ts), so the cache needs the same
+    // invalidation a league-settings edit already triggers.
+    await invalidateDraftValues(ctx, team.draftSettingsId);
     return await ctx.db.get(args.teamId);
   },
 });

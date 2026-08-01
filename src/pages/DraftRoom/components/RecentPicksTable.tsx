@@ -27,7 +27,16 @@ export function RecentPicksTable({
         </Text>
       ) : (
         <Table.ScrollContainer minWidth={500}>
-          <Table>
+          <Table striped highlightOnHover verticalSpacing="xs">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Player</Table.Th>
+                <Table.Th>Price</Table.Th>
+                <Table.Th>Team</Table.Th>
+                <Table.Th></Table.Th>
+                <Table.Th></Table.Th>
+              </Table.Tr>
+            </Table.Thead>
             <Table.Tbody>
               {picks.map((pick) => (
                 <Table.Tr key={pick._id}>

@@ -11,6 +11,7 @@ import {
   type BudgetPreset,
 } from "../lib/budgetPresets";
 import { categoryForSlot } from "../lib/budgetCategories";
+import { resolveTeamSalaryCap } from "../lib/teamBudget";
 import { CATEGORY_ORDER } from "../constants/budget";
 import { SlotRow } from "./BudgetTab/SlotRow";
 import { CategoryBreakdown } from "./BudgetTab/CategoryBreakdown";
@@ -29,6 +30,7 @@ interface BudgetTabProps {
 
 export function BudgetTab({ draftSettingsId, mode }: BudgetTabProps) {
   const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
+  const teams = useQuery(api.draft.teams.listDraftTeams, { draftSettingsId });
   const predraftPlan = useQuery(api.draft.plan.getBudgetPlan, {
     draftSettingsId,
   });
@@ -43,6 +45,7 @@ export function BudgetTab({ draftSettingsId, mode }: BudgetTabProps) {
   const resetLiveBudgetPlan = useMutation(api.draft.plan.resetLiveBudgetPlan);
 
   const settings = settingsList?.find((s) => s._id === draftSettingsId);
+  const selfTeam = teams?.find((t) => t.isSelf);
 
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [overspendBehavior, setOverspendBehavior] = useState<OverspendBehavior>(
@@ -63,7 +66,11 @@ export function BudgetTab({ draftSettingsId, mode }: BudgetTabProps) {
   // user is actively editing - "Reset to pre-draft plan" is the explicit,
   // deliberate way back to the current baseline instead.
   useEffect(() => {
-    if (isInitialized || !settings) return;
+    if (isInitialized || !settings || !teams) return;
+    const effectiveSalaryCap = resolveTeamSalaryCap(
+      selfTeam,
+      settings.salaryCap,
+    );
     if (mode === "predraft") {
       if (predraftPlan === undefined) return;
       if (predraftPlan) {
@@ -74,7 +81,7 @@ export function BudgetTab({ draftSettingsId, mode }: BudgetTabProps) {
           generatePresetAmounts(
             "balanced",
             settings.rosterSlots,
-            settings.salaryCap,
+            effectiveSalaryCap,
           ),
         );
       }
@@ -91,43 +98,45 @@ export function BudgetTab({ draftSettingsId, mode }: BudgetTabProps) {
         const preset = generatePresetAmounts(
           "balanced",
           settings.rosterSlots,
-          settings.salaryCap,
+          effectiveSalaryCap,
         );
         setAmounts(preset);
         setTouchedKeys(new Set(Object.keys(preset)));
       }
     }
     setIsInitialized(true);
-  }, [isInitialized, settings, mode, predraftPlan, livePlan]);
+  }, [isInitialized, settings, teams, selfTeam, mode, predraftPlan, livePlan]);
 
   const slots = useMemo(
     () => (settings ? expandRosterSlots(settings.rosterSlots) : []),
     [settings],
   );
 
-  if (!settings || !isInitialized) {
+  if (!settings || !teams || !isInitialized) {
     return null;
   }
+
+  const effectiveSalaryCap = resolveTeamSalaryCap(selfTeam, settings.salaryCap);
 
   const totalAllocated = slots.reduce(
     (sum, slot) => sum + (amounts[slot.key] ?? 0),
     0,
   );
-  const unallocated = settings.salaryCap - totalAllocated;
+  const unallocated = effectiveSalaryCap - totalAllocated;
   const maxAmount = Math.max(1, ...slots.map((slot) => amounts[slot.key] ?? 0));
   const starterSlots = slots.filter((slot) => !slot.label.startsWith("BN"));
   const perStarter = starterSlots.length
     ? starterSlots.reduce((sum, slot) => sum + (amounts[slot.key] ?? 0), 0) /
       starterSlots.length
     : 0;
-  const perRosterSpot = slots.length ? settings.salaryCap / slots.length : 0;
+  const perRosterSpot = slots.length ? effectiveSalaryCap / slots.length : 0;
   const topThreeTotal = [...slots]
     .map((slot) => amounts[slot.key] ?? 0)
     .sort((a, b) => b - a)
     .slice(0, 3)
     .reduce((sum, v) => sum + v, 0);
-  const topThreePct = settings.salaryCap
-    ? Math.round((topThreeTotal / settings.salaryCap) * 100)
+  const topThreePct = effectiveSalaryCap
+    ? Math.round((topThreeTotal / effectiveSalaryCap) * 100)
     : 0;
   const everySlotHasADollar = slots.every(
     (slot) => (amounts[slot.key] ?? 0) >= 1,
@@ -144,7 +153,7 @@ export function BudgetTab({ draftSettingsId, mode }: BudgetTabProps) {
     const next = generatePresetAmounts(
       preset,
       settings.rosterSlots,
-      settings.salaryCap,
+      effectiveSalaryCap,
     );
     setAmounts(next);
     if (mode === "live") {
@@ -243,7 +252,7 @@ export function BudgetTab({ draftSettingsId, mode }: BudgetTabProps) {
 
       <CategoryBreakdown
         categoryTotals={categoryTotals}
-        salaryCap={settings.salaryCap}
+        salaryCap={effectiveSalaryCap}
       />
 
       <Group align="flex-start" gap="xl" wrap="wrap">

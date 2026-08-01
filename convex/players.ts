@@ -1,6 +1,20 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { positionValidator } from "./positions";
+
+// Every fpid we've ever chosen to track (populated by upsertPlayers below,
+// so it never grows beyond "players we decided were roster-relevant").
+// Internal-only: used by convex/sleeper/playerPoints.ts to drop stat rows
+// for a player we don't otherwise have a record of, rather than by any
+// client-facing list, so a full collect() here stays bounded by that same
+// roster-relevant set rather than the unbounded Sleeper payload.
+export const listKnownFpids = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const players = await ctx.db.query("players").collect();
+    return players.map((player) => player.fpid);
+  },
+});
 
 export const getPlayer = query({
   args: { fpid: v.number() },

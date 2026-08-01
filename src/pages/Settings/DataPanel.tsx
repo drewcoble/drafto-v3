@@ -7,7 +7,7 @@ interface DataPanelProps {
   week: string;
 }
 
-type ActionKey = "projections" | "news" | "playerPoints";
+type ActionKey = "projections" | "news" | "playerPoints" | "caches";
 
 interface ActionState {
   isRunning: boolean;
@@ -22,6 +22,7 @@ export function DataPanel({ week }: DataPanelProps) {
   const fetchPlayerPoints = useAction(
     api.sleeper.playerPoints.fetchAllPlayerPoints,
   );
+  const refreshCaches = useAction(api.fetchAllData.refreshCaches);
   const currentUser = useQuery(api.users.getCurrentUser);
   const canFetchData = currentUser?.role === "super-admin";
 
@@ -35,6 +36,7 @@ export function DataPanel({ week }: DataPanelProps) {
     projections: IDLE_STATE,
     news: IDLE_STATE,
     playerPoints: IDLE_STATE,
+    caches: IDLE_STATE,
   });
 
   const actions: Array<{
@@ -73,6 +75,19 @@ export function DataPanel({ week }: DataPanelProps) {
       successMessage: `Player points refreshed${
         playerPointsYear.trim() ? ` for ${playerPointsYear.trim()}` : ""
       }.`,
+    },
+    {
+      key: "caches",
+      label: "Refresh value caches",
+      description:
+        "Recomputes the value-gap and $-value caches every Draft Room screen " +
+        "reads from - no external calls, just recomputes from whatever " +
+        "projections/rankings/player-stats data is already in the database. " +
+        "Use this if those caches are empty or stale (e.g. the daily fetch " +
+        "hasn't run yet) - an empty cache forces every draft screen onto a " +
+        "much more expensive live recompute.",
+      run: () => refreshCaches({ week }),
+      successMessage: "Value caches refreshed.",
     },
   ];
 

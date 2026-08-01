@@ -63,11 +63,11 @@ function consistencyOutline(consistency: ConsistencyLabel | undefined): string {
   if (!consistency) return "none";
   const color =
     consistency === "Reliable"
-      ? "green"
+      ? "gold-4"
       : consistency === "Boom/Bust"
-        ? "yellow"
-        : "red";
-  return `2.5px solid var(--mantine-color-${color}-9)`;
+        ? "blue-9"
+        : "red-8";
+  return `2.5px solid var(--mantine-color-${color})`;
 }
 
 // Bar fill is just the target/avoid tag (green/red), defaulting to blue
@@ -75,11 +75,14 @@ function consistencyOutline(consistency: ConsistencyLabel | undefined): string {
 // consistencyOutline above), so both signals stay visible at once.
 export function barStyle(
   consistency: ConsistencyLabel | undefined,
-  // tag: PlayerTag | undefined,
+  tag: PlayerTag | undefined,
   dollarValue: number,
   budgetAmount: number | undefined,
 ): { backgroundColor: string; opacity: number; outline: string } {
-  const backgroundColor = "var(--mantine-color-blue-9)";
+  const backgroundColor =
+    tag === "target"
+      ? "var(--mantine-color-gold-9)"
+      : "var(--mantine-color-green-9)";
 
   const outline = consistencyOutline(consistency);
   const opacity = budgetOpacity(dollarValue, budgetAmount);

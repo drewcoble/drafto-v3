@@ -271,6 +271,11 @@ export default defineSchema({
     isSelf: v.boolean(),
     order: v.number(),
     createdAt: v.number(),
+    // Overrides draftSettings.salaryCap for this team only - absent means
+    // this team just uses the league default. Lets a team start the auction
+    // with a different budget than everyone else (e.g. a supplemental cap
+    // adjustment or a carried-over keeper penalty).
+    salaryCapOverride: v.optional(v.number()),
   }).index("by_draft", ["draftSettingsId"]),
 
   // A completed auction result - one row per player won. `sequence` is
@@ -285,8 +290,14 @@ export default defineSchema({
     position: positionValidator,
     teamId: v.id("draftTeams"),
     price: v.number(),
-    // Which roster slot this fills, e.g. "RB2" - only set for the self
-    // team's picks, since only self has a budget plan to reconcile against.
+    // Which roster slot this fills, e.g. "RB2" - auto-assigned only for the
+    // self team's picks at pick time (since only self has a budget plan to
+    // reconcile against), but any team's pick can have this manually set
+    // afterward via convex/draft/picks.ts's setPickSlot (e.g. bumping a
+    // flex-caliber player down from RB2 to FLEX). Every other team's slot
+    // display falls back to computing this on the fly (see
+    // src/lib/slotAssignment.ts's assignPicksToSlots) for whichever picks
+    // don't have it set.
     planSlotKey: v.optional(v.string()),
     // True for a pre-draft keeper assignment (see convex/draft/picks.ts's
     // addKeeper), absent/false for a normal auction result. Optional rather
@@ -312,7 +323,7 @@ export default defineSchema({
     draftSettingsId: v.id("draftSettings"),
     fpid: v.number(),
     position: positionValidator,
-    nominatingTeamId: v.id("draftTeams"),
+    nominatingTeamId: v.optional(v.id("draftTeams")),
     currentBid: v.number(),
     createdAt: v.number(),
   }).index("by_draft", ["draftSettingsId"]),
@@ -364,6 +375,12 @@ export default defineSchema({
     draftSettingsId: v.id("draftSettings"),
     fpid: v.number(),
     tag: v.union(v.literal("target"), v.literal("avoid")),
+    // Dense 0..n-1 rank among this draft's "target" rows only - the
+    // Shortlist tab's display/drag order (see reorderShortlist in
+    // convex/draft/tags.ts). Assigned when a player is first tagged target
+    // (appended to the end) and rewritten across the whole list on reorder;
+    // meaningless/unset for "avoid" rows, which have no ordering UI.
+    order: v.optional(v.number()),
     updatedAt: v.number(),
   })
     .index("by_draft", ["draftSettingsId"])

@@ -17,7 +17,10 @@ import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { POSITIONS, type Position, type ScoringFormat } from "../../types";
 import { POSITION_COLORS } from "../../lib/positionColors";
 import { injuryColor } from "../../lib/playerFormatting";
-import { pointsForScoring } from "../../lib/relevantPlayers";
+import {
+  filterRelevantPlayers,
+  pointsForScoring,
+} from "../../lib/relevantPlayers";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 
 interface InjuryReportProps {
@@ -35,6 +38,7 @@ export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
   const allProjections = useQuery(api.projections.getAllProjections, {
     week,
   });
+  const allRankings = useQuery(api.rankings.getAllRankings, { week });
   const draftSettingsList = useQuery(api.draftSettings.listDraftSettings, {});
   const settings = draftSettingsId
     ? draftSettingsList?.find((league) => league._id === draftSettingsId)
@@ -42,16 +46,56 @@ export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
   const scoring: ScoringFormat = settings?.scoring ?? "PPR";
   const thisSeason = settings?.season ?? String(new Date().getFullYear());
 
+  // A position only matters to the selected league if it fills a dedicated
+  // roster slot or is FLEX/SUPERFLEX-eligible - same rule PlayersTable.tsx
+  // uses. Falls back to every position while settings are still loading (or
+  // no league is selected at all) so nothing flashes empty.
+  const activePositions = useMemo(() => {
+    if (!settings) return [...POSITIONS];
+    return POSITIONS.filter(
+      (pos) =>
+        settings.rosterSlots[pos] > 0 ||
+        settings.flexPositions.includes(pos) ||
+        settings.superflexPositions.includes(pos),
+    );
+  }, [settings]);
+
+  const adpByFpid = useMemo(() => {
+    const map = new Map<
+      number,
+      { adpStd: number; adpHalf: number; adpPpr: number }
+    >();
+    for (const ranking of allRankings ?? []) {
+      map.set(ranking.fpid, ranking);
+    }
+    return map;
+  }, [allRankings]);
+
+  // Same ADP-based relevance trim PlayersTable.tsx/PlayersLeftTab.tsx use,
+  // so a deep-bench/practice-squad injury (Sleeper tracks thousands) doesn't
+  // show up here just because it's technically "injured" - and restricted
+  // to the league's active positions, so e.g. a 0-K league shows no kickers.
+  const relevantProjections = useMemo(() => {
+    if (!allProjections) return [];
+    return filterRelevantPlayers(
+      allProjections,
+      activePositions,
+      scoring,
+      adpByFpid,
+      (row) => pointsForScoring(row, scoring),
+    );
+  }, [allProjections, activePositions, scoring, adpByFpid]);
+
   const projByFpid = useMemo(() => {
     const map = new Map<number, Doc<"projections">>();
-    for (const row of allProjections ?? []) map.set(row.fpid, row);
+    for (const row of relevantProjections) map.set(row.fpid, row);
     return map;
-  }, [allProjections]);
+  }, [relevantProjections]);
 
-  // Only players we can actually identify (name/team/position come from
-  // projections, not the injuries table itself) and that match the
-  // position filter - then most-prominent-first (by projected points), since
-  // that's what you'd scan for first before a draft.
+  // Only players we can actually identify as draft-relevant (see
+  // relevantProjections above) and that match the position filter - then
+  // most-prominent-first (by projected points), since that's what you'd
+  // scan for first before a draft.
   const rows = useMemo(() => {
     return (injuries ?? [])
       .map((injury) => ({ injury, player: projByFpid.get(injury.fpid) }))
@@ -62,7 +106,10 @@ export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
       .sort((a, b) => pointsForScoring(b.player, scoring) - pointsForScoring(a.player, scoring));
   }, [injuries, projByFpid, selectedPositions, scoring]);
 
-  const isLoading = injuries === undefined || allProjections === undefined;
+  const isLoading =
+    injuries === undefined ||
+    allProjections === undefined ||
+    allRankings === undefined;
 
   return (
     <Stack gap="md" py="sm">
@@ -76,11 +123,11 @@ export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
             <Button
               size="compact-xs"
               variant="default"
-              onClick={() => setSelectedPositions([...POSITIONS])}
+              onClick={() => setSelectedPositions(activePositions)}
             >
               All
             </Button>
-            {POSITIONS.map((pos) => (
+            {activePositions.map((pos) => (
               <Group key={pos} gap={4} wrap="nowrap">
                 <Chip value={pos} color={POSITION_COLORS[pos]}>
                   {pos}

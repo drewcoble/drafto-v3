@@ -3,10 +3,10 @@ import { mutation, query } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { requireDraftOwner } from "./auth";
 
-// Pure step function: given the configured order/mode and who's currently
-// up, computes who's up next. Exported (not just used internally by
-// nominate()) so it stays trivially testable/reasoned-about in isolation
-// from the mutation's DB plumbing.
+// Single, unchecked step - given the configured order/mode and who's
+// currently up, computes who's up next with no regard for roster capacity.
+// Kept separate from nextNominator so the capacity-skipping loop below can
+// call it repeatedly without re-deriving the linear/snake math each time.
 //
 // Linear is a plain round-robin. Snake bounces at each end of the order
 // instead of wrapping - when the next step would go out of range, the same
@@ -15,15 +15,12 @@ import { requireDraftOwner } from "./auth";
 // classic snake draft "snake"-shaped: e.g. with 4 teams the sequence is
 // A,B,C,D,D,C,B,A,A,B,C,D,... - team D and team A each nominate twice in a
 // row at the turns where the direction reverses.
-export function nextNominator(
+function rawStep(
   order: readonly Id<"draftTeams">[],
   mode: "linear" | "snake",
   currentTeamId: Id<"draftTeams">,
   direction: 1 | -1,
 ): { teamId: Id<"draftTeams">; direction: 1 | -1 } {
-  if (order.length === 0) {
-    throw new Error("Nomination order is empty.");
-  }
   const index = order.indexOf(currentTeamId);
   if (index === -1) {
     // Current team fell out of the order (e.g. order was reconfigured) -
@@ -38,6 +35,42 @@ export function nextNominator(
     return { teamId: order[index]!, direction: direction === 1 ? -1 : 1 };
   }
   return { teamId: order[nextIndex]!, direction };
+}
+
+// Given the configured order/mode and who's currently up, computes who's up
+// next - skipping any team isTeamFull reports as having no open roster
+// slots left, since a team with a full roster (bench included) has nothing
+// left to nominate for. Exported (not just used internally by nominate())
+// so it stays trivially testable/reasoned-about in isolation from the
+// mutation's DB plumbing.
+//
+// Repeatedly applies rawStep rather than jumping straight to "the next
+// non-full team in list order" so snake's bounce-at-the-boundary behavior
+// (see rawStep) is preserved exactly - a full team sitting at the boundary
+// just gets its would-be repeat turn skipped, without disturbing anyone
+// else's place in the sequence.
+export function nextNominator(
+  order: readonly Id<"draftTeams">[],
+  mode: "linear" | "snake",
+  currentTeamId: Id<"draftTeams">,
+  direction: 1 | -1,
+  isTeamFull: (teamId: Id<"draftTeams">) => boolean,
+): { teamId: Id<"draftTeams"> | null; direction: 1 | -1 } {
+  if (order.length === 0) {
+    throw new Error("Nomination order is empty.");
+  }
+  let candidate = rawStep(order, mode, currentTeamId, direction);
+  // (teamId, direction) is a finite state space of order.length * 2 - if we
+  // haven't found an open team within that many steps, every team is full
+  // and we're just cycling, so stop and report "nobody left."
+  const maxSteps = order.length * 2;
+  for (let step = 0; step < maxSteps; step++) {
+    if (!isTeamFull(candidate.teamId)) {
+      return candidate;
+    }
+    candidate = rawStep(order, mode, candidate.teamId, candidate.direction);
+  }
+  return { teamId: null, direction: candidate.direction };
 }
 
 export const getCurrentNominator = query({

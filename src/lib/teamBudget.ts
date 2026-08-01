@@ -17,6 +17,15 @@ export interface TeamBudgetStats {
   planSafe: number | null;
 }
 
+// Falls back to the league default when a team has no override set (see
+// draftTeams.salaryCapOverride in convex/schema.ts).
+export function resolveTeamSalaryCap(
+  team: { salaryCapOverride?: number } | undefined,
+  leagueSalaryCap: number,
+): number {
+  return team?.salaryCapOverride ?? leagueSalaryCap;
+}
+
 export function computeTeamBudgetStats(
   salaryCap: number,
   rosterSlots: RosterSlotCounts,

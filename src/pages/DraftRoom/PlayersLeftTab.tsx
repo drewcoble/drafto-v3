@@ -54,6 +54,9 @@ export function PlayersLeftTab({
       : "skip",
   ) as DraftTierRow[] | undefined;
   const picks = useQuery(api.draft.picks.listDraftPicks, { draftSettingsId });
+  const activeNomination = useQuery(api.draft.picks.getActiveNomination, {
+    draftSettingsId,
+  });
   const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
   const playerTags = useQuery(api.draft.tags.listPlayerTags, {
     draftSettingsId,
@@ -247,8 +250,9 @@ export function PlayersLeftTab({
       <Stack gap="lg" py="sm" miw="max-content">
         <Text size="xs" c="dimmed">
           Bar length = projected cost · color = consistency rating · outline =
-          target/avoid · faded = over your remaining budget. Drafted players are
-          hidden. Hover a bar for player info, click to mark target/avoid.
+          target/avoid · faded = over your remaining budget · gold glow +
+          gavel = currently on the block. Drafted players are hidden. Hover a
+          bar for player info, click to mark target/avoid.
         </Text>
         {activePositions.map((pos) => {
           const rows = rowsByPosition.get(pos) ?? [];
@@ -317,6 +321,7 @@ export function PlayersLeftTab({
                             tag={tagByFpid.get(row.fpid)}
                             valueGap={valueGapByFpid.get(row.fpid)}
                             consistency={consistencyByFpid.get(row.fpid)}
+                            isNominated={activeNomination?.fpid === row.fpid}
                             onCycleTag={() =>
                               cyclePlayerTag({
                                 draftSettingsId,

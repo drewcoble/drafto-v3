@@ -14,10 +14,6 @@ function DraftRouteLeaf() {
   if (!selfTeamResult?.selfTeam) return null;
 
   return (
-    <DraftTab
-      draftSettingsId={draftSettingsId}
-      teams={selfTeamResult.teams}
-      selfTeamId={selfTeamResult.selfTeam._id}
-    />
+    <DraftTab draftSettingsId={draftSettingsId} teams={selfTeamResult.teams} />
   );
 }

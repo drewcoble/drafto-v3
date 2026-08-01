@@ -59,3 +59,25 @@ export function expandRosterSlots(
   }
   return slots;
 }
+
+// Whether a player at `position` is allowed to sit in `slot` - an exact
+// position match, a flex-eligible slot when the position is in
+// flexPositions, a superflex-eligible slot when it's in superflexPositions,
+// or any bench slot (bench takes anyone). Shared by setPickSlot's server-side
+// validation and, in duplicate, src/lib/slotAssignment.ts's UI-facing
+// eligibleSlotsForPosition (see that file's comment on why it's duplicated
+// rather than imported).
+export function isEligibleForSlot(
+  position: Position,
+  slot: SlotDescriptor,
+  flexPositions: readonly Position[],
+  superflexPositions: readonly Position[],
+): boolean {
+  if (slot.position === position) return true;
+  if (slot.label.startsWith("FLEX")) return flexPositions.includes(position);
+  if (slot.label.startsWith("SFLEX")) {
+    return superflexPositions.includes(position);
+  }
+  if (slot.label.startsWith("BN")) return true;
+  return false;
+}

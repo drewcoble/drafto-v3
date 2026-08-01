@@ -4,6 +4,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import type { Position } from "../types";
 import {
   computeTeamBudgetStats,
+  resolveTeamSalaryCap,
   type TeamBudgetStats,
 } from "../lib/teamBudget";
 import { expandRosterSlots } from "../lib/rosterSlots";
@@ -94,7 +95,7 @@ export function useTeamBudget(
   }
 
   return computeTeamBudgetStats(
-    settings.salaryCap,
+    resolveTeamSalaryCap(team, settings.salaryCap),
     settings.rosterSlots,
     teamPicks.length,
     spent,

@@ -1,39 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
+import { SimpleGrid, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery } from "convex/react";
-import { Group, Select, Stack, Text } from "@mantine/core";
+import { useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
-import {
-  filterRelevantPlayers,
-  pointsForScoring,
-} from "../../lib/relevantPlayers";
-import { useTeamBudget } from "../../hooks/useTeamBudget";
-import { usePlanSlots } from "../../hooks/usePlanSlots";
-import { matchPlanSlot } from "../../lib/planRecommendation";
-import { assignSlotForPick } from "../../lib/slotAssignment";
-import { WEEK } from "../../constants/general";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
-import { NominationCard } from "./components/NominationCard";
-import { NominateSearchCard } from "./components/NominateSearchCard";
+import { WEEK } from "../../constants/general";
+import type { DraftTierRow } from "../../types";
 import { RecentPicksTable } from "./components/RecentPicksTable";
+import { TargetsTable } from "./components/ShortlistTable";
 
 interface DraftTabProps {
   draftSettingsId: Id<"draftSettings">;
   teams: Doc<"draftTeams">[];
-  selfTeamId: Id<"draftTeams">;
 }
 
-export function DraftTab({
-  draftSettingsId,
-  teams,
-  selfTeamId,
-}: DraftTabProps) {
-  const [search, setSearch] = useState("");
-  const [nominatingTeamId, setNominatingTeamId] =
-    useState<Id<"draftTeams">>(selfTeamId);
-  const [winnerTeamId, setWinnerTeamId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+// Search/nominate/bid/resolve all live in DraftTopBar now (shared across
+// every Draft Room tab) - this tab is just two audit/reference tables side
+// by side: what's already been picked, and the "target"-tagged shortlist
+// (see convex/draft/tags.ts) in priority order. Tagging itself still happens
+// elsewhere (Players Left's bar click, or the Setup app's Players table);
+// this is purely for reviewing/reordering/pruning it.
+export function DraftTab({ draftSettingsId, teams }: DraftTabProps) {
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
   const settings = settingsList?.find((s) => s._id === draftSettingsId);
@@ -41,132 +30,23 @@ export function DraftTab({
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
-  const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
-  const draftValues = useQuery(
-    api.draftValues.getDraftValues,
+  const picks = useQuery(api.draft.picks.listDraftPicks, { draftSettingsId });
+  const playerTags = useQuery(api.draft.tags.listPlayerTags, {
+    draftSettingsId,
+  });
+  // Same query/args PlayersLeftTab uses - stable for the draft's duration
+  // (draftSettings + projections only), so this is a shared subscription
+  // whenever that tab is also mounted, not a second server-side compute.
+  const tieredValues = useQuery(
+    api.draft.board.getDraftBoard,
     settings
       ? { draftSettingsId, week: WEEK, scoring: settings.scoring }
       : "skip",
-  );
-  const picks = useQuery(api.draft.picks.listDraftPicks, { draftSettingsId });
-  const activeNomination = useQuery(api.draft.picks.getActiveNomination, {
-    draftSettingsId,
-  });
-  const currentNominator = useQuery(
-    api.draft.nominationOrder.getCurrentNominator,
-    settings?.nominationOrder ? { draftSettingsId } : "skip",
-  );
-  const planSlots = usePlanSlots(draftSettingsId, selfTeamId);
+  ) as DraftTierRow[] | undefined;
 
-  const nominate = useMutation(api.draft.picks.nominate);
-  const bumpNominationBid = useMutation(api.draft.picks.bumpNominationBid);
-  const resolvePick = useMutation(api.draft.picks.resolvePick);
-  const passNomination = useMutation(api.draft.picks.passNomination);
   const removePick = useMutation(api.draft.picks.removePick);
-  const setCurrentNominator = useMutation(
-    api.draft.nominationOrder.setCurrentNominator,
-  );
-
-  // Keeps the nominate form's team picker following the suggested rotation
-  // (see convex/draft/nominationOrder.ts) as it advances each turn - still
-  // just a default, the Select below stays freely overridable for any one
-  // nomination.
-  useEffect(() => {
-    if (currentNominator?.currentTeamId) {
-      setNominatingTeamId(currentNominator.currentTeamId);
-    }
-  }, [currentNominator?.currentTeamId]);
-
-  const adpByFpid = useMemo(() => {
-    const map = new Map<
-      number,
-      { adpStd: number; adpHalf: number; adpPpr: number }
-    >();
-    for (const ranking of allRankings ?? []) {
-      map.set(ranking.fpid, ranking);
-    }
-    return map;
-  }, [allRankings]);
-
-  const draftValueByFpid = useMemo(() => {
-    const map = new Map<number, { dollarValue: number }>();
-    for (const value of draftValues ?? []) {
-      map.set(value.fpid, value);
-    }
-    return map;
-  }, [draftValues]);
-
-  const nominatedValue = activeNomination
-    ? draftValueByFpid.get(activeNomination.fpid)
-    : undefined;
-
-  const stats = useTeamBudget(
-    draftSettingsId,
-    selfTeamId,
-    activeNomination?.position,
-    nominatedValue?.dollarValue,
-  );
-
-  // Which of the team's still-open budget-plan slots the current nomination's
-  // market value best matches - the same value-based matching PlayersLeftTab
-  // uses, so "Plan-safe max" and this figure never disagree.
-  const planMatch = useMemo(() => {
-    if (!activeNomination || !planSlots) return undefined;
-    return matchPlanSlot(
-      activeNomination.position,
-      nominatedValue?.dollarValue ?? 0,
-      planSlots.openSlots,
-      planSlots.amounts,
-      planSlots.flexPositions,
-      planSlots.superflexPositions,
-    );
-  }, [activeNomination, planSlots, nominatedValue]);
-
-  const draftedFpids = useMemo(
-    () => new Set((picks ?? []).map((pick) => pick.fpid)),
-    [picks],
-  );
-
-  const activePositions = useMemo(() => {
-    if (!settings) return [];
-    return (["QB", "RB", "WR", "TE", "DST", "K"] as const).filter(
-      (pos) =>
-        settings.rosterSlots[pos] > 0 ||
-        settings.flexPositions.includes(pos) ||
-        settings.superflexPositions.includes(pos),
-    );
-  }, [settings]);
-
-  const searchResults = useMemo(() => {
-    if (!allProjections || !settings || search.trim().length < 2) return [];
-    const relevant = filterRelevantPlayers(
-      allProjections,
-      activePositions,
-      settings.scoring,
-      adpByFpid,
-      (row) => pointsForScoring(row, settings.scoring),
-    );
-    const query = search.trim().toLowerCase();
-    return relevant
-      .filter(
-        (row) =>
-          !draftedFpids.has(row.fpid) && row.name.toLowerCase().includes(query),
-      )
-      .sort(
-        (a, b) =>
-          (draftValueByFpid.get(b.fpid)?.dollarValue ?? 0) -
-          (draftValueByFpid.get(a.fpid)?.dollarValue ?? 0),
-      )
-      .slice(0, 8);
-  }, [
-    allProjections,
-    settings,
-    search,
-    activePositions,
-    adpByFpid,
-    draftedFpids,
-    draftValueByFpid,
-  ]);
+  const reorderShortlist = useMutation(api.draft.tags.reorderShortlist);
+  const clearPlayerTag = useMutation(api.draft.tags.clearPlayerTag);
 
   const nameByFpid = useMemo(() => {
     const map = new Map<number, { name: string; team: string | null }>();
@@ -184,22 +64,52 @@ export function DraftTab({
     return map;
   }, [teams]);
 
+  const teamById = useMemo(() => {
+    const map = new Map<string, Doc<"draftTeams">>();
+    for (const team of teams) {
+      map.set(team._id, team);
+    }
+    return map;
+  }, [teams]);
+
+  const boardByFpid = useMemo(() => {
+    const map = new Map<number, DraftTierRow>();
+    for (const row of tieredValues ?? []) map.set(row.fpid, row);
+    return map;
+  }, [tieredValues]);
+
+  const pickByFpid = useMemo(() => {
+    const map = new Map<number, Doc<"draftPicks">>();
+    for (const pick of picks ?? []) map.set(pick.fpid, pick);
+    return map;
+  }, [picks]);
+
   const recentPicks = useMemo(
     () =>
       [...(picks ?? [])].sort((a, b) => b.sequence - a.sequence).slice(0, 8),
     [picks],
   );
 
-  const selfFilledSlotKeys = useMemo(
-    () =>
-      new Set(
-        (picks ?? [])
-          .filter((pick) => pick.teamId === selfTeamId)
-          .map((pick) => pick.planSlotKey)
-          .filter((key): key is string => !!key),
-      ),
-    [picks, selfTeamId],
-  );
+  // Dense order among targets only - a stale/missing order value (e.g. from
+  // data written before this field existed) falls back to insertion order
+  // rather than corrupting the sort.
+  const shortlist = useMemo(() => {
+    return (playerTags ?? [])
+      .filter((tag) => tag.tag === "target")
+      .sort(
+        (a, b) =>
+          (a.order ?? 0) - (b.order ?? 0) || a._creationTime - b._creationTime,
+      )
+      .map((tag) => {
+        const pick = pickByFpid.get(tag.fpid);
+        return {
+          tag,
+          row: boardByFpid.get(tag.fpid),
+          pick,
+          draftedByTeam: pick ? teamById.get(pick.teamId) : undefined,
+        };
+      });
+  }, [playerTags, boardByFpid, pickByFpid, teamById]);
 
   const runAction = async (action: () => Promise<unknown>) => {
     setActionError(null);
@@ -212,142 +122,38 @@ export function DraftTab({
     }
   };
 
-  const nominatedPlayer = activeNomination
-    ? nameByFpid.get(activeNomination.fpid)
-    : undefined;
+  const handleMoveShortlist = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= shortlist.length) return;
+    const fpids = shortlist.map(({ tag }) => tag.fpid);
+    [fpids[index], fpids[target]] = [fpids[target]!, fpids[index]!];
+    runAction(() => reorderShortlist({ draftSettingsId, fpids }));
+  };
 
   return (
     <Stack gap="md" py="sm">
-      {activeNomination ? (
-        <NominationCard
-          activeNomination={activeNomination}
-          nominatedPlayer={nominatedPlayer}
-          nominatedValue={nominatedValue}
-          stats={stats}
-          planMatch={planMatch}
-          teams={teams}
-          winnerTeamId={winnerTeamId}
-          onWinnerTeamIdChange={setWinnerTeamId}
-          actionError={actionError}
-          onBumpBid={(delta) =>
-            runAction(() => bumpNominationBid({ draftSettingsId, delta }))
-          }
-          onLogWin={() =>
-            runAction(() => {
-              const planSlotKey = settings
-                ? assignSlotForPick(
-                    activeNomination.position,
-                    settings.rosterSlots,
-                    selfFilledSlotKeys,
-                    settings.flexPositions,
-                    settings.superflexPositions,
-                  )
-                : undefined;
-              return resolvePick({
-                draftSettingsId,
-                fpid: activeNomination.fpid,
-                teamId: selfTeamId,
-                price: activeNomination.currentBid,
-                ...(planSlotKey ? { planSlotKey } : {}),
-              });
-            })
-          }
-          onLogWinner={() =>
-            runAction(async () => {
-              if (!winnerTeamId) return;
-              await resolvePick({
-                draftSettingsId,
-                fpid: activeNomination.fpid,
-                teamId: winnerTeamId as Id<"draftTeams">,
-                price: activeNomination.currentBid,
-              });
-              setWinnerTeamId(null);
-            })
-          }
-          onPass={() => runAction(() => passNomination({ draftSettingsId }))}
-          onSelectPlayer={setSelectedFpid}
-        />
-      ) : (
-        <>
-          {settings?.nominationOrder && (
-            <Group gap="xs" wrap="wrap" align="center">
-              <Text size="sm" fw={500}>
-                {currentNominator?.currentTeamId
-                  ? `${
-                      teams.find(
-                        (team) => team._id === currentNominator.currentTeamId,
-                      )?.name ?? "Unknown team"
-                    }'s turn to nominate`
-                  : "No assigned nominator - pick manually"}
-              </Text>
-              <Select
-                size="xs"
-                placeholder="Set turn..."
-                data={[
-                  { value: "__manual__", label: "— Manual —" },
-                  ...teams.map((team) => ({
-                    value: team._id,
-                    label: team.name,
-                  })),
-                ]}
-                value={currentNominator?.currentTeamId ?? "__manual__"}
-                onChange={(value) =>
-                  runAction(() =>
-                    setCurrentNominator({
-                      draftSettingsId,
-                      teamId:
-                        !value || value === "__manual__"
-                          ? null
-                          : (value as Id<"draftTeams">),
-                    }),
-                  )
-                }
-                w={160}
-                allowDeselect={false}
-              />
-            </Group>
-          )}
-          <NominateSearchCard
-            search={search}
-            onSearchChange={setSearch}
-            teams={teams}
-            nominatingTeamId={nominatingTeamId}
-            onNominatingTeamIdChange={setNominatingTeamId}
-            actionError={actionError}
-            searchResults={searchResults}
-            draftValueByFpid={draftValueByFpid}
-            onNominate={(fpid) => {
-              runAction(() =>
-                nominate({
-                  draftSettingsId,
-                  fpid,
-                  nominatingTeamId,
-                  openingBid: 1,
-                }),
-              );
-              setSearch("");
-            }}
-            onSelectPlayer={() => {
-              setSelectedFpid;
-            }}
-          />
-        </>
-      )}
-
-      {stats && (
-        <Text size="sm" c="dimmed">
-          {stats.openSlots} open slot{stats.openSlots === 1 ? "" : "s"} · $
-          {stats.remaining} remaining
+      {actionError && (
+        <Text c="red" size="sm">
+          {actionError}
         </Text>
       )}
-
-      <RecentPicksTable
-        picks={recentPicks}
-        nameByFpid={nameByFpid}
-        teamNameById={teamNameById}
-        onRemove={(pickId) => runAction(() => removePick({ pickId }))}
-        onSelectPlayer={setSelectedFpid}
-      />
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+        <RecentPicksTable
+          picks={recentPicks}
+          nameByFpid={nameByFpid}
+          teamNameById={teamNameById}
+          onRemove={(pickId) => runAction(() => removePick({ pickId }))}
+          onSelectPlayer={setSelectedFpid}
+        />
+        <TargetsTable
+          rows={shortlist}
+          onMove={handleMoveShortlist}
+          onRemove={(fpid) =>
+            runAction(() => clearPlayerTag({ draftSettingsId, fpid }))
+          }
+          onSelectPlayer={setSelectedFpid}
+        />
+      </SimpleGrid>
 
       <PlayerDetailModal
         fpid={selectedFpid}

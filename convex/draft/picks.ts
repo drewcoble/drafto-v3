@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { requireDraftOwner } from "./auth";
 import { nextNominator } from "./nominationOrder";
+import { expandRosterSlots, isEligibleForSlot } from "./slots";
 import { invalidateDraftValues } from "../draftValues";
 
 export const listDraftPicks = query({
@@ -34,7 +35,7 @@ export const nominate = mutation({
   args: {
     draftSettingsId: v.id("draftSettings"),
     fpid: v.number(),
-    nominatingTeamId: v.id("draftTeams"),
+    nominatingTeamId: v.optional(v.id("draftTeams")),
     openingBid: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -74,7 +75,9 @@ export const nominate = mutation({
       draftSettingsId: args.draftSettingsId,
       fpid: args.fpid,
       position: player.position,
-      nominatingTeamId: args.nominatingTeamId,
+      ...(args.nominatingTeamId
+        ? { nominatingTeamId: args.nominatingTeamId }
+        : {}),
       currentBid: Math.max(args.openingBid ?? 1, 1),
       createdAt: Date.now(),
     });
@@ -94,11 +97,31 @@ export const nominate = mutation({
         )
         .first();
       if (turn && turn.currentTeamId !== null) {
+        // A team with no open roster slots (bench included) has nothing
+        // left to nominate for, so the rotation should skip straight past
+        // it - see nextNominator's isTeamFull param.
+        const allPicks = await ctx.db
+          .query("draftPicks")
+          .withIndex("by_draft_sequence", (q) =>
+            q.eq("draftSettingsId", args.draftSettingsId),
+          )
+          .collect();
+        const picksCountByTeam = new Map<string, number>();
+        for (const pick of allPicks) {
+          picksCountByTeam.set(
+            pick.teamId,
+            (picksCountByTeam.get(pick.teamId) ?? 0) + 1,
+          );
+        }
+        const totalSlots = expandRosterSlots(
+          draftSettings.rosterSlots,
+        ).length;
         const next = nextNominator(
           draftSettings.nominationOrder,
           draftSettings.nominationOrderMode,
           turn.currentTeamId,
           turn.direction,
+          (teamId) => (picksCountByTeam.get(teamId) ?? 0) >= totalSlots,
         );
         await ctx.db.patch(turn._id, {
           currentTeamId: next.teamId,
@@ -128,6 +151,28 @@ export const bumpNominationBid = mutation({
     const nextBid = Math.max(nomination.currentBid + args.delta, 1);
     await ctx.db.patch(nomination._id, { currentBid: nextBid });
     return nextBid;
+  },
+});
+
+// Absolute-value counterpart to bumpNominationBid - lets the host type the
+// final winning price directly (e.g. "$45") instead of clicking the +/-
+// stepper up one dollar at a time from wherever the bid last sat.
+export const setNominationBid = mutation({
+  args: { draftSettingsId: v.id("draftSettings"), amount: v.number() },
+  handler: async (ctx, args) => {
+    await requireDraftOwner(ctx, args.draftSettingsId);
+    const nomination = await ctx.db
+      .query("draftNominations")
+      .withIndex("by_draft", (q) =>
+        q.eq("draftSettingsId", args.draftSettingsId),
+      )
+      .first();
+    if (!nomination) {
+      throw new Error("Nothing is currently on the block.");
+    }
+    const amount = Math.max(Math.round(args.amount), 1);
+    await ctx.db.patch(nomination._id, { currentBid: amount });
+    return amount;
   },
 });
 
@@ -195,6 +240,75 @@ export const resolvePick = mutation({
     });
     await ctx.db.delete(nomination._id);
     return pickId;
+  },
+});
+
+// Manually (re)assigns which roster slot a completed pick fills - e.g.
+// bumping a flex-caliber RB down from RB2 to FLEX to free up RB2's budget
+// for a different player. Works for any team's picks, not just self, since
+// the League tab's per-team roster view (unlike DraftBoard's read-only TV
+// board) lets the host correct/override any team's slotting. `slotKey: null`
+// clears the assignment back to "unassigned", which falls back to
+// assignSlotForPick's greedy auto-placement on the client.
+export const setPickSlot = mutation({
+  args: {
+    pickId: v.id("draftPicks"),
+    slotKey: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    const pick = await ctx.db.get(args.pickId);
+    if (!pick) {
+      throw new Error("Pick not found.");
+    }
+    await requireDraftOwner(ctx, pick.draftSettingsId);
+
+    if (args.slotKey === null) {
+      await ctx.db.patch(args.pickId, { planSlotKey: undefined });
+      return null;
+    }
+
+    const draftSettings = await ctx.db.get(pick.draftSettingsId);
+    if (!draftSettings) {
+      throw new Error("Draft not found.");
+    }
+    const slot = expandRosterSlots(draftSettings.rosterSlots).find(
+      (s) => s.key === args.slotKey,
+    );
+    if (!slot) {
+      throw new Error("Not a valid roster slot for this league.");
+    }
+    if (
+      !isEligibleForSlot(
+        pick.position,
+        slot,
+        draftSettings.flexPositions,
+        draftSettings.superflexPositions,
+      )
+    ) {
+      throw new Error(`${pick.position} isn't eligible for ${slot.label}.`);
+    }
+
+    // If another pick on the same team already sits in the target slot,
+    // swap the two rather than rejecting - that's exactly the "make room"
+    // move this mutation exists for (e.g. bumping the current FLEX starter
+    // to bench to make room for the player being moved into FLEX).
+    const teamPicks = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft", (q) =>
+        q.eq("draftSettingsId", pick.draftSettingsId),
+      )
+      .collect();
+    const occupant = teamPicks.find(
+      (p) =>
+        p._id !== pick._id &&
+        p.teamId === pick.teamId &&
+        p.planSlotKey === args.slotKey,
+    );
+    if (occupant) {
+      await ctx.db.patch(occupant._id, { planSlotKey: pick.planSlotKey });
+    }
+    await ctx.db.patch(args.pickId, { planSlotKey: args.slotKey });
+    return null;
   },
 });
 

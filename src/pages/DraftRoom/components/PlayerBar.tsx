@@ -2,22 +2,23 @@ import { Box, Group, HoverCard, Text, ThemeIcon } from "@mantine/core";
 import {
   BanknoteArrowDown,
   Crosshair,
+  Gavel,
   HandCoins,
   Rocket,
   ThumbsDown,
   TrendingDown,
 } from "lucide-react";
-import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
-import type { PlanSlotMatch } from "../../../lib/planRecommendation";
-import { barStyle } from "../../../lib/draftRecommendation";
-import { type ConsistencyLabel } from "../../../lib/consistency";
 import {
   BAR_HEIGHT,
   ICON_SIZE,
-  MIN_BAR_WIDTH,
   MAX_BAR_WIDTH,
+  MIN_BAR_WIDTH,
   PX_PER_DOLLAR,
 } from "../../../constants/playersLeft";
+import { type ConsistencyLabel } from "../../../lib/consistency";
+import { barStyle } from "../../../lib/draftRecommendation";
+import type { PlanSlotMatch } from "../../../lib/planRecommendation";
+import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
 import HoverInfo from "./HoverInfo";
 
 interface PlayerBarProps {
@@ -27,6 +28,10 @@ interface PlayerBarProps {
   tag: PlayerTag | undefined;
   valueGap: ValueGap | undefined;
   consistency: ConsistencyLabel | undefined;
+  // True for the one player (across the whole board) currently up for bids -
+  // called out with a gold glow + gavel icon so it doesn't get lost among
+  // dozens of same-sized bars while the room's attention is on the auction.
+  isNominated: boolean;
   onCycleTag: () => void;
   onSelectPlayer: (fpid: number) => void;
 }
@@ -47,6 +52,7 @@ export function PlayerBar({
   tag,
   valueGap,
   consistency,
+  isNominated,
   onCycleTag,
   onSelectPlayer,
 }: PlayerBarProps) {
@@ -56,7 +62,7 @@ export function PlayerBar({
   );
   const fitsBudget =
     budgetAmount === undefined || row.dollarValue <= budgetAmount;
-  const style = barStyle(consistency, row.dollarValue, budgetAmount);
+  const style = barStyle(consistency, tag, row.dollarValue, budgetAmount);
   return (
     <HoverCard withArrow shadow="md">
       <HoverCard.Dropdown>
@@ -80,11 +86,14 @@ export function PlayerBar({
             overflow: "hidden",
             position: "relative",
             backgroundColor: style.backgroundColor,
-            opacity: style.opacity,
+            opacity: isNominated ? 1 : style.opacity,
             outline: style.outline,
             borderRadius: 4,
             outlineOffset: 1.5,
             cursor: "pointer",
+            boxShadow: isNominated
+              ? "0 0 0 2px var(--mantine-color-yellow-4), 0 0 10px 3px var(--mantine-color-yellow-6)"
+              : undefined,
           }}
         >
           <Group
@@ -99,6 +108,11 @@ export function PlayerBar({
               {row.name}
             </Text>
             <Group gap={0}>
+              {isNominated && (
+                <ThemeIcon bg="yellow.6" c="dark.8">
+                  <Gavel size={ICON_SIZE} />
+                </ThemeIcon>
+              )}
               {valueGap && (
                 <ThemeIcon w="content">
                   {valueGap.direction === "undervalued" ? (

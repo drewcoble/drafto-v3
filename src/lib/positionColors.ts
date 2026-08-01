@@ -28,7 +28,25 @@ export function positionColorOrGray(position: Position | null): string {
   return position ? POSITION_COLORS[position] : "gray";
 }
 
-const POSITION_KEYS = new Set<string>(Object.keys(POSITION_COLORS));
+const ADDITIONAL_POSITION_COLORS: Record<string, string> = {
+  FLEX: "orange",
+  SFLEX: "gold",
+  BENCH: "gray",
+};
+const POSITION_KEYS = new Set<string>(
+  Object.keys(POSITION_COLORS).concat(Object.keys(ADDITIONAL_POSITION_COLORS)),
+);
+
+export const POSITION_ORDER: string[] = [
+  "QB",
+  "RB",
+  "WR",
+  "TE",
+  "FLEX",
+  "SFLEX",
+  "DST",
+  "K",
+];
 
 // Same fallback, but for call sites keyed by a plain string that may or may
 // not be one of the six Position values (e.g. a roster slot's group label).

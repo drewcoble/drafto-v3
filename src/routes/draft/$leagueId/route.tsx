@@ -6,6 +6,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { AppHeader } from "../../../components/AppHeader";
 import { DraftTopBar } from "../../../pages/DraftRoom/DraftTopBar";
 import { useSelfTeam } from "../../../hooks/useSelfTeam";
+import { APP_CONTENT_MAX_WIDTH } from "../../../constants/general";
 
 export const Route = createFileRoute("/draft/$leagueId")({
   component: DraftLayout,
@@ -75,7 +76,7 @@ function DraftLayout() {
   const { selfTeam } = selfTeamResult;
 
   return (
-    <Container size="lg" py="xl">
+    <Container size={APP_CONTENT_MAX_WIDTH} py="xl">
       <Stack gap="md">
         <AppHeader />
         <Group justify="space-between" align="center">

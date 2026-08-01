@@ -298,6 +298,31 @@ export const getAllValueGaps = query({
 // Recomputes getAllValueGaps for one (week, scoring, lastSeason) combo and
 // replaces its cached rows - called from fetchAllData once a day, after the
 // projections/rankings/playerSeasonStats data it reads has been refreshed.
+// Also called directly (not via the mutation wrapper below) by
+// ensureValueGapsCached, so a brand-new league's scoring format gets seeded
+// immediately at creation time rather than waiting on the daily cron.
+export async function refreshValueGapsForCombo(
+  ctx: MutationCtx,
+  args: { week: string; scoring: Scoring; lastSeason: string },
+) {
+  const rows = await computeValueGaps(ctx, args);
+
+  const existing = await ctx.db
+    .query("valueGaps")
+    .withIndex("by_week_scoring_lastSeason", (q) =>
+      q
+        .eq("week", args.week)
+        .eq("scoring", args.scoring)
+        .eq("lastSeason", args.lastSeason),
+    )
+    .collect();
+  for (const row of existing) await ctx.db.delete(row._id);
+
+  for (const row of rows) {
+    await ctx.db.insert("valueGaps", { ...row, ...args });
+  }
+}
+
 export const refreshValueGaps = internalMutation({
   args: {
     week: v.string(),
@@ -305,21 +330,27 @@ export const refreshValueGaps = internalMutation({
     lastSeason: v.string(),
   },
   handler: async (ctx, args) => {
-    const rows = await computeValueGaps(ctx, args);
-
-    const existing = await ctx.db
-      .query("valueGaps")
-      .withIndex("by_week_scoring_lastSeason", (q) =>
-        q
-          .eq("week", args.week)
-          .eq("scoring", args.scoring)
-          .eq("lastSeason", args.lastSeason),
-      )
-      .collect();
-    for (const row of existing) await ctx.db.delete(row._id);
-
-    for (const row of rows) {
-      await ctx.db.insert("valueGaps", { ...row, ...args });
-    }
+    await refreshValueGapsForCombo(ctx, args);
   },
 });
+
+// Seeds the valueGaps cache for one combo only if it's missing - valueGaps is
+// shared across every league at the same scoring format (unlike draftValues,
+// which is per-league), so a second league created with a scoring format an
+// existing league already seeded shouldn't pay to recompute it again.
+export async function ensureValueGapsCached(
+  ctx: MutationCtx,
+  args: { week: string; scoring: Scoring; lastSeason: string },
+) {
+  const cached = await ctx.db
+    .query("valueGaps")
+    .withIndex("by_week_scoring_lastSeason", (q) =>
+      q
+        .eq("week", args.week)
+        .eq("scoring", args.scoring)
+        .eq("lastSeason", args.lastSeason),
+    )
+    .first();
+  if (cached) return;
+  await refreshValueGapsForCombo(ctx, args);
+}

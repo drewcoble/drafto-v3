@@ -33,6 +33,7 @@ export function MyTeamTab({ draftSettingsId, selfTeamId }: MyTeamTabProps) {
   });
   const stats = useTeamBudget(draftSettingsId, selfTeamId);
   const removePick = useMutation(api.draft.picks.removePick);
+  const setPickSlot = useMutation(api.draft.picks.setPickSlot);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
 
@@ -43,6 +44,17 @@ export function MyTeamTab({ draftSettingsId, selfTeamId }: MyTeamTabProps) {
     } catch (err) {
       setRemoveError(
         err instanceof Error ? err.message : "Failed to remove pick.",
+      );
+    }
+  };
+
+  const handleMove = async (pickId: Id<"draftPicks">, slotKey: string) => {
+    setRemoveError(null);
+    try {
+      await setPickSlot({ pickId, slotKey });
+    } catch (err) {
+      setRemoveError(
+        err instanceof Error ? err.message : "Failed to move pick.",
       );
     }
   };
@@ -127,7 +139,10 @@ export function MyTeamTab({ draftSettingsId, selfTeamId }: MyTeamTabProps) {
         pickBySlotKey={pickBySlotKey}
         planAmounts={plan?.amounts ?? {}}
         nameByFpid={nameByFpid}
+        flexPositions={settings?.flexPositions ?? []}
+        superflexPositions={settings?.superflexPositions ?? []}
         onRemove={handleRemove}
+        onMove={handleMove}
         onSelectPlayer={setSelectedFpid}
       />
 

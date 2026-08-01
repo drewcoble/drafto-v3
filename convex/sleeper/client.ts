@@ -54,6 +54,9 @@ export async function fetchSleeper(
   season: string,
   week: string | undefined,
   positions: string[],
+  // Untyped fetch boundary - callers cast the JSON response to whatever
+  // specific record shape they expect (SleeperProjectionRecord[], etc).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   const path = week
     ? `/${endpoint}/nfl/${season}/${week}`

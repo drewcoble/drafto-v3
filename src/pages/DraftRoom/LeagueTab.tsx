@@ -1,14 +1,30 @@
-import { useMemo, useState } from "react";
+import {
+  Badge,
+  Card,
+  Group,
+  Progress,
+  SimpleGrid,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { useMutation, useQuery } from "convex/react";
-import { Card, Group, Progress, SimpleGrid, Stack, Text } from "@mantine/core";
+import { useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
-import { computeTeamBudgetStats } from "../../lib/teamBudget";
+import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { TeamSlotDetail } from "../../components/TeamSlotDetail";
+import { WEEK } from "../../constants/general";
+import {
+  POSITION_ORDER,
+  positionColorOrDefault,
+} from "../../lib/positionColors";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { assignPicksToSlots } from "../../lib/slotAssignment";
-import { WEEK } from "../../constants/general";
-import { TeamSlotDetail } from "../../components/TeamSlotDetail";
-import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import {
+  computeTeamBudgetStats,
+  resolveTeamSalaryCap,
+} from "../../lib/teamBudget";
+import { Position } from "../../types";
 
 interface LeagueTabProps {
   draftSettingsId: Id<"draftSettings">;
@@ -32,6 +48,7 @@ export function LeagueTab({
   );
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const removePick = useMutation(api.draft.picks.removePick);
+  const setPickSlot = useMutation(api.draft.picks.setPickSlot);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
   const handleRemove = async (pickId: Id<"draftPicks">) => {
@@ -41,6 +58,17 @@ export function LeagueTab({
     } catch (err) {
       setRemoveError(
         err instanceof Error ? err.message : "Failed to remove pick.",
+      );
+    }
+  };
+
+  const handleMove = async (pickId: Id<"draftPicks">, slotKey: string) => {
+    setRemoveError(null);
+    try {
+      await setPickSlot({ pickId, slotKey });
+    } catch (err) {
+      setRemoveError(
+        err instanceof Error ? err.message : "Failed to move pick.",
       );
     }
   };
@@ -59,7 +87,7 @@ export function LeagueTab({
         .sort((a, b) => a.sequence - b.sequence);
       const spent = teamPicks.reduce((sum, pick) => sum + pick.price, 0);
       const stats = computeTeamBudgetStats(
-        settings.salaryCap,
+        resolveTeamSalaryCap(team, settings.salaryCap),
         settings.rosterSlots,
         teamPicks.length,
         spent,
@@ -74,9 +102,11 @@ export function LeagueTab({
       const needs = slots
         .filter((slot) => !bySlot.has(slot.key))
         .map((slot) => slot.label);
-      const fillPct = slots.length
-        ? ((slots.length - needs.length) / slots.length) * 100
-        : 0;
+      console.log(stats);
+      const fillPct = (stats.remaining / (stats.remaining + stats.spent)) * 100;
+      // const fillPct = slots.length
+      //   ? ((slots.length - needs.length) / slots.length) * 100
+      //   : 0;
       return { team, teamPicks, stats, slots, bySlot, needs, fillPct };
     });
   }, [teams, settings, picks]);
@@ -110,6 +140,7 @@ export function LeagueTab({
   if (!settings || !picks) return null;
 
   const thisSeason = settings.season ?? String(new Date().getFullYear());
+  console.log(settings.rosterSlots);
 
   return (
     <Stack gap="md" py="sm">
@@ -150,7 +181,30 @@ export function LeagueTab({
                     {stats.totalSlots} filled
                   </Text>
                 </Group>
-                <Progress value={fillPct} size="sm" />
+                <Progress value={fillPct} size="lg" color="green" />
+                <Group>
+                  {Object.keys(settings.rosterSlots)
+                    .sort(
+                      (a, b) =>
+                        POSITION_ORDER.indexOf(a as Position) -
+                        POSITION_ORDER.indexOf(b as Position),
+                    )
+                    .map((slot) => {
+                      if (needs.some((p) => p.startsWith(slot))) {
+                        return (
+                          <Badge
+                            key={slot}
+                            color={positionColorOrDefault(slot)}
+                            size="xs"
+                            variant="light"
+                          >
+                            {slot}
+                          </Badge>
+                        );
+                      }
+                      return null;
+                    })}
+                </Group>
                 <Text size="xs" c="dimmed" lineClamp={1}>
                   needs {needs.slice(0, 4).join(", ") || "nothing"}
                   {needs.length > 4 ? ` +${needs.length - 4}` : ""}
@@ -160,7 +214,10 @@ export function LeagueTab({
                     slots={slots}
                     bySlot={bySlot}
                     nameByFpid={nameByFpid}
+                    flexPositions={settings.flexPositions}
+                    superflexPositions={settings.superflexPositions}
                     onRemove={handleRemove}
+                    onMove={handleMove}
                     onSelectPlayer={setSelectedFpid}
                   />
                 )}

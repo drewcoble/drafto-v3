@@ -10,6 +10,8 @@ export function CategoryBreakdown({
   categoryTotals,
   salaryCap,
 }: CategoryBreakdownProps) {
+  const allocated = categoryTotals.reduce((sum, { total }) => sum + total, 0);
+  const remaining = Math.max(salaryCap - allocated, 0);
   return (
     <Stack gap={6}>
       <Box
@@ -30,6 +32,17 @@ export function CategoryBreakdown({
               }}
             />
           ) : null,
+        )}
+        {remaining > 0 && (
+          // Cap still available to spend - gold, matching the palette's
+          // "money/scarcity" accent, distinct from the position-colored
+          // spent segments to its left.
+          <Box
+            style={{
+              width: `${(remaining / salaryCap) * 100}%`,
+              backgroundColor: "var(--mantine-color-gold-6)",
+            }}
+          />
         )}
       </Box>
       <Group gap="md">

@@ -24,8 +24,7 @@ import {
 } from "../../constants/leagueSettings";
 import { SettingsForm } from "./components/SettingsForm";
 import { SeasonHistoryPanel } from "./components/SeasonHistoryPanel";
-import { TeamNameField } from "./components/TeamNameField";
-import { NominationOrderPanel } from "./components/NominationOrderPanel";
+import { TeamsPanel } from "./components/TeamsPanel";
 
 interface LeagueDetailsProps {
   selectedLeagueId: Id<"draftSettings"> | undefined;
@@ -51,6 +50,7 @@ export function LeagueDetails({
     api.draft.teams.initializeDraftTeams,
   );
   const renameDraftTeam = useMutation(api.draft.teams.renameDraftTeam);
+  const setTeamSalaryCap = useMutation(api.draft.teams.setTeamSalaryCap);
   const seasonLineage = useQuery(
     api.draft.history.listSeasonLineage,
     selectedLeagueId ? { draftSettingsId: selectedLeagueId } : "skip",
@@ -190,6 +190,20 @@ export function LeagueDetails({
     }
   };
 
+  const handleSetTeamSalaryCap = async (
+    teamId: Id<"draftTeams">,
+    salaryCap: number | null,
+  ) => {
+    setTeamsError(null);
+    try {
+      await setTeamSalaryCap({ teamId, salaryCap });
+    } catch (err) {
+      setTeamsError(
+        err instanceof Error ? err.message : "Failed to set salary cap.",
+      );
+    }
+  };
+
   const openStartSeasonForm = () => {
     setNextSeasonLabel(guessNextSeason(settings?.season));
     setNextSeasonName(settings?.name ?? "");
@@ -249,159 +263,165 @@ export function LeagueDetails({
   const rosterEntries = Object.entries(settings.rosterSlots);
 
   return (
-    <Stack gap="md" py="sm">
-      <Group justify="space-between" align="center">
-        <Title order={4}>{settings.name}</Title>
-        <Button variant="default" size="sm" onClick={startEditing}>
-          Edit
-        </Button>
-      </Group>
-      <SeasonHistoryPanel
-        seasonLineage={seasonLineage}
-        currentSettingsId={settings._id}
-        historySeasonId={historySeasonId}
-        onSelectHistorySeason={setHistorySeasonId}
-        isStartingSeason={isStartingSeason}
-        onOpenStartSeason={openStartSeasonForm}
-        onCancelStartSeason={() => setIsStartingSeason(false)}
-        nextSeasonName={nextSeasonName}
-        onNextSeasonNameChange={setNextSeasonName}
-        nextSeasonLabel={nextSeasonLabel}
-        onNextSeasonLabelChange={setNextSeasonLabel}
-        cloneError={cloneError}
-        isCloning={isCloning}
-        onStartSeason={handleStartSeason}
-      />
-      <SimpleGrid cols={3} spacing="md">
+    <Stack gap="lg" py="sm">
+      <Title order={4}>{settings.name}</Title>
+
+      <Card withBorder padding="md">
+        <SeasonHistoryPanel
+          seasonLineage={seasonLineage}
+          currentSettingsId={settings._id}
+          historySeasonId={historySeasonId}
+          onSelectHistorySeason={setHistorySeasonId}
+          isStartingSeason={isStartingSeason}
+          onOpenStartSeason={openStartSeasonForm}
+          onCancelStartSeason={() => setIsStartingSeason(false)}
+          nextSeasonName={nextSeasonName}
+          onNextSeasonNameChange={setNextSeasonName}
+          nextSeasonLabel={nextSeasonLabel}
+          onNextSeasonLabelChange={setNextSeasonLabel}
+          cloneError={cloneError}
+          isCloning={isCloning}
+          onStartSeason={handleStartSeason}
+        />
+      </Card>
+
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <Card withBorder padding="md">
-          <Text size="sm" c="dimmed">
-            Teams
-          </Text>
-          <Text size="xl" fw={700}>
-            {settings.teamCount}
-          </Text>
-        </Card>
-        <Card withBorder padding="md">
-          <Text size="sm" c="dimmed">
-            Salary Cap
-          </Text>
-          <Text size="xl" fw={700}>
-            ${settings.salaryCap}
-          </Text>
-        </Card>
-        <Card withBorder padding="md">
-          <Text size="sm" c="dimmed">
-            Scoring
-          </Text>
-          <Text size="xl" fw={700}>
-            {SCORING_OPTIONS.find((option) => option.value === settings.scoring)
-              ?.label ?? settings.scoring}
-          </Text>
-        </Card>
-      </SimpleGrid>
-      <Stack gap={6}>
-        <Text size="sm" c="dimmed">
-          Roster Slots
-        </Text>
-        <Group gap="xs">
-          {rosterEntries.map(([slot, count]) => (
-            <Badge
-              key={slot}
-              variant="light"
-              size="lg"
-              color={positionColorOrDefault(slot)}
-            >
-              {slot}: {count}
-            </Badge>
-          ))}
-        </Group>
-      </Stack>
-      <Text size="sm" c="dimmed">
-        FLEX eligible: {settings.flexPositions.join(", ")}
-      </Text>
-      <Text size="sm" c="dimmed">
-        SUPERFLEX eligible: {settings.superflexPositions.join(", ")}
-      </Text>
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          Draft Teams
-        </Text>
-        {draftTeams === undefined ? (
-          <Loader size="sm" />
-        ) : draftTeams.length === 0 ? (
-          <Stack gap="sm" maw={420}>
-            <Text size="sm" c="dimmed">
-              Enter your team name and the other {opponentNames.length} teams
-              in this draft before entering the Draft Room. You can rename
-              teams later.
-            </Text>
-            <TextInput
-              label="Your team name"
-              value={selfName}
-              onChange={(event) => setSelfName(event.currentTarget.value)}
-            />
-            {opponentNames.map((name, index) => (
-              <TextInput
-                key={index}
-                placeholder={`Team ${index + 1}`}
-                value={name}
-                onChange={(event) => {
-                  const next = [...opponentNames];
-                  next[index] = event.currentTarget.value;
-                  setOpponentNames(next);
-                }}
-              />
-            ))}
-            {teamsError && (
-              <Text c="red" size="sm">
-                {teamsError}
+          <Stack gap="md">
+            <Group justify="space-between" align="center">
+              <Text size="sm" fw={500}>
+                League Settings
               </Text>
-            )}
-            <Button
-              onClick={handleSaveTeams}
-              loading={isSavingTeams}
-              disabled={
-                !selfName.trim() ||
-                opponentNames.some((name) => !name.trim())
-              }
-              w="fit-content"
-            >
-              Save Teams
-            </Button>
-          </Stack>
-        ) : (
-          <Stack gap="xs">
-            {teamsError && (
-              <Text c="red" size="sm">
-                {teamsError}
+              <Button
+                variant="default"
+                size="compact-sm"
+                onClick={startEditing}
+              >
+                Edit
+              </Button>
+            </Group>
+            <SimpleGrid cols={3} spacing="md">
+              <Card withBorder padding="sm">
+                <Text size="sm" c="dimmed">
+                  Teams
+                </Text>
+                <Text size="xl" fw={700}>
+                  {settings.teamCount}
+                </Text>
+              </Card>
+              <Card withBorder padding="sm">
+                <Text size="sm" c="dimmed">
+                  Salary Cap
+                </Text>
+                <Text size="xl" fw={700}>
+                  ${settings.salaryCap}
+                </Text>
+              </Card>
+              <Card withBorder padding="sm">
+                <Text size="sm" c="dimmed">
+                  Scoring
+                </Text>
+                <Text size="xl" fw={700}>
+                  {SCORING_OPTIONS.find(
+                    (option) => option.value === settings.scoring,
+                  )?.label ?? settings.scoring}
+                </Text>
+              </Card>
+            </SimpleGrid>
+            <Stack gap={6}>
+              <Text size="sm" c="dimmed">
+                Roster Slots
               </Text>
-            )}
-            <Group gap="xs">
-              {draftTeams.map((team) => (
-                <Group key={team._id} gap={4} wrap="nowrap">
-                  <TeamNameField
-                    team={team}
-                    onRename={(name) => handleRenameTeam(team._id, name)}
-                  />
-                  {team.isSelf && (
-                    <Badge variant="light" size="sm">
-                      you
-                    </Badge>
-                  )}
-                </Group>
-              ))}
+              <Group gap="xs">
+                {rosterEntries.map(([slot, count]) => (
+                  <Badge
+                    key={slot}
+                    variant="light"
+                    size="lg"
+                    color={positionColorOrDefault(slot)}
+                  >
+                    {slot}: {count}
+                  </Badge>
+                ))}
+              </Group>
+            </Stack>
+            <Group gap="lg">
+              <Text size="sm" c="dimmed">
+                FLEX eligible: {settings.flexPositions.join(", ")}
+              </Text>
+              <Text size="sm" c="dimmed">
+                SUPERFLEX eligible: {settings.superflexPositions.join(", ")}
+              </Text>
             </Group>
           </Stack>
-        )}
-      </Stack>
-      {draftTeams && draftTeams.length > 0 && (
-        <NominationOrderPanel
-          draftSettingsId={settings._id}
-          teams={draftTeams}
-          nominationOrder={settings.nominationOrder}
-          nominationOrderMode={settings.nominationOrderMode}
-        />
-      )}
+        </Card>
+
+        <Card withBorder padding="md">
+          {draftTeams === undefined ? (
+            <Stack gap={6}>
+              <Text size="sm" fw={500}>
+                Teams
+              </Text>
+              <Loader size="sm" />
+            </Stack>
+          ) : draftTeams.length === 0 ? (
+            <Stack gap="sm" maw={420}>
+              <Text size="sm" fw={500}>
+                Teams
+              </Text>
+              <Text size="sm" c="dimmed">
+                Enter your team name and the other {opponentNames.length}{" "}
+                teams in this draft before entering the Draft Room. You can
+                rename teams later.
+              </Text>
+              <TextInput
+                label="Your team name"
+                value={selfName}
+                onChange={(event) => setSelfName(event.currentTarget.value)}
+              />
+              {opponentNames.map((name, index) => (
+                <TextInput
+                  key={index}
+                  placeholder={`Team ${index + 1}`}
+                  value={name}
+                  onChange={(event) => {
+                    const next = [...opponentNames];
+                    next[index] = event.currentTarget.value;
+                    setOpponentNames(next);
+                  }}
+                />
+              ))}
+              {teamsError && (
+                <Text c="red" size="sm">
+                  {teamsError}
+                </Text>
+              )}
+              <Button
+                onClick={handleSaveTeams}
+                loading={isSavingTeams}
+                disabled={
+                  !selfName.trim() ||
+                  opponentNames.some((name) => !name.trim())
+                }
+                w="fit-content"
+              >
+                Save Teams
+              </Button>
+            </Stack>
+          ) : (
+            <TeamsPanel
+              draftSettingsId={settings._id}
+              teams={draftTeams}
+              nominationOrder={settings.nominationOrder}
+              nominationOrderMode={settings.nominationOrderMode}
+              salaryCap={settings.salaryCap}
+              onRenameTeam={handleRenameTeam}
+              onSetTeamSalaryCap={handleSetTeamSalaryCap}
+              renameError={teamsError}
+            />
+          )}
+        </Card>
+      </SimpleGrid>
     </Stack>
   );
 }

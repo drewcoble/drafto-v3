@@ -3,7 +3,10 @@ import { useQuery } from "convex/react";
 import { Card, Group, Progress, SimpleGrid, Stack, Text } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { computeTeamBudgetStats } from "../../lib/teamBudget";
+import {
+  computeTeamBudgetStats,
+  resolveTeamSalaryCap,
+} from "../../lib/teamBudget";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { assignPicksToSlots } from "../../lib/slotAssignment";
 import { WEEK } from "../../constants/general";
@@ -45,7 +48,7 @@ export function SeasonSummary({ draftSettingsId }: SeasonSummaryProps) {
         .sort((a, b) => a.sequence - b.sequence);
       const spent = teamPicks.reduce((sum, pick) => sum + pick.price, 0);
       const stats = computeTeamBudgetStats(
-        settings.salaryCap,
+        resolveTeamSalaryCap(team, settings.salaryCap),
         settings.rosterSlots,
         teamPicks.length,
         spent,

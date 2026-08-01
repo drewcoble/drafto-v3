@@ -251,11 +251,29 @@ async function computeDraftValues(
     settings.rosterSlots.FLEX +
     settings.rosterSlots.SUPERFLEX +
     settings.rosterSlots.BENCH;
+  // Sum each team's actual cap (its override, or the league default) rather
+  // than assuming every team uses the league default - a team with a custom
+  // salaryCapOverride (convex/draft/teams.ts) changes the total money in the
+  // room. Teams may not exist yet the first time this runs (createDraftSettings
+  // seeds the cache before initializeDraftTeams has ever run), so fall back
+  // to the settings-only formula in that case.
+  const teams = await ctx.db
+    .query("draftTeams")
+    .withIndex("by_draft", (q) =>
+      q.eq("draftSettingsId", args.draftSettingsId),
+    )
+    .collect();
+  const totalCapDollars =
+    teams.length > 0
+      ? teams.reduce(
+          (sum, team) => sum + (team.salaryCapOverride ?? settings.salaryCap),
+          0,
+        )
+      : settings.teamCount * settings.salaryCap;
   // Dollars already committed to keepers are off the auction table, and
   // each kept player fills a roster slot that no longer needs its $1
   // reservation out of the surplus pool.
-  const totalDraftDollars =
-    settings.teamCount * settings.salaryCap - keptDollars;
+  const totalDraftDollars = totalCapDollars - keptDollars;
   const baselineDollars =
     settings.teamCount * totalRosterSlots - keepers.length;
   const surplusDollars = totalDraftDollars - baselineDollars;
@@ -368,6 +386,37 @@ export const getDraftValues = query({
 // fetchAllData (after the projections/rankings it reads have refreshed), and
 // on-demand by invalidateDraftValues below (a keeper change or settings
 // edit) so the cache doesn't have to wait for the next day to catch up.
+// Also called directly (not via the mutation wrapper below) at league-
+// creation time - see createDraftSettings/cloneDraftSettings - so a new
+// league's cache is never in the "empty because the daily cron hasn't run
+// yet" state that forces every getDraftValues subscription onto the
+// expensive live-compute path.
+export async function refreshDraftValuesForLeague(
+  ctx: MutationCtx,
+  args: {
+    draftSettingsId: Id<"draftSettings">;
+    week: string;
+    scoring: Scoring;
+  },
+) {
+  const rows = await computeDraftValues(ctx, args);
+
+  const existing = await ctx.db
+    .query("draftValues")
+    .withIndex("by_draft_week_scoring", (q) =>
+      q
+        .eq("draftSettingsId", args.draftSettingsId)
+        .eq("week", args.week)
+        .eq("scoring", args.scoring),
+    )
+    .collect();
+  for (const row of existing) await ctx.db.delete(row._id);
+
+  for (const row of rows) {
+    await ctx.db.insert("draftValues", { ...row, ...args });
+  }
+}
+
 export const refreshDraftValues = internalMutation({
   args: {
     draftSettingsId: v.id("draftSettings"),
@@ -375,22 +424,7 @@ export const refreshDraftValues = internalMutation({
     scoring: scoringValidator,
   },
   handler: async (ctx, args) => {
-    const rows = await computeDraftValues(ctx, args);
-
-    const existing = await ctx.db
-      .query("draftValues")
-      .withIndex("by_draft_week_scoring", (q) =>
-        q
-          .eq("draftSettingsId", args.draftSettingsId)
-          .eq("week", args.week)
-          .eq("scoring", args.scoring),
-      )
-      .collect();
-    for (const row of existing) await ctx.db.delete(row._id);
-
-    for (const row of rows) {
-      await ctx.db.insert("draftValues", { ...row, ...args });
-    }
+    await refreshDraftValuesForLeague(ctx, args);
   },
 });
 

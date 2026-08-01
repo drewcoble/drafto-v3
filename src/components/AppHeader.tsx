@@ -1,12 +1,12 @@
-import { useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { Button, Group, Select, Text, Title } from "@mantine/core";
 import {
   Link,
   useLocation,
   useNavigate,
   useParams,
 } from "@tanstack/react-router";
-import { Button, Group, Select, Title } from "@mantine/core";
+import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { setStoredLeagueId } from "../lib/leagueStorage";
@@ -48,9 +48,15 @@ export function AppHeader() {
 
   return (
     <Group justify="space-between" align="center">
-      <Title order={2}>Fantasy Football Projections</Title>
+      <Title order={2}>
+        <Text component="span" inherit c="gold.5">
+          infini
+        </Text>
+        draft
+      </Title>
       <Group gap="sm">
         <Select
+          variant="unstyled"
           placeholder="Select league"
           data={[
             ...(draftSettingsList ?? []).map((league) => ({
@@ -69,13 +75,13 @@ export function AppHeader() {
             to="/setup/$leagueId/league"
             params={{ leagueId: leagueId ?? NEW_LEAGUE_VALUE }}
           >
-            <Button component="span" variant="default" size="sm">
+            <Button component="span" variant="light" size="sm" color="gold">
               Back to Setup
             </Button>
           </Link>
         ) : leagueId && leagueId !== NEW_LEAGUE_VALUE ? (
           <Link to="/draft/$leagueId/draft" params={{ leagueId }}>
-            <Button component="span" variant="filled" size="sm">
+            <Button component="span" variant="filled" size="sm" color="gold">
               Enter Draft Room
             </Button>
           </Link>

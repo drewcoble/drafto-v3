@@ -2,6 +2,13 @@ import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import { requireDraftOwner } from "./auth";
+import { refreshDraftValuesForLeague } from "../draftValues";
+import { ensureValueGapsCached } from "../valueGaps";
+
+// Mirrors src/constants/general.ts's WEEK - see convex/draftSettings.ts's
+// copy of this same constant for why it's duplicated here rather than
+// imported from src/.
+const DRAFT_PREP_WEEK = "0";
 
 const MAX_LINEAGE_WALK = 25;
 
@@ -130,6 +137,9 @@ export const cloneDraftSettings = mutation({
         isSelf: team.isSelf,
         order: team.order,
         createdAt: now,
+        ...(team.salaryCapOverride !== undefined
+          ? { salaryCapOverride: team.salaryCapOverride }
+          : {}),
       });
     }
 
@@ -145,6 +155,22 @@ export const cloneDraftSettings = mutation({
         updatedAt: now,
       });
     }
+
+    // Seed the new season's draftValues cache immediately (same reasoning as
+    // createDraftSettings in convex/draftSettings.ts) rather than leaving it
+    // empty until the next daily cron run. Unlike createDraftSettings, this
+    // row's `season` is known exactly (args.season), so lastSeason doesn't
+    // need the current-year fallback.
+    await refreshDraftValuesForLeague(ctx, {
+      draftSettingsId: newId,
+      week: DRAFT_PREP_WEEK,
+      scoring: source.scoring,
+    });
+    await ensureValueGapsCached(ctx, {
+      week: DRAFT_PREP_WEEK,
+      scoring: source.scoring,
+      lastSeason: String(Number(args.season) - 1),
+    });
 
     return newId;
   },

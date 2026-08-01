@@ -50,6 +50,9 @@ export async function requireSuperAdmin(ctx: ActionCtx) {
 export async function fetchFantasyPros(
   path: string,
   params: Record<string, string | undefined>,
+  // Untyped fetch boundary - callers cast the JSON response to whatever
+  // specific record shape they expect.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   const apiKey = requireApiKey();
   const url = new URL(`${API_BASE_URL}${path}`);

@@ -8,13 +8,15 @@ import {
   Loader,
   SimpleGrid,
   Stack,
-  Table,
   Text,
   Title,
 } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { computeTeamBudgetStats } from "../../lib/teamBudget";
+import {
+  computeTeamBudgetStats,
+  resolveTeamSalaryCap,
+} from "../../lib/teamBudget";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { assignPicksToSlots } from "../../lib/slotAssignment";
 import { positionColorOrGray, POSITION_COLORS } from "../../lib/positionColors";
@@ -51,7 +53,7 @@ export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
     week: WEEK,
   });
 
-  const nameByFpid = useMemo(() => {
+  const playerByFpid = useMemo(() => {
     const map = new Map<number, { name: string; team: string | null }>();
     for (const row of allProjections ?? []) map.set(row.fpid, row);
     return map;
@@ -67,7 +69,7 @@ export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
           .sort((a, b) => a.sequence - b.sequence);
         const spent = teamPicks.reduce((sum, pick) => sum + pick.price, 0);
         const stats = computeTeamBudgetStats(
-          settings.salaryCap,
+          resolveTeamSalaryCap(team, settings.salaryCap),
           settings.rosterSlots,
           teamPicks.length,
           spent,
@@ -117,7 +119,7 @@ export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
           <Group gap="xs" wrap="wrap">
             {activeNomination && nominatingTeam && (
               <Badge size="xl" radius="md" variant="light" color="yellow">
-                Nominated by {nominatingTeam.name}
+                {nominatingTeam.name} nominated
               </Badge>
             )}
             {!activeNomination && turnTeam && (
@@ -133,9 +135,10 @@ export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
                 color={`${POSITION_COLORS[activeNomination.position]}`}
               >
                 On the block:{" "}
-                {nameByFpid.get(activeNomination.fpid)?.name ??
+                {playerByFpid.get(activeNomination.fpid)?.name ??
                   `#${activeNomination.fpid}`}{" "}
-                ({activeNomination.position})
+                ({activeNomination.position}) -{" "}
+                {playerByFpid.get(activeNomination.fpid)?.team}
               </Badge>
             )}
           </Group>
@@ -148,6 +151,7 @@ export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
             key={team._id}
             withBorder
             padding="xs"
+            radius="lg"
             bd={
               team._id === highlightedTeamId
                 ? "3px solid var(--mantine-color-blue-7)"
@@ -159,42 +163,39 @@ export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
                 : "inherit"
             }
           >
-            <Stack gap={6} w="100%" bg="saddlebrown">
-              {index + 1 > boardCols && (
-                <BudgetStats stats={stats} position="top" />
-              )}
+            <Stack gap={6}>
               <Text fw={700} size="lg">
                 {team.name}
               </Text>
-              <Table verticalSpacing={4} fz="sm">
-                <Table.Tbody>
-                  {slots.map((slot) => {
-                    const pick = bySlot.get(slot.key);
-                    const player = pick ? nameByFpid.get(pick.fpid) : undefined;
-                    return (
-                      <Table.Tr key={slot.key}>
-                        <Table.Td w={65}>
-                          <Badge
-                            size="sm"
-                            variant="light"
-                            color={positionColorOrGray(slot.position)}
-                          >
-                            {slot.label}
-                          </Badge>
-                        </Table.Td>
-                        <Table.Td w="calc(100% - 169px)">
-                          <Text truncate size="xs">
-                            {player?.name ?? "-"}
-                          </Text>
-                        </Table.Td>
-                        <Table.Td ta="right" w={44}>
-                          <Text size="xs">{pick ? `$${pick.price}` : ""}</Text>
-                        </Table.Td>
-                      </Table.Tr>
-                    );
-                  })}
-                </Table.Tbody>
-              </Table>
+              {index + 1 > boardCols && (
+                <BudgetStats stats={stats} position="top" />
+              )}
+
+              {slots.map((slot) => {
+                const pick = bySlot.get(slot.key);
+                const player = pick ? playerByFpid.get(pick.fpid) : undefined;
+                return (
+                  <>
+                    <Group gap={10} w="100%" justify="space-between">
+                      <Badge
+                        size="sm"
+                        variant="light"
+                        color={positionColorOrGray(slot.position)}
+                        w={65}
+                      >
+                        {slot.label}
+                      </Badge>
+                      <Text truncate size="md" ta="left" w="calc(100% - 120px)">
+                        {player?.name ?? "-"}
+                      </Text>
+                      <Text size="md" ta="right" w={35} fw={600}>
+                        {pick ? `$${pick.price}` : ""}
+                      </Text>
+                    </Group>
+                  </>
+                );
+              })}
+
               {index < boardCols && (
                 <BudgetStats stats={stats} position="bottom" />
               )}
