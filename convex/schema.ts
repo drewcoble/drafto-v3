@@ -4,6 +4,44 @@ import { v } from "convex/values";
 import { positionValidator } from "./positions";
 import { scoringValidator } from "./scoring";
 
+// Shared by seasons/drafts below.
+const rosterSlotsValidator = v.object({
+  QB: v.number(),
+  RB: v.number(),
+  WR: v.number(),
+  TE: v.number(),
+  DST: v.number(),
+  K: v.number(),
+  FLEX: v.number(),
+  SUPERFLEX: v.number(),
+  BENCH: v.number(),
+});
+
+// Shared by leagues/seasons below.
+const keeperRulesValidator = v.object({
+  defaultFormula: v.object({
+    multiplier: v.number(),
+    flatAdd: v.number(),
+    minimumCost: v.optional(v.number()),
+    undraftedCost: v.optional(v.number()),
+  }),
+  tiers: v.array(
+    v.object({
+      id: v.string(),
+      name: v.string(),
+      maxSize: v.optional(v.number()),
+      formula: v.object({
+        multiplier: v.number(),
+        flatAdd: v.number(),
+        minimumCost: v.optional(v.number()),
+      }),
+      fpids: v.array(v.number()),
+    }),
+  ),
+  maxKeepersPerTeam: v.optional(v.number()),
+  maxConsecutiveYears: v.optional(v.number()),
+});
+
 export default defineSchema({
   ...authTables,
 
@@ -206,77 +244,162 @@ export default defineSchema({
     // client-side since a week can have more than one row.
     .index("by_fpid_season", ["fpid", "season"]),
 
-  // League/format settings for the $ value calculation (convex/draftValues.ts).
-  // One row per draft config; only one is seeded for now, but this is
-  // designed to be user-configurable per-draft later.
-  draftSettings: defineTable({
+  // Live NFL week/season snapshot, refreshed daily alongside the rest of
+  // fetchAllData (see convex/sleeper/state.ts's fetchNflSeasonState and
+  // convex/fetchAllData.ts). Exists because queries can't reach Sleeper
+  // themselves - anything read-only that needs "what week is it right now"
+  // (e.g. the in-season FAAB calculator) reads this table instead. Single
+  // row, always upserted in place rather than keyed by season/week, since
+  // only the current value is ever needed.
+  nflState: defineTable({
+    season: v.string(),
+    week: v.string(),
+    seasonType: v.union(
+      v.literal("pre"),
+      v.literal("regular"),
+      v.literal("post"),
+    ),
+    updatedAt: v.number(),
+  }),
+
+  // Durable league identity - rarely written, one per real-world league
+  // regardless of how many seasons/years it's played. A league's year-to-year
+  // history is just seasons.by_league, ordered by year/createdAt - no
+  // separate lineage-chain field needed.
+  leagues: defineTable({
     ownerId: v.id("users"),
     name: v.string(),
+    createdAt: v.number(),
+  }).index("by_owner", ["ownerId"]),
+
+  // One per league per year - this season's actual format (roster shape,
+  // scoring, cap, provider links). The unit most of the app's "league
+  // settings" UI actually edits.
+  seasons: defineTable({
+    leagueId: v.id("leagues"),
+    year: v.string(),
     teamCount: v.number(),
     salaryCap: v.number(),
-    // Default scoring format for this league - drives both the $ value
-    // calculation and the Players table's point/sort display.
     scoring: scoringValidator,
-    rosterSlots: v.object({
-      QB: v.number(),
-      RB: v.number(),
-      WR: v.number(),
-      TE: v.number(),
-      DST: v.number(),
-      K: v.number(),
-      FLEX: v.number(),
-      SUPERFLEX: v.number(),
-      BENCH: v.number(),
-    }),
-    // Which positions are eligible for the FLEX slot(s), e.g. ["RB","WR","TE"]
+    rosterSlots: rosterSlotsValidator,
     flexPositions: v.array(positionValidator),
-    // Which positions are eligible for the SUPERFLEX slot(s), e.g.
-    // ["QB","RB","WR","TE"]
     superflexPositions: v.array(positionValidator),
+    // Sleeper/Yahoo mint a new league id each year, so these are correctly
+    // season-scoped rather than durable across every season of a league.
+    sleeperLeagueId: v.optional(v.string()),
+    yahooLeagueKey: v.optional(v.string()),
+    faabBudget: v.optional(v.number()),
+    useKeepers: v.optional(v.boolean()),
+    keeperRules: v.optional(keeperRulesValidator),
     createdAt: v.number(),
-    // Free-text season label (e.g. "2026"), set when this row is created via
-    // cloneDraftSettings - absent on rows never advanced into a season chain.
-    season: v.optional(v.string()),
-    // Points at the immediately-prior season's draftSettings row, forming an
-    // implicit linked list of seasons for one league rather than a separate
-    // leagues table. Written ONCE, at insert time, by
-    // convex/draft/history.ts's cloneDraftSettings - no mutation ever patches
-    // this on an existing row, so the backward lineage walk in
-    // listSeasonLineage/getPlayerPriceHistory is structurally cycle-free, not
-    // just defensively bounded. Keep it that way: do not add a way to
-    // repoint this field after creation.
-    clonedFromId: v.optional(v.id("draftSettings")),
-    // Optional custom nomination order, independent of draftTeams.order
-    // (which is just team creation/display order) - absent means nomination
-    // order is fully manual (the original behavior: any team can be picked
-    // from the nominate dropdown every time, no suggested turn). Both are
-    // always set/cleared together by convex/draft/nominationOrder.ts.
-    nominationOrder: v.optional(v.array(v.id("draftTeams"))),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_league_year", ["leagueId", "year"]),
+
+  // A draft within a season - a season can have many (mock drafts) but at
+  // most one with kind "real" (enforced by convex/draft/history.ts's season
+  // creation, which always creates exactly one "real" draft alongside the
+  // season). Auction-session config defaults from the season at creation but
+  // can diverge (e.g. a mock testing a different cap) - though today's UI
+  // only ever creates the one real draft.
+  drafts: defineTable({
+    seasonId: v.id("seasons"),
+    kind: v.union(v.literal("mock"), v.literal("real")),
+    name: v.string(),
+    salaryCap: v.optional(v.number()),
+    rosterSlots: v.optional(rosterSlotsValidator),
+    flexPositions: v.optional(v.array(positionValidator)),
+    superflexPositions: v.optional(v.array(positionValidator)),
+    // Meaningless outside a live auction.
+    nominationOrder: v.optional(v.array(v.id("seasonTeams"))),
     nominationOrderMode: v.optional(
       v.union(v.literal("linear"), v.literal("snake")),
     ),
+    status: v.union(
+      v.literal("setup"),
+      v.literal("in_progress"),
+      v.literal("complete"),
+    ),
+    createdAt: v.number(),
   })
-    .index("by_owner", ["ownerId"])
-    // Finds the season (if any) already cloned FROM a given row - used both
-    // to walk the lineage forward and to enforce "at most one forward clone
-    // per source row" in cloneDraftSettings.
-    .index("by_cloned_from", ["clonedFromId"]),
+    .index("by_season", ["seasonId"])
+    .index("by_season_kind", ["seasonId", "kind"])
+    .index("by_season_status", ["seasonId", "status"]),
 
-  // One team per participant in a live draft, including the owner's own team
-  // (isSelf: true) - keeping "me" as a real row makes budget math and the
-  // League tab symmetric across every team instead of special-casing one.
-  draftTeams: defineTable({
-    draftSettingsId: v.id("draftSettings"),
+  // The season's durable team roster - one table shared by every draft in
+  // the season (mock or real), so mocks can't diverge in team count/shape.
+  // Includes the owner's own team (isSelf: true) - keeping "me" as a real row
+  // makes budget math and the League tab symmetric across every team instead
+  // of special-casing one.
+  seasonTeams: defineTable({
+    seasonId: v.id("seasons"),
     name: v.string(),
     isSelf: v.boolean(),
     order: v.number(),
     createdAt: v.number(),
-    // Overrides draftSettings.salaryCap for this team only - absent means
-    // this team just uses the league default. Lets a team start the auction
-    // with a different budget than everyone else (e.g. a supplemental cap
-    // adjustment or a carried-over keeper penalty).
+    // Overrides seasons.salaryCap for this team only - absent means this
+    // team just uses the league default.
     salaryCapOverride: v.optional(v.number()),
-  }).index("by_draft", ["draftSettingsId"]),
+    // Links this team to a real Sleeper roster/owner once seasons.
+    // sleeperLeagueId is set - see convex/sleeper/league.ts's syncLeagueRoster
+    // and the team-mapping step in Settings. Absent means unmapped.
+    sleeperRosterId: v.optional(v.string()),
+    sleeperOwnerId: v.optional(v.string()),
+    // Yahoo equivalent of sleeperRosterId - see convex/yahoo/league.ts's
+    // syncYahooLeagueRoster.
+    yahooTeamKey: v.optional(v.string()),
+    // In-season FAAB spent so far, synced from the linked provider roster -
+    // defaults to 0 until the first sync.
+    faabSpent: v.optional(v.number()),
+    // Overrides seasons.faabBudget for this team only.
+    faabBudgetOverride: v.optional(v.number()),
+  }).index("by_season", ["seasonId"]),
+
+  // One team's currently-rostered players, synced from whichever provider
+  // this season is linked to (convex/sleeper/league.ts's syncLeagueRoster or
+  // convex/yahoo/league.ts's syncYahooLeagueRoster) - provider-agnostic by
+  // design, since the only consumer (convex/season/faabValues.ts) only ever
+  // needs "which fpids does this team currently have," never which provider
+  // synced them. Replace-all-on-sync per team: every existing row for a
+  // teamId is deleted and reinserted fresh on each sync, the same pattern
+  // upsertProjections uses for injuries/rankings - simpler than diffing
+  // adds/drops, and in-season roster syncs are manually triggered (not
+  // high-frequency) so the delete+reinsert cost is a non-issue.
+  rosterPlayers: defineTable({
+    seasonId: v.id("seasons"),
+    teamId: v.id("seasonTeams"),
+    fpid: v.number(),
+    syncedAt: v.number(),
+  })
+    .index("by_season", ["seasonId"])
+    .index("by_team", ["teamId"]),
+
+  // One row per app user (not per league) - connecting a Yahoo account is a
+  // one-time action that then lets that user link any of their Yahoo leagues
+  // to any of their drafto leagues, mirroring how leagues.ownerId already
+  // scopes everything else per-user. See convex/yahoo/oauth.ts.
+  yahooOAuthTokens: defineTable({
+    userId: v.id("users"),
+    accessToken: v.string(),
+    refreshToken: v.string(),
+    // Epoch ms - convex/yahoo/oauth.ts's withYahooToken refreshes proactively
+    // a few minutes before this, rather than waiting for a 401.
+    expiresAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  // Short-lived nonce bridging Yahoo's OAuth redirect (an unauthenticated
+  // browser navigation - no Convex auth session survives that trip) back to
+  // "which app user, and optionally which season's Settings page, started
+  // this." Generated by startYahooAuth right before redirecting to Yahoo,
+  // consumed (looked up and deleted) exactly once by the /yahoo/callback
+  // HTTP route in convex/http.ts. See convex/yahoo/oauth.ts.
+  yahooOAuthState: defineTable({
+    state: v.string(),
+    userId: v.id("users"),
+    seasonId: v.optional(v.id("seasons")),
+    createdAt: v.number(),
+  }).index("by_state", ["state"]),
 
   // A completed auction result - one row per player won. `sequence` is
   // monotonic per draft and is the sole source of truth for "last pick"
@@ -284,11 +407,11 @@ export default defineSchema({
   // anywhere, so REMAINING is always salaryCap - sum(picks.price) and undo
   // is a plain delete.
   draftPicks: defineTable({
-    draftSettingsId: v.id("draftSettings"),
+    draftId: v.id("drafts"),
     sequence: v.number(),
     fpid: v.number(),
     position: positionValidator,
-    teamId: v.id("draftTeams"),
+    teamId: v.id("seasonTeams"),
     price: v.number(),
     // Which roster slot this fills, e.g. "RB2" - auto-assigned only for the
     // self team's picks at pick time (since only self has a budget plan to
@@ -304,38 +427,47 @@ export default defineSchema({
     // than required so existing rows need no backfill - `eq("isKeeper",
     // true)` never matches a row where the field is absent either way.
     isKeeper: v.optional(v.boolean()),
+    // Consecutive seasons (including this one) this player has been kept,
+    // by any team - only meaningful when isKeeper is true. Auto-suggested
+    // by addKeeper's computeKeeperStreak (see convex/draft/picks.ts) from
+    // the immediately-prior season's value when this fpid was also a
+    // keeper then, and always overridable afterward via setKeeperStreak
+    // (e.g. to backfill real-world keeper history from before this app
+    // tracked it) - next season's suggestion chains off whatever value
+    // ends up here. Optional rather than required so existing rows need no
+    // backfill; treated as 1 wherever read.
+    keeperStreak: v.optional(v.number()),
     createdAt: v.number(),
   })
-    .index("by_draft", ["draftSettingsId"])
-    .index("by_draft_sequence", ["draftSettingsId", "sequence"])
-    .index("by_draft_fpid", ["draftSettingsId", "fpid"])
+    .index("by_draft", ["draftId"])
+    .index("by_draft_sequence", ["draftId", "sequence"])
+    .index("by_draft_fpid", ["draftId", "fpid"])
     // Scoped to isKeeper===true so draftValues.ts can read "just the
     // keepers" without its query being invalidated by every live auction
     // pick - see the comment on that read in convex/draftValues.ts.
-    .index("by_draft_keeper", ["draftSettingsId", "isKeeper"]),
+    .index("by_draft_keeper", ["draftId", "isKeeper"]),
 
   // The single live "on the block" nomination for a draft, if any. Kept as
-  // its own table rather than a field on draftSettings so that fast-changing
-  // bid-stepper clicks don't re-render every subscriber of the draftSettings
-  // row (e.g. App.tsx's league selector). At most one row per
-  // draftSettingsId.
+  // its own table rather than a field on drafts so that fast-changing
+  // bid-stepper clicks don't re-render every subscriber of the drafts row.
+  // At most one row per draftId.
   draftNominations: defineTable({
-    draftSettingsId: v.id("draftSettings"),
+    draftId: v.id("drafts"),
     fpid: v.number(),
     position: positionValidator,
-    nominatingTeamId: v.optional(v.id("draftTeams")),
+    nominatingTeamId: v.optional(v.id("seasonTeams")),
     currentBid: v.number(),
     createdAt: v.number(),
-  }).index("by_draft", ["draftSettingsId"]),
+  }).index("by_draft", ["draftId"]),
 
   // The self team's PRE-DRAFT planned $ allocation per roster slot (keys
   // from expandRosterSlots, e.g. "RB1"/"FLEX"/"BN3") - one row per draft,
   // edited from the Setup app's Budget tab, before entering the Draft Room.
-  // This is the baseline cloneDraftSettings carries forward to next season -
-  // draftLiveBudgetOverrides (below) deliberately isn't, since it's specific
-  // to how one draft actually played out.
+  // This is the baseline a new season's draft carries forward from the prior
+  // one - draftLiveBudgetOverrides (below) deliberately isn't, since it's
+  // specific to how one draft actually played out.
   draftBudgetPlans: defineTable({
-    draftSettingsId: v.id("draftSettings"),
+    draftId: v.id("drafts"),
     amounts: v.record(v.string(), v.number()),
     overspendBehavior: v.union(
       v.literal("bench"),
@@ -343,7 +475,7 @@ export default defineSchema({
       v.literal("ask"),
     ),
     updatedAt: v.number(),
-  }).index("by_draft", ["draftSettingsId"]),
+  }).index("by_draft", ["draftId"]),
 
   // Live, in-draft overrides to the pre-draft plan above - only the slots
   // the user has explicitly reallocated during THIS draft are stored here;
@@ -357,7 +489,7 @@ export default defineSchema({
   // draft, absence means "fully mirroring the pre-draft plan, nothing
   // overridden yet".
   draftLiveBudgetOverrides: defineTable({
-    draftSettingsId: v.id("draftSettings"),
+    draftId: v.id("drafts"),
     overrides: v.record(v.string(), v.number()),
     // Falls back to draftBudgetPlans.overspendBehavior when unset, same
     // mirror-until-touched relationship as `overrides` has with `amounts`.
@@ -365,14 +497,14 @@ export default defineSchema({
       v.union(v.literal("bench"), v.literal("spread"), v.literal("ask")),
     ),
     updatedAt: v.number(),
-  }).index("by_draft", ["draftSettingsId"]),
+  }).index("by_draft", ["draftId"]),
 
   // A manual "target"/"avoid" annotation on a player, scoped to one draft -
   // pure user preference, not derived from anything, so (unlike tiers) this
   // genuinely needs to be stored rather than computed. One row per
-  // (draftSettingsId, fpid); absence of a row means "no opinion".
+  // (draftId, fpid); absence of a row means "no opinion".
   draftPlayerTags: defineTable({
-    draftSettingsId: v.id("draftSettings"),
+    draftId: v.id("drafts"),
     fpid: v.number(),
     tag: v.union(v.literal("target"), v.literal("avoid")),
     // Dense 0..n-1 rank among this draft's "target" rows only - the
@@ -383,27 +515,27 @@ export default defineSchema({
     order: v.optional(v.number()),
     updatedAt: v.number(),
   })
-    .index("by_draft", ["draftSettingsId"])
-    .index("by_draft_fpid", ["draftSettingsId", "fpid"]),
+    .index("by_draft", ["draftId"])
+    .index("by_draft_fpid", ["draftId", "fpid"]),
 
   // Live "whose turn is it to nominate" pointer - only meaningful when the
-  // league's draftSettings.nominationOrder is configured. At most one row
-  // per draft. currentTeamId is null when the host has explicitly cleared
-  // "whose turn" (e.g. running a pre-cycle top-X auction with no fixed
-  // nominator before the regular rotation begins) - distinct from no row
-  // existing yet, which just means the order was configured but the cycle
-  // hasn't been started. direction only matters in "snake" mode (see
+  // draft's nominationOrder is configured. At most one row per draft.
+  // currentTeamId is null when the host has explicitly cleared "whose turn"
+  // (e.g. running a pre-cycle top-X auction with no fixed nominator before
+  // the regular rotation begins) - distinct from no row existing yet, which
+  // just means the order was configured but the cycle hasn't been started.
+  // direction only matters in "snake" mode (see
   // convex/draft/nominationOrder.ts's nextNominator) - it's what lets the
   // team at each end of the order take two consecutive turns before
   // reversing, matching a standard snake draft's round-boundary behavior.
   // Always overridable by the host (see setCurrentNominator) - this is a
   // suggestion the nominate UI defaults to, never an enforced restriction.
   draftNominationTurns: defineTable({
-    draftSettingsId: v.id("draftSettings"),
-    currentTeamId: v.union(v.id("draftTeams"), v.null()),
+    draftId: v.id("drafts"),
+    currentTeamId: v.union(v.id("seasonTeams"), v.null()),
     direction: v.union(v.literal(1), v.literal(-1)),
     updatedAt: v.number(),
-  }).index("by_draft", ["draftSettingsId"]),
+  }).index("by_draft", ["draftId"]),
 
   // Precomputed cache of convex/valueGaps.ts's getAllValueGaps result, keyed
   // by the same (week, scoring, lastSeason) triple the query is called with.
@@ -438,20 +570,20 @@ export default defineSchema({
   }).index("by_week_scoring_lastSeason", ["week", "scoring", "lastSeason"]),
 
   // Precomputed cache of convex/draftValues.ts's getDraftValues result, keyed
-  // by (draftSettingsId, week, scoring) - same reasoning as valueGaps above:
-  // that computation reads every active position's full projections docs
-  // (the unused `stats` blob included) plus keepers, and was recomputed from
+  // by (draftId, week, scoring) - same reasoning as valueGaps above: that
+  // computation reads every active position's full projections docs (the
+  // unused `stats` blob included) plus keepers, and was recomputed from
   // scratch on every one of its 5+ call sites' subscriptions. Refreshed once
-  // daily by refreshDraftValues (one call per league, at that league's own
-  // scoring format - see fetchAllData.ts), and eagerly invalidated whenever
-  // something that actually changes the computation happens off the daily
-  // cycle (a keeper added/removed, or draftSettings edited - see
+  // daily by refreshDraftValues (one call per real draft, at that league's
+  // own scoring format - see fetchAllData.ts), and eagerly invalidated
+  // whenever something that actually changes the computation happens off the
+  // daily cycle (a keeper added/removed, or season settings edited - see
   // invalidateDraftValues, called from convex/draft/picks.ts and
-  // convex/draftSettings.ts). getDraftValues reads this table first and only
-  // falls back to a live recompute on a cache miss (a combo the daily
-  // refresh hasn't covered yet, or one just invalidated).
+  // convex/leagues.ts). getDraftValues reads this table first and only falls
+  // back to a live recompute on a cache miss (a combo the daily refresh
+  // hasn't covered yet, or one just invalidated).
   draftValues: defineTable({
-    draftSettingsId: v.id("draftSettings"),
+    draftId: v.id("drafts"),
     week: v.string(),
     scoring: scoringValidator,
     fpid: v.number(),
@@ -466,7 +598,7 @@ export default defineSchema({
     dollarValue: v.number(),
     // Read/write path (getDraftValues/refreshDraftValues) queries the full
     // key; the invalidation path (a keeper change or settings edit doesn't
-    // know which week/scoring combos are cached) queries just the
-    // draftSettingsId prefix to clear all of them at once.
-  }).index("by_draft_week_scoring", ["draftSettingsId", "week", "scoring"]),
+    // know which week/scoring combos are cached) queries just the draftId
+    // prefix to clear all of them at once.
+  }).index("by_draft_week_scoring", ["draftId", "week", "scoring"]),
 });

@@ -26,15 +26,27 @@ const SLOT_ORDER: Array<{
   position: Position | null;
 }> = [
   { countKey: "QB", label: "QB", position: "QB" },
+  { countKey: "SUPERFLEX", label: "SFLEX", position: null },
   { countKey: "RB", label: "RB", position: "RB" },
   { countKey: "WR", label: "WR", position: "WR" },
-  { countKey: "TE", label: "TE", position: "TE" },
   { countKey: "FLEX", label: "FLEX", position: null },
-  { countKey: "SUPERFLEX", label: "SFLEX", position: null },
+  { countKey: "TE", label: "TE", position: "TE" },
   { countKey: "DST", label: "DST", position: "DST" },
   { countKey: "K", label: "K", position: "K" },
   { countKey: "BENCH", label: "BN", position: null },
 ];
+
+// Whether every roster slot, league-wide, has been filled - used to gate
+// in-season tooling (see AppHeader.tsx's Season mode switch) without needing
+// a dedicated "draft status" field: a completed draft is just one where
+// picksCount has caught up to the full roster size for every team.
+export function isDraftComplete(
+  rosterSlots: RosterSlotCounts,
+  teamCount: number,
+  picksCount: number,
+): boolean {
+  return picksCount >= expandRosterSlots(rosterSlots).length * teamCount;
+}
 
 // Deterministic, ordered slot list for a league's roster shape - kept in
 // sync with convex/draft/slots.ts (Convex's bundler doesn't allow importing

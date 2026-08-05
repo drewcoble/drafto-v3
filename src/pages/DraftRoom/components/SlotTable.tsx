@@ -1,4 +1,5 @@
-import { Anchor, Badge, Button, Group, Menu, Table, Text } from "@mantine/core";
+import { ActionIcon, Anchor, Badge, Group, Menu, Table, Text } from "@mantine/core";
+import { MoreVertical } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { Position } from "../../../types";
 import type { SlotDescriptor } from "../../../lib/rosterSlots";
@@ -46,6 +47,7 @@ export function SlotTable({
             const pick = pickBySlotKey.get(slot.key);
             const player = pick ? nameByFpid.get(pick.fpid) : undefined;
             const planAmount = planAmounts[slot.key] ?? 0;
+            const diff = pick ? planAmount - pick.price : 0;
             const moveTargets = pick
               ? eligibleSlotsForPosition(
                   pick.position,
@@ -77,22 +79,35 @@ export function SlotTable({
                     )}
                     {pick?.isKeeper && (
                       <Badge variant="light" color="gray" size="sm">
-                        Keeper
+                        Keeper · Yr {pick.keeperStreak ?? 1}
                       </Badge>
                     )}
                   </Group>
                 </Table.Td>
                 <Table.Td>${planAmount}</Table.Td>
                 <Table.Td>{pick ? `$${pick.price}` : "—"}</Table.Td>
-                <Table.Td>{pick ? pick.price - planAmount : ""}</Table.Td>
                 <Table.Td>
-                  <Group gap={4} wrap="nowrap" justify="flex-end">
-                    {pick && moveTargets.length > 0 && (
+                  {pick && (
+                    <Text
+                      size="sm"
+                      c={diff > 0 ? "green" : diff < 0 ? "red" : "inherit"}
+                    >
+                      {diff > 0 ? `+${diff}` : diff}
+                    </Text>
+                  )}
+                </Table.Td>
+                <Table.Td>
+                  {pick && (
+                    <Group gap={4} wrap="nowrap" justify="flex-end">
                       <Menu shadow="md" width={170} position="bottom-end">
                         <Menu.Target>
-                          <Button size="compact-sm" variant="subtle">
-                            Move
-                          </Button>
+                          <ActionIcon
+                            variant="subtle"
+                            color="gray"
+                            aria-label="Slot actions"
+                          >
+                            <MoreVertical size={16} />
+                          </ActionIcon>
                         </Menu.Target>
                         <Menu.Dropdown>
                           {moveTargets.map((target) => {
@@ -105,25 +120,22 @@ export function SlotTable({
                                 key={target.key}
                                 onClick={() => onMove(pick._id, target.key)}
                               >
-                                {target.label}
+                                Move to {target.label}
                                 {occupantName ? ` (swap w/ ${occupantName})` : ""}
                               </Menu.Item>
                             );
                           })}
+                          {moveTargets.length > 0 && <Menu.Divider />}
+                          <Menu.Item
+                            color="red"
+                            onClick={() => onRemove(pick._id)}
+                          >
+                            Remove
+                          </Menu.Item>
                         </Menu.Dropdown>
                       </Menu>
-                    )}
-                    {pick && (
-                      <Button
-                        size="compact-sm"
-                        variant="subtle"
-                        color="red"
-                        onClick={() => onRemove(pick._id)}
-                      >
-                        Remove
-                      </Button>
-                    )}
-                  </Group>
+                    </Group>
+                  )}
                 </Table.Td>
               </Table.Tr>
             );

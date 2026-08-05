@@ -23,6 +23,11 @@ interface SettingsFormProps {
   isSaving: boolean;
   onSave: () => void;
   onCancel: () => void;
+  // Overrides the Save button's label - e.g. LeagueImportWizard.tsx uses
+  // this form purely as the "review the imported settings" step of a bigger
+  // multi-part create action, so "Save" alone would undersell what clicking
+  // it actually does.
+  saveLabel?: string;
 }
 
 export function SettingsForm({
@@ -32,6 +37,7 @@ export function SettingsForm({
   isSaving,
   onSave,
   onCancel,
+  saveLabel = "Save",
 }: SettingsFormProps) {
   return (
     <Stack gap="md" py="sm" maw={500}>
@@ -147,7 +153,7 @@ export function SettingsForm({
       )}
       <Group>
         <Button onClick={onSave} loading={isSaving}>
-          Save
+          {saveLabel}
         </Button>
         <Button variant="default" onClick={onCancel} disabled={isSaving}>
           Cancel

@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
+  ActionIcon,
   Anchor,
   Badge,
-  Button,
   Group,
   Progress,
   Stack,
   Text,
 } from "@mantine/core";
+import { Trash2 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { expandRosterSlots } from "../../lib/rosterSlots";
@@ -19,19 +20,19 @@ import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { SlotTable } from "./components/SlotTable";
 
 interface MyTeamTabProps {
-  draftSettingsId: Id<"draftSettings">;
-  teams: Doc<"draftTeams">[];
-  selfTeamId: Id<"draftTeams">;
+  seasonId: Id<"seasons">;
+  teams: Doc<"seasonTeams">[];
+  selfTeamId: Id<"seasonTeams">;
 }
 
-export function MyTeamTab({ draftSettingsId, selfTeamId }: MyTeamTabProps) {
-  const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const picks = useQuery(api.draft.picks.listDraftPicks, { draftSettingsId });
-  const plan = useQuery(api.draft.plan.getLiveBudgetPlan, { draftSettingsId });
+export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
+  const settingsList = useQuery(api.leagues.listSeasons, {});
+  const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
+  const plan = useQuery(api.draft.plan.getLiveBudgetPlan, { seasonId });
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
-  const stats = useTeamBudget(draftSettingsId, selfTeamId);
+  const stats = useTeamBudget(seasonId, selfTeamId);
   const removePick = useMutation(api.draft.picks.removePick);
   const setPickSlot = useMutation(api.draft.picks.setPickSlot);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -59,7 +60,7 @@ export function MyTeamTab({ draftSettingsId, selfTeamId }: MyTeamTabProps) {
     }
   };
 
-  const settings = settingsList?.find((s) => s._id === draftSettingsId);
+  const settings = settingsList?.find((s) => s._id === seasonId);
 
   const nameByFpid = useMemo(() => {
     const map = new Map<number, { name: string; team: string | null }>();
@@ -112,7 +113,7 @@ export function MyTeamTab({ draftSettingsId, selfTeamId }: MyTeamTabProps) {
     pickBySlotKey.has(slot.key),
   ).length;
 
-  const thisSeason = settings?.season ?? String(new Date().getFullYear());
+  const thisSeason = settings?.year ?? String(new Date().getFullYear());
 
   return (
     <Stack gap="md" py="sm">
@@ -158,7 +159,6 @@ export function MyTeamTab({ draftSettingsId, selfTeamId }: MyTeamTabProps) {
                   component="button"
                   type="button"
                   size="sm"
-                  c="dimmed"
                   onClick={() => setSelectedFpid(pick.fpid)}
                 >
                   {nameByFpid.get(pick.fpid)?.name ?? `#${pick.fpid}`}
@@ -167,17 +167,17 @@ export function MyTeamTab({ draftSettingsId, selfTeamId }: MyTeamTabProps) {
               </Text>
               {pick.isKeeper && (
                 <Badge variant="light" color="gray" size="sm">
-                  Keeper
+                  Keeper · Yr {pick.keeperStreak ?? 1}
                 </Badge>
               )}
-              <Button
-                size="compact-sm"
+              <ActionIcon
                 variant="subtle"
                 color="red"
+                aria-label="Remove pick"
                 onClick={() => handleRemove(pick._id)}
               >
-                Remove
-              </Button>
+                <Trash2 size={16} />
+              </ActionIcon>
             </Group>
           ))}
         </Stack>
@@ -221,7 +221,7 @@ export function MyTeamTab({ draftSettingsId, selfTeamId }: MyTeamTabProps) {
         week={WEEK}
         scoring={settings?.scoring ?? "PPR"}
         season={thisSeason}
-        draftSettingsId={draftSettingsId}
+        seasonId={seasonId}
       />
     </Stack>
   );

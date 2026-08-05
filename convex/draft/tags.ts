@@ -3,14 +3,12 @@ import { mutation, query } from "../_generated/server";
 import { requireDraftOwner } from "./auth";
 
 export const listPlayerTags = query({
-  args: { draftSettingsId: v.id("draftSettings") },
+  args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     return await ctx.db
       .query("draftPlayerTags")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .collect();
   },
 });
@@ -19,13 +17,13 @@ export const listPlayerTags = query({
 // no-opinion -> target -> avoid -> no-opinion, so the frontend never has to
 // know the current state to decide what to write next.
 export const cyclePlayerTag = mutation({
-  args: { draftSettingsId: v.id("draftSettings"), fpid: v.number() },
+  args: { seasonId: v.id("seasons"), fpid: v.number() },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     const existing = await ctx.db
       .query("draftPlayerTags")
       .withIndex("by_draft_fpid", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId).eq("fpid", args.fpid),
+        q.eq("draftId", draft._id).eq("fpid", args.fpid),
       )
       .first();
 
@@ -35,15 +33,13 @@ export const cyclePlayerTag = mutation({
       // already does) just to find the current max order among targets.
       const allTags = await ctx.db
         .query("draftPlayerTags")
-        .withIndex("by_draft", (q) =>
-          q.eq("draftSettingsId", args.draftSettingsId),
-        )
+        .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
         .collect();
       const maxOrder = allTags
         .filter((tag) => tag.tag === "target")
         .reduce((max, tag) => Math.max(max, tag.order ?? -1), -1);
       return await ctx.db.insert("draftPlayerTags", {
-        draftSettingsId: args.draftSettingsId,
+        draftId: draft._id,
         fpid: args.fpid,
         tag: "target",
         order: maxOrder + 1,
@@ -59,18 +55,70 @@ export const cyclePlayerTag = mutation({
   },
 });
 
+// Direct one-step set (not a cycle) - used by explicit Target/Avoid buttons
+// (e.g. the Players Left board's per-player popover) where the two actions
+// are separate controls rather than one button to step through. Setting the
+// tag a row already has clears it instead (so clicking an already-active
+// button toggles it off) rather than being a no-op.
+export const setPlayerTag = mutation({
+  args: {
+    seasonId: v.id("seasons"),
+    fpid: v.number(),
+    tag: v.union(v.literal("target"), v.literal("avoid")),
+  },
+  handler: async (ctx, args) => {
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    const existing = await ctx.db
+      .query("draftPlayerTags")
+      .withIndex("by_draft_fpid", (q) =>
+        q.eq("draftId", draft._id).eq("fpid", args.fpid),
+      )
+      .first();
+
+    if (existing && existing.tag === args.tag) {
+      await ctx.db.delete(existing._id);
+      return null;
+    }
+    if (existing) {
+      await ctx.db.patch(existing._id, { tag: args.tag, updatedAt: Date.now() });
+      return existing._id;
+    }
+
+    // Same append-to-end-of-shortlist ordering as cyclePlayerTag above -
+    // only meaningful for "target", "avoid" rows don't use `order`.
+    let order: number | undefined;
+    if (args.tag === "target") {
+      const allTags = await ctx.db
+        .query("draftPlayerTags")
+        .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+        .collect();
+      order =
+        allTags
+          .filter((t) => t.tag === "target")
+          .reduce((max, t) => Math.max(max, t.order ?? -1), -1) + 1;
+    }
+    return await ctx.db.insert("draftPlayerTags", {
+      draftId: draft._id,
+      fpid: args.fpid,
+      tag: args.tag,
+      ...(order !== undefined ? { order } : {}),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 // Direct one-step removal (any tag -> no-opinion) - used by the Shortlist
 // tab's "Remove" action, where stepping through cyclePlayerTag's
 // target -> avoid -> gone sequence would leave a target briefly (and
 // confusingly) marked avoid instead of just disappearing from the list.
 export const clearPlayerTag = mutation({
-  args: { draftSettingsId: v.id("draftSettings"), fpid: v.number() },
+  args: { seasonId: v.id("seasons"), fpid: v.number() },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     const existing = await ctx.db
       .query("draftPlayerTags")
       .withIndex("by_draft_fpid", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId).eq("fpid", args.fpid),
+        q.eq("draftId", draft._id).eq("fpid", args.fpid),
       )
       .first();
     if (existing) {
@@ -89,18 +137,16 @@ export const clearPlayerTag = mutation({
 // writes the two rows that actually moved.
 export const reorderShortlist = mutation({
   args: {
-    draftSettingsId: v.id("draftSettings"),
+    seasonId: v.id("seasons"),
     fpids: v.array(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     for (let i = 0; i < args.fpids.length; i++) {
       const tag = await ctx.db
         .query("draftPlayerTags")
         .withIndex("by_draft_fpid", (q) =>
-          q
-            .eq("draftSettingsId", args.draftSettingsId)
-            .eq("fpid", args.fpids[i]!),
+          q.eq("draftId", draft._id).eq("fpid", args.fpids[i]!),
         )
         .first();
       if (tag && tag.tag === "target" && tag.order !== i) {

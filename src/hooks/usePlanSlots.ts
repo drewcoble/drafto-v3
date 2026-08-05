@@ -17,24 +17,24 @@ export interface PlanSlots {
 // hook per row. Only ever resolves for the self team, since only self has a
 // saved budget plan to match against.
 export function usePlanSlots(
-  draftSettingsId: Id<"draftSettings"> | undefined,
-  teamId: Id<"draftTeams"> | undefined,
+  seasonId: Id<"seasons"> | undefined,
+  teamId: Id<"seasonTeams"> | undefined,
 ): PlanSlots | undefined {
-  const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
+  const seasonsList = useQuery(api.leagues.listSeasons, {});
   const picks = useQuery(
     api.draft.picks.listDraftPicks,
-    draftSettingsId ? { draftSettingsId } : "skip",
+    seasonId ? { seasonId } : "skip",
   );
   const teams = useQuery(
-    api.draft.teams.listDraftTeams,
-    draftSettingsId ? { draftSettingsId } : "skip",
+    api.draft.teams.listSeasonTeams,
+    seasonId ? { seasonId } : "skip",
   );
   const plan = useQuery(
     api.draft.plan.getLiveBudgetPlan,
-    draftSettingsId ? { draftSettingsId } : "skip",
+    seasonId ? { seasonId } : "skip",
   );
 
-  const settings = settingsList?.find((s) => s._id === draftSettingsId);
+  const settings = seasonsList?.find((s) => s._id === seasonId);
   if (!settings || !picks || !teams || !plan || !teamId) return undefined;
 
   const team = teams.find((t) => t._id === teamId);

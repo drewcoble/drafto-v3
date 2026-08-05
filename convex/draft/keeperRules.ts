@@ -1,0 +1,99 @@
+import { v } from "convex/values";
+import { mutation } from "../_generated/server";
+import { requireSeasonOwner } from "./auth";
+
+const keeperFormulaValidator = v.object({
+  multiplier: v.number(),
+  flatAdd: v.number(),
+  minimumCost: v.optional(v.number()),
+});
+
+const keeperTierValidator = v.object({
+  id: v.string(),
+  name: v.string(),
+  maxSize: v.optional(v.number()),
+  formula: keeperFormulaValidator,
+  fpids: v.array(v.number()),
+});
+
+const keeperRulesValidator = v.object({
+  defaultFormula: v.object({
+    multiplier: v.number(),
+    flatAdd: v.number(),
+    minimumCost: v.optional(v.number()),
+    undraftedCost: v.optional(v.number()),
+  }),
+  tiers: v.array(keeperTierValidator),
+  maxKeepersPerTeam: v.optional(v.number()),
+  maxConsecutiveYears: v.optional(v.number()),
+});
+
+// Full replace of the season's keeper cost/eligibility config - called by
+// the League Details "Keeper Rules" panel's Save button. Doesn't validate
+// that any tier is currently under its own maxSize (an admin might
+// legitimately lower maxSize below a tier's current membership while
+// editing formulas, and setKeeperTierPlayers below is what enforces the cap
+// going forward) - it just persists whatever shape the panel built.
+export const setKeeperRules = mutation({
+  args: {
+    seasonId: v.id("seasons"),
+    keeperRules: keeperRulesValidator,
+  },
+  handler: async (ctx, args) => {
+    await requireSeasonOwner(ctx, args.seasonId);
+    await ctx.db.patch(args.seasonId, {
+      keeperRules: args.keeperRules,
+    });
+    return null;
+  },
+});
+
+// Patches one tier's designated-player list without touching the rest of
+// keeperRules (formulas, the other tiers, the two max settings) - used by
+// the per-tier player picker so toggling one player in/out doesn't require
+// resending the whole config. Enforces the tier's own maxSize and that no
+// fpid ends up in more than one tier at once (a player's formula is
+// resolved by "first tier containing this fpid," so an accidental overlap
+// would silently pick whichever tier happens to be listed first).
+export const setKeeperTierPlayers = mutation({
+  args: {
+    seasonId: v.id("seasons"),
+    tierId: v.string(),
+    fpids: v.array(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const { season } = await requireSeasonOwner(ctx, args.seasonId);
+    const keeperRules = season.keeperRules;
+    if (!keeperRules) {
+      throw new Error("No keeper rules configured for this league.");
+    }
+    const tier = keeperRules.tiers.find((t) => t.id === args.tierId);
+    if (!tier) {
+      throw new Error("Keeper tier not found.");
+    }
+    if (tier.maxSize !== undefined && args.fpids.length > tier.maxSize) {
+      throw new Error(
+        `"${tier.name}" allows at most ${tier.maxSize} players.`,
+      );
+    }
+    const newFpidSet = new Set(args.fpids);
+    const overlap = keeperRules.tiers.some(
+      (other) =>
+        other.id !== args.tierId &&
+        other.fpids.some((fpid) => newFpidSet.has(fpid)),
+    );
+    if (overlap) {
+      throw new Error(
+        "A player can only be designated in one keeper tier at a time.",
+      );
+    }
+
+    const tiers = keeperRules.tiers.map((t) =>
+      t.id === args.tierId ? { ...t, fpids: args.fpids } : t,
+    );
+    await ctx.db.patch(args.seasonId, {
+      keeperRules: { ...keeperRules, tiers },
+    });
+    return null;
+  },
+});

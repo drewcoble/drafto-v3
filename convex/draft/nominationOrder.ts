@@ -16,11 +16,11 @@ import { requireDraftOwner } from "./auth";
 // A,B,C,D,D,C,B,A,A,B,C,D,... - team D and team A each nominate twice in a
 // row at the turns where the direction reverses.
 function rawStep(
-  order: readonly Id<"draftTeams">[],
+  order: readonly Id<"seasonTeams">[],
   mode: "linear" | "snake",
-  currentTeamId: Id<"draftTeams">,
+  currentTeamId: Id<"seasonTeams">,
   direction: 1 | -1,
-): { teamId: Id<"draftTeams">; direction: 1 | -1 } {
+): { teamId: Id<"seasonTeams">; direction: 1 | -1 } {
   const index = order.indexOf(currentTeamId);
   if (index === -1) {
     // Current team fell out of the order (e.g. order was reconfigured) -
@@ -50,12 +50,12 @@ function rawStep(
 // just gets its would-be repeat turn skipped, without disturbing anyone
 // else's place in the sequence.
 export function nextNominator(
-  order: readonly Id<"draftTeams">[],
+  order: readonly Id<"seasonTeams">[],
   mode: "linear" | "snake",
-  currentTeamId: Id<"draftTeams">,
+  currentTeamId: Id<"seasonTeams">,
   direction: 1 | -1,
-  isTeamFull: (teamId: Id<"draftTeams">) => boolean,
-): { teamId: Id<"draftTeams"> | null; direction: 1 | -1 } {
+  isTeamFull: (teamId: Id<"seasonTeams">) => boolean,
+): { teamId: Id<"seasonTeams"> | null; direction: 1 | -1 } {
   if (order.length === 0) {
     throw new Error("Nomination order is empty.");
   }
@@ -74,15 +74,28 @@ export function nextNominator(
 }
 
 export const getCurrentNominator = query({
-  args: { draftSettingsId: v.id("draftSettings") },
+  args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     return await ctx.db
       .query("draftNominationTurns")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
+  },
+});
+
+// The draft's configured nomination order + mode - moved off the old
+// draftSettings row onto drafts (see schema.ts), so callers that need to
+// sort teams by nomination order (e.g. the TV board) fetch it here instead
+// of reading it directly off a season/league doc.
+export const getNominationConfig = query({
+  args: { seasonId: v.id("seasons") },
+  handler: async (ctx, args) => {
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    return {
+      nominationOrder: draft.nominationOrder,
+      nominationOrderMode: draft.nominationOrderMode,
+    };
   },
 });
 
@@ -94,18 +107,16 @@ export const getCurrentNominator = query({
 // already-running order shouldn't reset whose turn it is).
 export const setNominationOrder = mutation({
   args: {
-    draftSettingsId: v.id("draftSettings"),
-    teamIds: v.array(v.id("draftTeams")),
+    seasonId: v.id("seasons"),
+    teamIds: v.array(v.id("seasonTeams")),
     mode: v.union(v.literal("linear"), v.literal("snake")),
   },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
 
     const teams = await ctx.db
-      .query("draftTeams")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .query("seasonTeams")
+      .withIndex("by_season", (q) => q.eq("seasonId", args.seasonId))
       .collect();
     const teamIdSet = new Set(teams.map((t) => t._id));
     const uniqueGiven = new Set(args.teamIds);
@@ -120,25 +131,26 @@ export const setNominationOrder = mutation({
       );
     }
 
-    await ctx.db.patch(args.draftSettingsId, {
+    await ctx.db.patch(draft._id, {
       nominationOrder: args.teamIds,
       nominationOrderMode: args.mode,
     });
 
     const existingTurn = await ctx.db
       .query("draftNominationTurns")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
     if (!existingTurn) {
       await ctx.db.insert("draftNominationTurns", {
-        draftSettingsId: args.draftSettingsId,
+        draftId: draft._id,
         currentTeamId: args.teamIds[0]!,
         direction: 1,
         updatedAt: Date.now(),
       });
-    } else if (!uniqueGiven.has(existingTurn.currentTeamId as Id<"draftTeams">)) {
+    } else if (
+      existingTurn.currentTeamId !== null &&
+      !uniqueGiven.has(existingTurn.currentTeamId)
+    ) {
       // The team whose turn it was is no longer in the (re-saved) order -
       // clear to manual rather than silently pointing at a stale team.
       await ctx.db.patch(existingTurn._id, {
@@ -153,18 +165,16 @@ export const setNominationOrder = mutation({
 
 // Back to fully manual: no order, no suggested turn.
 export const clearNominationOrder = mutation({
-  args: { draftSettingsId: v.id("draftSettings") },
+  args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
-    await ctx.db.patch(args.draftSettingsId, {
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    await ctx.db.patch(draft._id, {
       nominationOrder: undefined,
       nominationOrderMode: undefined,
     });
     const existingTurn = await ctx.db
       .query("draftNominationTurns")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
     if (existingTurn) {
       await ctx.db.delete(existingTurn._id);
@@ -180,16 +190,14 @@ export const clearNominationOrder = mutation({
 // times to nudge it back on track if that guess is wrong.
 export const setCurrentNominator = mutation({
   args: {
-    draftSettingsId: v.id("draftSettings"),
-    teamId: v.union(v.id("draftTeams"), v.null()),
+    seasonId: v.id("seasons"),
+    teamId: v.union(v.id("seasonTeams"), v.null()),
   },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     const existingTurn = await ctx.db
       .query("draftNominationTurns")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
     if (existingTurn) {
       await ctx.db.patch(existingTurn._id, {
@@ -199,7 +207,7 @@ export const setCurrentNominator = mutation({
       });
     } else {
       await ctx.db.insert("draftNominationTurns", {
-        draftSettingsId: args.draftSettingsId,
+        draftId: draft._id,
         currentTeamId: args.teamId,
         direction: 1,
         updatedAt: Date.now(),

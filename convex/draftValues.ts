@@ -26,7 +26,7 @@ export interface DraftValueRow {
 
 /**
  * Auction/salary-cap $ value per player, computed from current projections +
- * draft settings.
+ * the draft's season settings.
  *
  * Value-Based Drafting: find each position's replacement-level player (the
  * last one who'd realistically be rostered given league settings, including
@@ -50,14 +50,18 @@ export interface DraftValueRow {
 async function computeDraftValues(
   ctx: QueryCtx | MutationCtx,
   args: {
-    draftSettingsId: Id<"draftSettings">;
+    draftId: Id<"drafts">;
     week: string;
     scoring: Scoring;
   },
 ): Promise<DraftValueRow[]> {
-  const settings = await ctx.db.get(args.draftSettingsId);
+  const draft = await ctx.db.get(args.draftId);
+  if (!draft) {
+    throw new Error("Draft not found");
+  }
+  const settings = await ctx.db.get(draft.seasonId);
   if (!settings) {
-    throw new Error("Draft settings not found");
+    throw new Error("Season not found");
   }
 
   // A position only matters to this league if it fills a dedicated roster
@@ -84,7 +88,7 @@ async function computeDraftValues(
   const keepers = await ctx.db
     .query("draftPicks")
     .withIndex("by_draft_keeper", (q) =>
-      q.eq("draftSettingsId", args.draftSettingsId).eq("isKeeper", true),
+      q.eq("draftId", args.draftId).eq("isKeeper", true),
     )
     .collect();
   const keptFpids = new Set(keepers.map((keeper) => keeper.fpid));
@@ -254,14 +258,12 @@ async function computeDraftValues(
   // Sum each team's actual cap (its override, or the league default) rather
   // than assuming every team uses the league default - a team with a custom
   // salaryCapOverride (convex/draft/teams.ts) changes the total money in the
-  // room. Teams may not exist yet the first time this runs (createDraftSettings
-  // seeds the cache before initializeDraftTeams has ever run), so fall back
+  // room. Teams may not exist yet the first time this runs (createLeague
+  // seeds the cache before initializeSeasonTeams has ever run), so fall back
   // to the settings-only formula in that case.
   const teams = await ctx.db
-    .query("draftTeams")
-    .withIndex("by_draft", (q) =>
-      q.eq("draftSettingsId", args.draftSettingsId),
-    )
+    .query("seasonTeams")
+    .withIndex("by_season", (q) => q.eq("seasonId", draft.seasonId))
     .collect();
   const totalCapDollars =
     teams.length > 0
@@ -285,13 +287,6 @@ async function computeDraftValues(
   // compresses that top-end spike into a believable curve - raw VOR is
   // still returned below as valueOverReplacement, it's only the $ split
   // that changes.
-  // (Tuned against real Free Money League auction prices (non-keeper only -
-  // keeper costs reflect prior-year keeper economics, not market value).
-  // 0.6 landed top RB/WR studs in the $50-60 range but undershot the very
-  // top - e.g. Josh Allen went for $46, Bijan Robinson $48, vs 0.6's $34/
-  // $42. 0.85 matched RB1 (Bijan $48 vs modeled $55 - close) better than
-  // 0.75 did. QB is still a separate, harder problem - see the
-  // superflex-vs-non-superflex comparison this was tuned alongside.)
   const FALLOFF_EXPONENT = 0.85;
   let totalWeight = 0;
   const vorByFpid = new Map<number, number>();
@@ -338,9 +333,14 @@ async function computeDraftValues(
   return output;
 }
 
+// Public, frontend-facing entry point - takes a seasonId (what every route/
+// component actually has on hand) and resolves it to that season's real
+// draft internally, same lookup convex/draft/auth.ts's requireRealDraft
+// does. Deliberately not auth-gated (same as before the league/season/draft
+// split): draft values are read-only derived data, cheap to expose by id.
 export const getDraftValues = query({
   args: {
-    draftSettingsId: v.id("draftSettings"),
+    seasonId: v.id("seasons"),
     week: v.string(),
     scoring: scoringValidator,
     // Omit to get every position back in one call (the combined players
@@ -349,11 +349,19 @@ export const getDraftValues = query({
     position: v.optional(positionValidator),
   },
   handler: async (ctx, args) => {
+    const draft = await ctx.db
+      .query("drafts")
+      .withIndex("by_season_kind", (q) =>
+        q.eq("seasonId", args.seasonId).eq("kind", "real"),
+      )
+      .first();
+    if (!draft) return [];
+
     const cached = await ctx.db
       .query("draftValues")
       .withIndex("by_draft_week_scoring", (q) =>
         q
-          .eq("draftSettingsId", args.draftSettingsId)
+          .eq("draftId", draft._id)
           .eq("week", args.week)
           .eq("scoring", args.scoring),
       )
@@ -373,7 +381,11 @@ export const getDraftValues = query({
             valueOverReplacement: row.valueOverReplacement,
             dollarValue: row.dollarValue,
           }))
-        : await computeDraftValues(ctx, args);
+        : await computeDraftValues(ctx, {
+            draftId: draft._id,
+            week: args.week,
+            scoring: args.scoring,
+          });
 
     return args.position
       ? rows.filter((row) => row.position === args.position)
@@ -381,20 +393,20 @@ export const getDraftValues = query({
   },
 });
 
-// Recomputes getDraftValues for one (draftSettingsId, week, scoring) combo
-// and replaces its cached rows - called once daily per league from
-// fetchAllData (after the projections/rankings it reads have refreshed), and
-// on-demand by invalidateDraftValues below (a keeper change or settings
-// edit) so the cache doesn't have to wait for the next day to catch up.
-// Also called directly (not via the mutation wrapper below) at league-
-// creation time - see createDraftSettings/cloneDraftSettings - so a new
-// league's cache is never in the "empty because the daily cron hasn't run
+// Recomputes getDraftValues for one (draftId, week, scoring) combo and
+// replaces its cached rows - called once daily per draft from fetchAllData
+// (after the projections/rankings it reads have refreshed), and on-demand by
+// invalidateDraftValues below (a keeper change or settings edit) so the
+// cache doesn't have to wait for the next day to catch up. Also called
+// directly (not via the mutation wrapper below) at league-creation/
+// next-season time - see convex/leagues.ts/convex/draft/history.ts - so a
+// new draft's cache is never in the "empty because the daily cron hasn't run
 // yet" state that forces every getDraftValues subscription onto the
 // expensive live-compute path.
 export async function refreshDraftValuesForLeague(
   ctx: MutationCtx,
   args: {
-    draftSettingsId: Id<"draftSettings">;
+    draftId: Id<"drafts">;
     week: string;
     scoring: Scoring;
   },
@@ -405,7 +417,7 @@ export async function refreshDraftValuesForLeague(
     .query("draftValues")
     .withIndex("by_draft_week_scoring", (q) =>
       q
-        .eq("draftSettingsId", args.draftSettingsId)
+        .eq("draftId", args.draftId)
         .eq("week", args.week)
         .eq("scoring", args.scoring),
     )
@@ -419,7 +431,7 @@ export async function refreshDraftValuesForLeague(
 
 export const refreshDraftValues = internalMutation({
   args: {
-    draftSettingsId: v.id("draftSettings"),
+    draftId: v.id("drafts"),
     week: v.string(),
     scoring: scoringValidator,
   },
@@ -428,24 +440,22 @@ export const refreshDraftValues = internalMutation({
   },
 });
 
-// Clears every cached combo (any week/scoring) for one league - called
+// Clears every cached combo (any week/scoring) for one draft - called
 // inline (same transaction, plain ctx.db, not a separate mutation call) by
 // whatever actually changes getDraftValues' inputs off the daily cycle: a
-// keeper added/removed (convex/draft/picks.ts) or draftSettings edited
-// (convex/draftSettings.ts's updateDraftSettings). Deliberately just deletes
-// rather than recomputing inline - getDraftValues' cache-miss fallback
-// already makes a stale/missing cache correct, and recomputing here would
-// duplicate that same read cost inside every keeper edit instead of once on
-// the next actual read.
+// keeper added/removed (convex/draft/picks.ts) or season settings edited
+// (convex/leagues.ts's updateSeason). Deliberately just deletes rather than
+// recomputing inline - getDraftValues' cache-miss fallback already makes a
+// stale/missing cache correct, and recomputing here would duplicate that
+// same read cost inside every keeper edit instead of once on the next
+// actual read.
 export async function invalidateDraftValues(
   ctx: MutationCtx,
-  draftSettingsId: Id<"draftSettings">,
+  draftId: Id<"drafts">,
 ) {
   const cached = await ctx.db
     .query("draftValues")
-    .withIndex("by_draft_week_scoring", (q) =>
-      q.eq("draftSettingsId", draftSettingsId),
-    )
+    .withIndex("by_draft_week_scoring", (q) => q.eq("draftId", draftId))
     .collect();
   for (const row of cached) await ctx.db.delete(row._id);
 }

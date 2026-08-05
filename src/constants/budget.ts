@@ -24,16 +24,15 @@ export const OVERSPEND_OPTIONS: Array<{
   },
 ];
 
-// Coarse grouping for the top summary bar - QB/RB/WR/TE stand alone since
-// they're the slots you actually compare across, everything else (FLEX/
-// SUPERFLEX/DST/K/bench) is lumped into one bucket.
+// Category order for the top summary bar - matches POSITION_ORDER in
+// lib/positionColors.ts.
 export const CATEGORY_ORDER = [
   "QB",
+  "SFLEX",
   "RB",
   "WR",
-  "TE",
   "FLEX",
-  "SFLEX",
+  "TE",
   "DST",
   "K",
   "BENCH",
@@ -41,24 +40,24 @@ export const CATEGORY_ORDER = [
 
 export const CATEGORY_LABELS: Record<(typeof CATEGORY_ORDER)[number], string> = {
   QB: "QB",
+  SFLEX: "SFLEX",
   RB: "RB",
   WR: "WR",
+  FLEX: "FLEX",
   TE: "TE",
   DST: "DST",
   K: "K",
-  FLEX: "FLEX",
-  SFLEX: "SFLEX",
   BENCH: "bench",
 };
 
 export const CATEGORY_COLORS: Record<(typeof CATEGORY_ORDER)[number], string> = {
   QB: POSITION_COLORS.QB,
+  SFLEX: "superflex",
   RB: POSITION_COLORS.RB,
   WR: POSITION_COLORS.WR,
+  FLEX: "flex",
   TE: POSITION_COLORS.TE,
   DST: POSITION_COLORS.DST,
   K: POSITION_COLORS.K,
-  FLEX: "yellow.6",
-  SFLEX: "teal.6",
-  BENCH: "gray.6",
+  BENCH: "bn",
 };

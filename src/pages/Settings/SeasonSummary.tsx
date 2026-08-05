@@ -14,18 +14,18 @@ import { TeamSlotDetail } from "../../components/TeamSlotDetail";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 
 interface SeasonSummaryProps {
-  draftSettingsId: Id<"draftSettings">;
+  seasonId: Id<"seasons">;
 }
 
 // Read-only per-team roster/spend breakdown for a past season - the same
 // reconstruction LeagueTab.tsx uses for the live draft (expandRosterSlots +
 // assignPicksToSlots + computeTeamBudgetStats), just pointed at a historical
-// draftSettingsId with no mutation affordances (no Remove/Edit/keeper-add).
-export function SeasonSummary({ draftSettingsId }: SeasonSummaryProps) {
-  const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const settings = settingsList?.find((s) => s._id === draftSettingsId);
-  const teams = useQuery(api.draft.teams.listDraftTeams, { draftSettingsId });
-  const picks = useQuery(api.draft.picks.listDraftPicks, { draftSettingsId });
+// seasonId with no mutation affordances (no Remove/Edit/keeper-add).
+export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
+  const settingsList = useQuery(api.leagues.listSeasons, {});
+  const settings = settingsList?.find((s) => s._id === seasonId);
+  const teams = useQuery(api.draft.teams.listSeasonTeams, { seasonId });
+  const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
@@ -78,8 +78,7 @@ export function SeasonSummary({ draftSettingsId }: SeasonSummaryProps) {
   return (
     <Stack gap="sm">
       <Text size="sm" c="dimmed">
-        {settings.name}
-        {settings.season ? ` · ${settings.season}` : ""} - ${settings.salaryCap}{" "}
+        {settings.name} · {settings.year} - ${settings.salaryCap}{" "}
         cap, {settings.teamCount} teams
       </Text>
       <SimpleGrid cols={3} spacing="md">
@@ -126,8 +125,8 @@ export function SeasonSummary({ draftSettingsId }: SeasonSummaryProps) {
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
         scoring={settings.scoring}
-        season={settings.season ?? String(new Date().getFullYear())}
-        draftSettingsId={undefined}
+        season={settings.year}
+        seasonId={undefined}
       />
     </Stack>
   );

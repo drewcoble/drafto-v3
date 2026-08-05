@@ -1,5 +1,5 @@
 import { ThemeIcon, Tooltip } from "@mantine/core";
-import { Rocket, Snowflake, Star, TrendingDown } from "lucide-react";
+import { HandCoins, Rocket, Snowflake, TrendingDown } from "lucide-react";
 import type { Position, ValueGap } from "../../../types";
 
 interface ValueGapIconProps {
@@ -17,10 +17,10 @@ export function ValueGapIcon({ valueGap, position }: ValueGapIconProps) {
     >
       {valueGap.direction === "undervalued" ? (
         <ThemeIcon radius="md" color="yellow" size="md" variant="light">
-          <Star size={16} strokeWidth={2} />
+          <HandCoins size={16} strokeWidth={2} />
         </ThemeIcon>
       ) : valueGap.direction === "breakout" ? (
-        <ThemeIcon radius="md" color="teal" size="md" variant="light">
+        <ThemeIcon radius="md" color="grape" size="md" variant="light">
           <Rocket size={16} strokeWidth={2} />
         </ThemeIcon>
       ) : valueGap.direction === "falloff" ? (

@@ -1,4 +1,5 @@
-import { Anchor, Badge, Button, Group, Menu, Stack, Text } from "@mantine/core";
+import { ActionIcon, Anchor, Badge, Group, Menu, Stack, Text } from "@mantine/core";
+import { MoreVertical } from "lucide-react";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import type { Position } from "../types";
 import type { SlotDescriptor } from "../lib/rosterSlots";
@@ -35,7 +36,7 @@ export function TeamSlotDetail({
 }: TeamSlotDetailProps) {
   const canMove = onMove && flexPositions && superflexPositions;
   return (
-    <Stack gap={4} mt="xs">
+    <Stack gap={10} mt="xs">
       {slots.map((slot) => {
         const pick = bySlot.get(slot.key);
         const player = pick ? nameByFpid.get(pick.fpid) : undefined;
@@ -48,8 +49,16 @@ export function TeamSlotDetail({
                 superflexPositions,
               ).filter((target) => target.key !== slot.key)
             : [];
+        const hasActions =
+          pick && ((canMove && moveTargets.length > 0) || onRemove);
         return (
-          <Group key={slot.key} justify="space-between" gap="xs" wrap="nowrap">
+          <Group
+            key={slot.key}
+            justify="space-between"
+            gap="xs"
+            wrap="nowrap"
+            mih={36}
+          >
             <Badge
               variant="light"
               size="sm"
@@ -63,7 +72,6 @@ export function TeamSlotDetail({
                   component="button"
                   type="button"
                   size="xs"
-                  c="dimmed"
                   onClick={(event) => {
                     event.stopPropagation();
                     onSelectPlayer(pick.fpid);
@@ -75,50 +83,51 @@ export function TeamSlotDetail({
                 (player?.name ?? "—")
               )}
               {pick ? ` · $${pick.price}` : ""}
-              {pick?.isKeeper ? " (keeper)" : ""}
+              {pick?.isKeeper ? ` (keeper, yr ${pick.keeperStreak ?? 1})` : ""}
             </Text>
-            {pick && canMove && moveTargets.length > 0 && (
+            {hasActions && (
               <Menu shadow="md" width={170} position="bottom-end">
                 <Menu.Target>
-                  <Button
-                    size="compact-xs"
+                  <ActionIcon
                     variant="subtle"
+                    color="gray"
                     onClick={(event) => event.stopPropagation()}
+                    aria-label="Slot actions"
                   >
-                    Move
-                  </Button>
+                    <MoreVertical size={16} />
+                  </ActionIcon>
                 </Menu.Target>
                 <Menu.Dropdown onClick={(event) => event.stopPropagation()}>
-                  {moveTargets.map((target) => {
-                    const occupant = bySlot.get(target.key);
-                    const occupantName = occupant
-                      ? nameByFpid.get(occupant.fpid)?.name
-                      : undefined;
-                    return (
-                      <Menu.Item
-                        key={target.key}
-                        onClick={() => onMove(pick._id, target.key)}
-                      >
-                        {target.label}
-                        {occupantName ? ` (swap w/ ${occupantName})` : ""}
-                      </Menu.Item>
-                    );
-                  })}
+                  {pick &&
+                    canMove &&
+                    moveTargets.map((target) => {
+                      const occupant = bySlot.get(target.key);
+                      const occupantName = occupant
+                        ? nameByFpid.get(occupant.fpid)?.name
+                        : undefined;
+                      return (
+                        <Menu.Item
+                          key={target.key}
+                          onClick={() => onMove(pick._id, target.key)}
+                        >
+                          Move to {target.label}
+                          {occupantName ? ` (swap w/ ${occupantName})` : ""}
+                        </Menu.Item>
+                      );
+                    })}
+                  {pick && canMove && moveTargets.length > 0 && onRemove && (
+                    <Menu.Divider />
+                  )}
+                  {pick && onRemove && (
+                    <Menu.Item
+                      color="red"
+                      onClick={() => onRemove(pick._id)}
+                    >
+                      Remove
+                    </Menu.Item>
+                  )}
                 </Menu.Dropdown>
               </Menu>
-            )}
-            {pick && onRemove && (
-              <Button
-                size="compact-xs"
-                variant="subtle"
-                color="red"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRemove(pick._id);
-                }}
-              >
-                Remove
-              </Button>
             )}
           </Group>
         );

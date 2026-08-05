@@ -1,25 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Center, Loader, Stack, Text } from "@mantine/core";
+import { Card, Center, Loader, SimpleGrid, Stack, Text } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import type { Position } from "../../types";
+import { POSITIONS, type Position } from "../../types";
 import { filterRelevantPlayers, pointsForScoring } from "../../lib/relevantPlayers";
 import { assignSlotForPick } from "../../lib/slotAssignment";
+import { expandRosterSlots } from "../../lib/rosterSlots";
 import { WEEK } from "../../constants/general";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { KeeperTable } from "./components/KeeperTable";
+import { KeeperCardList } from "./components/KeeperCardList";
 import { KeeperSearchForm } from "./components/KeeperSearchForm";
+import { KeeperRulesPanel } from "./components/KeeperRulesPanel";
 
 interface KeepersTabProps {
-  draftSettingsId: Id<"draftSettings">;
+  seasonId: Id<"seasons">;
 }
 
-export function KeepersTab({ draftSettingsId }: KeepersTabProps) {
-  const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const settings = settingsList?.find((league) => league._id === draftSettingsId);
-  const draftTeams = useQuery(api.draft.teams.listDraftTeams, {
-    draftSettingsId,
+export function KeepersTab({ seasonId }: KeepersTabProps) {
+  const settingsList = useQuery(api.leagues.listSeasons, {});
+  const settings = settingsList?.find((league) => league._id === seasonId);
+  const draftTeams = useQuery(api.draft.teams.listSeasonTeams, {
+    seasonId,
   });
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
@@ -28,18 +31,20 @@ export function KeepersTab({ draftSettingsId }: KeepersTabProps) {
   const draftValues = useQuery(
     api.draftValues.getDraftValues,
     settings
-      ? { draftSettingsId, week: WEEK, scoring: settings.scoring }
+      ? { seasonId, week: WEEK, scoring: settings.scoring }
       : "skip",
   );
-  const picks = useQuery(api.draft.picks.listDraftPicks, { draftSettingsId });
+  const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const priceHistory = useQuery(api.draft.history.getPlayerPriceHistory, {
-    draftSettingsId,
+    seasonId,
   });
   const addKeeper = useMutation(api.draft.picks.addKeeper);
   const removeKeeper = useMutation(api.draft.picks.removeKeeper);
+  const setKeeperStreak = useMutation(api.draft.picks.setKeeperStreak);
+  const setPickSlot = useMutation(api.draft.picks.setPickSlot);
 
   const [keeperSearch, setKeeperSearch] = useState("");
-  const [keeperTeamId, setKeeperTeamId] = useState<Id<"draftTeams"> | null>(
+  const [keeperTeamId, setKeeperTeamId] = useState<Id<"seasonTeams"> | null>(
     null,
   );
   const [keeperPrice, setKeeperPrice] = useState<number>(1);
@@ -56,7 +61,7 @@ export function KeepersTab({ draftSettingsId }: KeepersTabProps) {
 
   const activePositions = useMemo(() => {
     if (!settings) return [];
-    return (["QB", "RB", "WR", "TE", "DST", "K"] as const).filter(
+    return POSITIONS.filter(
       (pos) =>
         settings.rosterSlots[pos] > 0 ||
         settings.flexPositions.includes(pos) ||
@@ -143,7 +148,25 @@ export function KeepersTab({ draftSettingsId }: KeepersTabProps) {
     [picks],
   );
 
-  const handleAddKeeper = async (fpid: number, position: Position) => {
+  const atTeamKeeperCap = useMemo(() => {
+    const maxKeepersPerTeam = settings?.keeperRules?.maxKeepersPerTeam;
+    if (maxKeepersPerTeam === undefined || !keeperTeamId) return false;
+    const teamKeeperCount = keepers.filter(
+      (pick) => pick.teamId === keeperTeamId,
+    ).length;
+    return teamKeeperCount >= maxKeepersPerTeam;
+  }, [settings, keeperTeamId, keepers]);
+
+  const slots = useMemo(
+    () => (settings ? expandRosterSlots(settings.rosterSlots) : []),
+    [settings],
+  );
+
+  const handleAddKeeper = async (
+    fpid: number,
+    position: Position,
+    price: number,
+  ) => {
     if (!settings || !keeperTeamId) return;
     setKeeperError(null);
     try {
@@ -165,10 +188,10 @@ export function KeepersTab({ draftSettingsId }: KeepersTabProps) {
         );
       }
       await addKeeper({
-        draftSettingsId,
+        seasonId,
         teamId: keeperTeamId,
         fpid,
-        price: keeperPrice,
+        price,
         ...(planSlotKey ? { planSlotKey } : {}),
       });
       setKeeperSearch("");
@@ -186,6 +209,28 @@ export function KeepersTab({ draftSettingsId }: KeepersTabProps) {
     } catch (err) {
       setKeeperError(
         err instanceof Error ? err.message : "Failed to remove keeper.",
+      );
+    }
+  };
+
+  const handleSetStreak = async (pickId: Id<"draftPicks">, streak: number) => {
+    setKeeperError(null);
+    try {
+      await setKeeperStreak({ pickId, streak });
+    } catch (err) {
+      setKeeperError(
+        err instanceof Error ? err.message : "Failed to update keeper streak.",
+      );
+    }
+  };
+
+  const handleMoveKeeper = async (pickId: Id<"draftPicks">, slotKey: string) => {
+    setKeeperError(null);
+    try {
+      await setPickSlot({ pickId, slotKey });
+    } catch (err) {
+      setKeeperError(
+        err instanceof Error ? err.message : "Failed to move keeper.",
       );
     }
   };
@@ -218,36 +263,91 @@ export function KeepersTab({ draftSettingsId }: KeepersTabProps) {
         pre-loaded onto their team's roster and won't appear in the
         nomination pool or Players Left board.
       </Text>
-      <KeeperTable
-        keepers={keepers}
-        nameByFpid={nameByFpid}
-        teamNameById={teamNameById}
-        onRemove={handleRemoveKeeper}
-        onSelectPlayer={setSelectedFpid}
-      />
-      <KeeperSearchForm
-        keeperSearch={keeperSearch}
-        onKeeperSearchChange={setKeeperSearch}
-        draftTeams={draftTeams}
-        keeperTeamId={keeperTeamId}
-        onKeeperTeamIdChange={setKeeperTeamId}
-        keeperPrice={keeperPrice}
-        onKeeperPriceChange={setKeeperPrice}
-        keeperError={keeperError}
-        keeperSearchResults={keeperSearchResults}
-        draftValueByFpid={draftValueByFpid}
-        priceHistory={priceHistory}
-        onAddKeeper={handleAddKeeper}
-        onSelectPlayer={setSelectedFpid}
-      />
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+        <Stack gap="md">
+          <Text size="md" fw={500}>
+            Current Keepers
+          </Text>
+          {keepers.length === 0 ? (
+            <Text size="sm" c="dimmed">
+              No keepers assigned yet.
+            </Text>
+          ) : (
+            <>
+              {/* Desktop table gets its own single-level border - the mobile
+                  card list below already boxes each keeper individually
+                  (KeeperCardList), so it isn't also wrapped in a Card here
+                  (that would nest a Card inside a Card). */}
+              <Card withBorder padding="md" visibleFrom="sm">
+                <KeeperTable
+                  keepers={keepers}
+                  nameByFpid={nameByFpid}
+                  teamNameById={teamNameById}
+                  slots={slots}
+                  flexPositions={settings.flexPositions}
+                  superflexPositions={settings.superflexPositions}
+                  onRemove={handleRemoveKeeper}
+                  onSetStreak={handleSetStreak}
+                  onMove={handleMoveKeeper}
+                  onSelectPlayer={setSelectedFpid}
+                />
+              </Card>
+              <KeeperCardList
+                keepers={keepers}
+                nameByFpid={nameByFpid}
+                teamNameById={teamNameById}
+                slots={slots}
+                flexPositions={settings.flexPositions}
+                superflexPositions={settings.superflexPositions}
+                onRemove={handleRemoveKeeper}
+                onSetStreak={handleSetStreak}
+                onMove={handleMoveKeeper}
+                onSelectPlayer={setSelectedFpid}
+              />
+            </>
+          )}
+        </Stack>
+
+        <Stack gap="md">
+          <Text size="md" fw={500}>
+            Add a Keeper
+          </Text>
+          {/* No outer Card here - KeeperSearchForm already boxes the
+              selected-candidate summary in its own Card once a player is
+              picked, so wrapping this whole section would nest one Card
+              inside another. */}
+          <KeeperSearchForm
+            keeperSearch={keeperSearch}
+            onKeeperSearchChange={setKeeperSearch}
+            draftTeams={draftTeams}
+            keeperTeamId={keeperTeamId}
+            onKeeperTeamIdChange={setKeeperTeamId}
+            keeperPrice={keeperPrice}
+            onKeeperPriceChange={setKeeperPrice}
+            keeperError={keeperError}
+            keeperSearchResults={keeperSearchResults}
+            draftValueByFpid={draftValueByFpid}
+            priceHistory={priceHistory}
+            keeperRules={settings.keeperRules}
+            atTeamKeeperCap={atTeamKeeperCap}
+            onAddKeeper={handleAddKeeper}
+            onSelectPlayer={setSelectedFpid}
+          />
+        </Stack>
+      </SimpleGrid>
+
+      {/* No outer Card - KeeperRulesPanel already organizes itself into its
+          own Cards (default formula, limits, per tier), so wrapping it here
+          would nest a Card inside a Card. */}
+      <KeeperRulesPanel settings={settings} />
 
       <PlayerDetailModal
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
         scoring={settings.scoring}
-        season={settings.season ?? String(new Date().getFullYear())}
-        draftSettingsId={draftSettingsId}
+        season={settings.year}
+        seasonId={seasonId}
       />
     </Stack>
   );

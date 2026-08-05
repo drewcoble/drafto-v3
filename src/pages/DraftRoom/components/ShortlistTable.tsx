@@ -2,13 +2,12 @@ import {
   ActionIcon,
   Anchor,
   Badge,
-  Button,
   Group,
   Stack,
   Table,
   Text,
 } from "@mantine/core";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import type { DraftTierRow } from "../../../types";
@@ -17,7 +16,7 @@ interface ShortlistRow {
   tag: Doc<"draftPlayerTags">;
   row: DraftTierRow | undefined;
   pick: Doc<"draftPicks"> | undefined;
-  draftedByTeam: Doc<"draftTeams"> | undefined;
+  draftedByTeam: Doc<"seasonTeams"> | undefined;
 }
 
 interface ShortlistTableProps {
@@ -65,7 +64,7 @@ export function TargetsTable({
                   <Table.Td>
                     <Group gap={2} wrap="nowrap">
                       <ActionIcon
-                        size="sm"
+                        size={40}
                         variant="subtle"
                         disabled={index === 0}
                         onClick={() => onMove(index, -1)}
@@ -73,7 +72,7 @@ export function TargetsTable({
                         <ChevronUp size={14} />
                       </ActionIcon>
                       <ActionIcon
-                        size="sm"
+                        size={40}
                         variant="subtle"
                         disabled={index === rows.length - 1}
                         onClick={() => onMove(index, 1)}
@@ -130,14 +129,14 @@ export function TargetsTable({
                     )}
                   </Table.Td>
                   <Table.Td>
-                    <Button
-                      size="compact-sm"
+                    <ActionIcon
                       variant="subtle"
                       color="red"
+                      aria-label="Remove target"
                       onClick={() => onRemove(tag.fpid)}
                     >
-                      Remove
-                    </Button>
+                      <Trash2 size={16} />
+                    </ActionIcon>
                   </Table.Td>
                 </Table.Tr>
               ))}

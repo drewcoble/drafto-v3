@@ -1,120 +1,146 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { mutation, query, type QueryCtx, type MutationCtx } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
-import { requireDraftOwner } from "./auth";
+import { requireSeasonOwner, requireRealDraft } from "./auth";
 import { refreshDraftValuesForLeague } from "../draftValues";
 import { ensureValueGapsCached } from "../valueGaps";
 
-// Mirrors src/constants/general.ts's WEEK - see convex/draftSettings.ts's
-// copy of this same constant for why it's duplicated here rather than
-// imported from src/.
+// Mirrors src/constants/general.ts's WEEK - see convex/leagues.ts's copy of
+// this same constant for why it's duplicated here rather than imported.
 const DRAFT_PREP_WEEK = "0";
 
-const MAX_LINEAGE_WALK = 25;
+// Every season for this league, oldest first (ordered by year - the season's
+// own label - with createdAt as a tiebreak for the rare case of two seasons
+// sharing a year label). Replaces the old clonedFromId chain walk with a
+// plain indexed query over the whole league's history.
+export async function getSeasonLineage(
+  ctx: QueryCtx | MutationCtx,
+  current: Doc<"seasons">,
+): Promise<Doc<"seasons">[]> {
+  const seasons = await ctx.db
+    .query("seasons")
+    .withIndex("by_league", (q) => q.eq("leagueId", current.leagueId))
+    .collect();
+  seasons.sort((a, b) => a.year.localeCompare(b.year) || a.createdAt - b.createdAt);
+  return seasons;
+}
 
-// Every linked season for this draft's league, oldest first, including the
-// argument's own row. clonedFromId is write-once at insert time (see
-// schema.ts) and cloneDraftSettings enforces at most one forward clone per
-// row, so this walk can never cycle or branch - the iteration bound is
-// belt-and-suspenders, not load-bearing.
+// The season immediately before `season` in its league's lineage, or
+// undefined if `season` is the earliest one on record.
+export async function getPreviousSeason(
+  ctx: QueryCtx | MutationCtx,
+  season: Doc<"seasons">,
+): Promise<Doc<"seasons"> | undefined> {
+  const lineage = await getSeasonLineage(ctx, season);
+  const index = lineage.findIndex((s) => s._id === season._id);
+  if (index <= 0) return undefined;
+  return lineage[index - 1];
+}
+
 export const listSeasonLineage = query({
-  args: { draftSettingsId: v.id("draftSettings") },
+  args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
-    const current = await requireDraftOwner(ctx, args.draftSettingsId);
-    const seasons: Doc<"draftSettings">[] = [current];
-
-    let cursor = current;
-    for (let i = 0; i < MAX_LINEAGE_WALK && cursor.clonedFromId; i++) {
-      const parent = await ctx.db.get(cursor.clonedFromId);
-      if (!parent) break;
-      seasons.push(parent);
-      cursor = parent;
-    }
-
-    cursor = current;
-    for (let i = 0; i < MAX_LINEAGE_WALK; i++) {
-      const child = await ctx.db
-        .query("draftSettings")
-        .withIndex("by_cloned_from", (q) => q.eq("clonedFromId", cursor._id))
-        .first();
-      if (!child) break;
-      seasons.push(child);
-      cursor = child;
-    }
-
-    seasons.sort((a, b) => a.createdAt - b.createdAt);
-    return seasons;
+    const { season } = await requireSeasonOwner(ctx, args.seasonId);
+    return await getSeasonLineage(ctx, season);
   },
 });
 
 // For every player, their price from the most recent PRIOR season in this
-// lineage (excluding the current row) - a keeper cost reference. Walks
+// lineage (excluding the current one) - a keeper cost reference. Walks
 // ancestors most-recent-first and never overwrites an fpid a more-recent
 // season already set. draftPicks.by_draft_fpid already guarantees at most
-// one pick per fpid within a single season (nominate/resolvePick/addKeeper
+// one pick per fpid within a single draft (nominate/resolvePick/addKeeper
 // all check it), so there's never ambiguity about which pick to use for any
 // one season - only across seasons, which the walk order handles.
+//
+// isKeeper/keeperStreak/fromImmediateParent are carried through so callers
+// can compute "if kept again, what would the new streak be" the exact same
+// way convex/draft/picks.ts's computeKeeperStreak does server-side (only the
+// immediately-prior season counts - a gap season resets to 1) without
+// reimplementing that rule separately and risking drift.
 export const getPlayerPriceHistory = query({
-  args: { draftSettingsId: v.id("draftSettings") },
+  args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
-    const current = await requireDraftOwner(ctx, args.draftSettingsId);
+    const { season: current } = await requireSeasonOwner(ctx, args.seasonId);
 
-    const ancestors: Doc<"draftSettings">[] = [];
-    let cursor = current;
-    for (let i = 0; i < MAX_LINEAGE_WALK && cursor.clonedFromId; i++) {
-      const parent = await ctx.db.get(cursor.clonedFromId);
-      if (!parent) break;
-      ancestors.push(parent);
-      cursor = parent;
-    }
+    const lineage = await getSeasonLineage(ctx, current);
+    const currentIndex = lineage.findIndex((s) => s._id === current._id);
+    // Most-recent-first, excluding the current season.
+    const ancestors = lineage.slice(0, currentIndex).reverse();
+    const immediateParentId = ancestors[0]?._id;
 
     const priceByFpid: Record<
       number,
-      { price: number; season: string | undefined }
+      {
+        price: number;
+        season: string | undefined;
+        isKeeper: boolean;
+        keeperStreak: number | undefined;
+        fromImmediateParent: boolean;
+      }
     > = {};
     for (const season of ancestors) {
+      const draft = await ctx.db
+        .query("drafts")
+        .withIndex("by_season_kind", (q) =>
+          q.eq("seasonId", season._id).eq("kind", "real"),
+        )
+        .first();
+      if (!draft) continue;
       const picks = await ctx.db
         .query("draftPicks")
-        .withIndex("by_draft", (q) => q.eq("draftSettingsId", season._id))
+        .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
         .collect();
       for (const pick of picks) {
         if (priceByFpid[pick.fpid] !== undefined) continue;
-        priceByFpid[pick.fpid] = { price: pick.price, season: season.season };
+        priceByFpid[pick.fpid] = {
+          price: pick.price,
+          season: season.year,
+          isKeeper: pick.isKeeper ?? false,
+          keeperStreak: pick.keeperStreak,
+          fromImmediateParent: season._id === immediateParentId,
+        };
       }
     }
     return priceByFpid;
   },
 });
 
-// Starts a new season for this league: copies durable config (roster
-// shape, scoring, cap), teams, and the budget plan forward, but not
-// draftPicks/draftNominations/draftPlayerTags - those are season-specific
-// live-draft state. Throws if this season has already been advanced, so a
-// double-click/retry can't silently create two sibling seasons (one of
-// which would become permanently invisible to the lineage walk above).
-export const cloneDraftSettings = mutation({
+// Starts a new season for this league: inserts a new seasons row (copying
+// durable config - roster shape, scoring, cap, keeper rule definitions with
+// tier membership reset) plus that season's one real draft, then copies
+// teams and the pre-draft budget plan forward - but not draftPicks/
+// draftNominations/draftPlayerTags, which are live-draft state specific to
+// how one auction actually played out. Throws if this league already has a
+// season for the target year, so a double-click/retry can't silently create
+// two seasons with the same label.
+export const createNextSeason = mutation({
   args: {
-    id: v.id("draftSettings"),
+    id: v.id("seasons"),
     season: v.string(),
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    const source = await requireDraftOwner(ctx, args.id);
+    const { season: source, league } = await requireSeasonOwner(ctx, args.id);
 
-    const existingChild = await ctx.db
-      .query("draftSettings")
-      .withIndex("by_cloned_from", (q) => q.eq("clonedFromId", args.id))
+    const existingYear = await ctx.db
+      .query("seasons")
+      .withIndex("by_league_year", (q) =>
+        q.eq("leagueId", league._id).eq("year", args.season),
+      )
       .first();
-    if (existingChild) {
-      throw new Error(
-        `This season has already been advanced to "${existingChild.name}".`,
-      );
+    if (existingYear) {
+      throw new Error(`This league already has a season for ${args.season}.`);
     }
 
     const now = Date.now();
-    const newId = await ctx.db.insert("draftSettings", {
-      ownerId: source.ownerId,
-      name: args.name,
+    if (league.name !== args.name) {
+      await ctx.db.patch(league._id, { name: args.name });
+    }
+
+    const newSeasonId = await ctx.db.insert("seasons", {
+      leagueId: league._id,
+      year: args.season,
       teamCount: source.teamCount,
       salaryCap: source.salaryCap,
       scoring: source.scoring,
@@ -122,17 +148,42 @@ export const cloneDraftSettings = mutation({
       flexPositions: source.flexPositions,
       superflexPositions: source.superflexPositions,
       createdAt: now,
-      season: args.season,
-      clonedFromId: args.id,
+      ...(source.useKeepers !== undefined
+        ? { useKeepers: source.useKeepers }
+        : {}),
+      // Formula/tier definitions carry forward as durable league config, but
+      // each tier's designated players are picked fresh every season - see
+      // schema.ts's comment on seasons.keeperRules.
+      ...(source.keeperRules
+        ? {
+            keeperRules: {
+              ...source.keeperRules,
+              tiers: source.keeperRules.tiers.map((tier) => ({
+                ...tier,
+                fpids: [],
+              })),
+            },
+          }
+        : {}),
     });
 
+    const newDraftId = await ctx.db.insert("drafts", {
+      seasonId: newSeasonId,
+      kind: "real",
+      name: args.name,
+      status: "setup",
+      createdAt: now,
+    });
+
+    const sourceDraft = await requireRealDraft(ctx, args.id);
+
     const sourceTeams = await ctx.db
-      .query("draftTeams")
-      .withIndex("by_draft", (q) => q.eq("draftSettingsId", args.id))
+      .query("seasonTeams")
+      .withIndex("by_season", (q) => q.eq("seasonId", args.id))
       .collect();
     for (const team of sourceTeams) {
-      await ctx.db.insert("draftTeams", {
-        draftSettingsId: newId,
+      await ctx.db.insert("seasonTeams", {
+        seasonId: newSeasonId,
         name: team.name,
         isSelf: team.isSelf,
         order: team.order,
@@ -145,11 +196,11 @@ export const cloneDraftSettings = mutation({
 
     const sourcePlan = await ctx.db
       .query("draftBudgetPlans")
-      .withIndex("by_draft", (q) => q.eq("draftSettingsId", args.id))
+      .withIndex("by_draft", (q) => q.eq("draftId", sourceDraft._id))
       .first();
     if (sourcePlan) {
       await ctx.db.insert("draftBudgetPlans", {
-        draftSettingsId: newId,
+        draftId: newDraftId,
         amounts: sourcePlan.amounts,
         overspendBehavior: sourcePlan.overspendBehavior,
         updatedAt: now,
@@ -157,12 +208,12 @@ export const cloneDraftSettings = mutation({
     }
 
     // Seed the new season's draftValues cache immediately (same reasoning as
-    // createDraftSettings in convex/draftSettings.ts) rather than leaving it
-    // empty until the next daily cron run. Unlike createDraftSettings, this
-    // row's `season` is known exactly (args.season), so lastSeason doesn't
-    // need the current-year fallback.
+    // convex/leagues.ts's createLeague) rather than leaving it empty until
+    // the next daily cron run. Unlike createLeague, this season's year is
+    // known exactly (args.season), so lastSeason doesn't need the
+    // current-year fallback.
     await refreshDraftValuesForLeague(ctx, {
-      draftSettingsId: newId,
+      draftId: newDraftId,
       week: DRAFT_PREP_WEEK,
       scoring: source.scoring,
     });
@@ -172,6 +223,6 @@ export const cloneDraftSettings = mutation({
       lastSeason: String(Number(args.season) - 1),
     });
 
-    return newId;
+    return newSeasonId;
   },
 });

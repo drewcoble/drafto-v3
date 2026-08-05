@@ -9,13 +9,13 @@ export const Route = createFileRoute("/draft/$leagueId/league")({
 
 function LeagueRouteLeaf() {
   const { leagueId } = Route.useParams();
-  const draftSettingsId = leagueId as Id<"draftSettings">;
-  const selfTeamResult = useSelfTeam(draftSettingsId);
+  const seasonId = leagueId as Id<"seasons">;
+  const selfTeamResult = useSelfTeam(seasonId);
   if (!selfTeamResult?.selfTeam) return null;
 
   return (
     <LeagueTab
-      draftSettingsId={draftSettingsId}
+      seasonId={seasonId}
       teams={selfTeamResult.teams}
       selfTeamId={selfTeamResult.selfTeam._id}
     />

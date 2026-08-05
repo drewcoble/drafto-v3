@@ -1,25 +1,92 @@
-import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
-import { Button, Center, Container, Group, Loader, Stack, Tabs, Text } from "@mantine/core";
+import {
+  Box,
+  Button,
+  Center,
+  Container,
+  Loader,
+  Stack,
+  Tabs,
+  Text,
+} from "@mantine/core";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useLocation,
+} from "@tanstack/react-router";
 import { useQuery } from "convex/react";
+import {
+  CircleUserRound,
+  DollarSign,
+  HeartPulse,
+  ListChecks,
+  Settings2,
+  UserSearch,
+} from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { AppHeader } from "../../../components/AppHeader";
-import { DraftTopBar } from "../../../pages/DraftRoom/DraftTopBar";
+import { BottomNav } from "../../../components/BottomNav";
+import {
+  APP_CONTENT_MAX_WIDTH,
+  MOBILE_HEADER_HEIGHT,
+  MOBILE_STATS_ROW_HEIGHT,
+} from "../../../constants/general";
 import { useSelfTeam } from "../../../hooks/useSelfTeam";
-import { APP_CONTENT_MAX_WIDTH } from "../../../constants/general";
+import { DraftTopBar } from "../../../pages/DraftRoom/DraftTopBar";
 
 export const Route = createFileRoute("/draft/$leagueId")({
   component: DraftLayout,
 });
 
 const TABS = [
-  { value: "budget", label: "Budget", to: "/draft/$leagueId/budget" },
-  { value: "draft", label: "Draft", to: "/draft/$leagueId/draft" },
-  { value: "myTeam", label: "My Team", to: "/draft/$leagueId/myTeam" },
-  { value: "players", label: "Players", to: "/draft/$leagueId/players" },
-  { value: "injuries", label: "Injuries", to: "/draft/$leagueId/injuries" },
-  { value: "league", label: "League", to: "/draft/$leagueId/league" },
+  {
+    value: "budget",
+    label: "Budget",
+    icon: DollarSign,
+    to: "/draft/$leagueId/budget",
+  },
+  {
+    value: "draft",
+    label: "Draft",
+    icon: ListChecks,
+    to: "/draft/$leagueId/draft",
+  },
+  {
+    value: "myTeam",
+    label: "My Team",
+    icon: CircleUserRound,
+    to: "/draft/$leagueId/myTeam",
+  },
+  {
+    value: "players",
+    label: "Players",
+    icon: UserSearch,
+    to: "/draft/$leagueId/players",
+  },
+  {
+    value: "injuries",
+    label: "Injuries",
+    icon: HeartPulse,
+    to: "/draft/$leagueId/injuries",
+  },
+  {
+    value: "league",
+    label: "League",
+    icon: Settings2,
+    to: "/draft/$leagueId/league",
+  },
 ] as const;
+
+// "draft" moves into More too (not just injuries/league) so the bottom nav
+// has an even number of direct items - BottomNav splits them 2-and-2 around
+// a center gap reserved for the nominate FAB (see MobileNomination), which
+// used to sit directly on top of whichever tab landed in the dead center of
+// an odd-count flex row (myTeam, with the old 4-item bar).
+const MORE_VALUES = new Set(["draft", "injuries", "league"]);
+
+const BOTTOM_NAV_ITEMS = TABS.filter((tab) => !MORE_VALUES.has(tab.value));
+const BOTTOM_NAV_MORE_ITEMS = TABS.filter((tab) => MORE_VALUES.has(tab.value));
 
 // Teams are set up ahead of time on the League Details tab (Enter Draft Room
 // is disabled there until they exist), so this only needs to handle the
@@ -27,8 +94,8 @@ const TABS = [
 function DraftLayout() {
   const { leagueId } = Route.useParams();
   const location = useLocation();
-  const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const selfTeamResult = useSelfTeam(leagueId as Id<"draftSettings">);
+  const settingsList = useQuery(api.leagues.listSeasons, {});
+  const selfTeamResult = useSelfTeam(leagueId as Id<"seasons">);
 
   const settings = settingsList?.find((s) => s._id === leagueId);
   const activeTab = location.pathname.split("/").pop();
@@ -76,40 +143,45 @@ function DraftLayout() {
   const { selfTeam } = selfTeamResult;
 
   return (
-    <Container size={APP_CONTENT_MAX_WIDTH} py="xl">
+    <Container
+      size={APP_CONTENT_MAX_WIDTH}
+      pt={{
+        base: MOBILE_HEADER_HEIGHT + MOBILE_STATS_ROW_HEIGHT + 16,
+        sm: "xl",
+      }}
+      pb={{ base: 230, sm: "xl" }}
+    >
       <Stack gap="md">
         <AppHeader />
-        <Group justify="space-between" align="center">
-          <Text size="sm" c="dimmed">
-            {settings.name}
-          </Text>
-          <Link to="/board/$leagueId" params={{ leagueId }} target="_blank">
-            <Button component="span" variant="default" size="xs">
-              TV Board ↗
-            </Button>
-          </Link>
-        </Group>
         {selfTeam && (
           <DraftTopBar
-            draftSettingsId={leagueId as Id<"draftSettings">}
+            seasonId={leagueId as Id<"seasons">}
             selfTeamId={selfTeam._id}
           />
         )}
-        <Tabs value={activeTab ?? null}>
-          <Tabs.List>
-            {TABS.map((tab) => (
-              <Tabs.Tab
-                key={tab.value}
-                value={tab.value}
-                renderRoot={(props) => (
-                  <Link to={tab.to} params={{ leagueId }} {...props} />
-                )}
-              >
-                {tab.label}
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs>
+        <Box visibleFrom="sm">
+          <Tabs value={activeTab ?? null}>
+            <Tabs.List>
+              {TABS.map((tab) => (
+                <Tabs.Tab
+                  key={tab.value}
+                  value={tab.value}
+                  renderRoot={(props) => (
+                    <Link to={tab.to} params={{ leagueId }} {...props} />
+                  )}
+                >
+                  {tab.label}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs>
+        </Box>
+        <BottomNav
+          items={BOTTOM_NAV_ITEMS}
+          more={{ label: "More", items: BOTTOM_NAV_MORE_ITEMS }}
+          leagueId={leagueId}
+          hasFab
+        />
         <Outlet />
       </Stack>
     </Container>

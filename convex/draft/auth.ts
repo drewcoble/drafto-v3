@@ -2,24 +2,61 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { QueryCtx, MutationCtx } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
 
-// Every convex/draft/* function is scoped to one draftSettings row, and every
-// one of them needs the same "signed in + owns this draft" check that
-// convex/draftSettings.ts currently inlines at its two call sites - worth
-// extracting here given how many call sites this directory has.
-export async function requireDraftOwner(
+// Confirms the signed-in user owns this season (via its league) - every
+// convex/draft/* and convex/leagues.ts function needs this same check.
+export async function requireSeasonOwner(
   ctx: QueryCtx | MutationCtx,
-  draftSettingsId: Id<"draftSettings">,
-): Promise<Doc<"draftSettings">> {
+  seasonId: Id<"seasons">,
+): Promise<{ season: Doc<"seasons">; league: Doc<"leagues"> }> {
   const userId = await getAuthUserId(ctx);
   if (!userId) {
     throw new Error("You must be signed in.");
   }
-  const draftSettings = await ctx.db.get(draftSettingsId);
-  if (!draftSettings) {
+  const season = await ctx.db.get(seasonId);
+  if (!season) {
+    throw new Error("Season not found.");
+  }
+  const league = await ctx.db.get(season.leagueId);
+  if (!league) {
     throw new Error("League not found.");
   }
-  if (draftSettings.ownerId !== userId) {
-    throw new Error("Not authorized to access this draft.");
+  if (league.ownerId !== userId) {
+    throw new Error("Not authorized to access this season.");
   }
-  return draftSettings;
+  return { season, league };
+}
+
+// Resolves this season's canonical live draft - the "real" (not mock) draft
+// every current UI flow (setup, live auction) operates on. Today's app never
+// exposes creating a second (mock) draft, so this always exists once the
+// season itself does - convex/leagues.ts's createLeague and
+// convex/draft/history.ts's createNextSeason both create the real draft
+// atomically alongside the season.
+export async function requireRealDraft(
+  ctx: QueryCtx | MutationCtx,
+  seasonId: Id<"seasons">,
+): Promise<Doc<"drafts">> {
+  const draft = await ctx.db
+    .query("drafts")
+    .withIndex("by_season_kind", (q) =>
+      q.eq("seasonId", seasonId).eq("kind", "real"),
+    )
+    .first();
+  if (!draft) {
+    throw new Error("No draft found for this season.");
+  }
+  return draft;
+}
+
+// The common case for convex/draft/* functions that operate on live-auction
+// state (picks, nominations, budget plan, tags, nomination turns): confirm
+// ownership, then resolve this season's one real draft to scope the write/
+// read to. Named to match the pre-split helper this replaces.
+export async function requireDraftOwner(
+  ctx: QueryCtx | MutationCtx,
+  seasonId: Id<"seasons">,
+): Promise<{ season: Doc<"seasons">; draft: Doc<"drafts"> }> {
+  const { season } = await requireSeasonOwner(ctx, seasonId);
+  const draft = await requireRealDraft(ctx, seasonId);
+  return { season, draft };
 }

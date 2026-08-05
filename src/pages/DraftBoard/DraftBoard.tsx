@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-import { useQuery } from "convex/react";
 import {
   Badge,
   Card,
@@ -11,21 +9,23 @@ import {
   Text,
   Title,
 } from "@mantine/core";
+import { useQuery } from "convex/react";
+import { useMemo } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { ColorSchemeToggle } from "../../components/ColorSchemeToggle";
+import { WEEK } from "../../constants/general";
+import { POSITION_COLORS, positionColorOrGray } from "../../lib/positionColors";
+import { expandRosterSlots } from "../../lib/rosterSlots";
+import { assignPicksToSlots } from "../../lib/slotAssignment";
 import {
   computeTeamBudgetStats,
   resolveTeamSalaryCap,
 } from "../../lib/teamBudget";
-import { expandRosterSlots } from "../../lib/rosterSlots";
-import { assignPicksToSlots } from "../../lib/slotAssignment";
-import { positionColorOrGray, POSITION_COLORS } from "../../lib/positionColors";
-import { WEEK } from "../../constants/general";
-import { ColorSchemeToggle } from "../../components/ColorSchemeToggle";
 import BudgetStats from "./BudgetStats";
 
 interface DraftBoardProps {
-  draftSettingsId: Id<"draftSettings">;
+  seasonId: Id<"seasons">;
 }
 
 // Read-only, TV/projector-friendly view of every team's roster - meant to be
@@ -37,17 +37,21 @@ interface DraftBoardProps {
 // never reads this app's own analysis - no $ values (draftValues.ts), ADP,
 // target/avoid tags (draftPlayerTags), or budget plans - since those are the
 // host's private prep, not something to broadcast to the room.
-export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
-  const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const settings = settingsList?.find((s) => s._id === draftSettingsId);
-  const teams = useQuery(api.draft.teams.listDraftTeams, { draftSettingsId });
-  const picks = useQuery(api.draft.picks.listDraftPicks, { draftSettingsId });
+export function DraftBoard({ seasonId }: DraftBoardProps) {
+  const settingsList = useQuery(api.leagues.listSeasons, {});
+  const settings = settingsList?.find((s) => s._id === seasonId);
+  const teams = useQuery(api.draft.teams.listSeasonTeams, { seasonId });
+  const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const activeNomination = useQuery(api.draft.picks.getActiveNomination, {
-    draftSettingsId,
+    seasonId,
   });
+  const nominationConfig = useQuery(
+    api.draft.nominationOrder.getNominationConfig,
+    { seasonId },
+  );
   const currentNominator = useQuery(
     api.draft.nominationOrder.getCurrentNominator,
-    settings?.nominationOrder ? { draftSettingsId } : "skip",
+    nominationConfig?.nominationOrder ? { seasonId } : "skip",
   );
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
@@ -61,8 +65,28 @@ export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
 
   const teamSummaries = useMemo(() => {
     if (!settings || !teams || !picks) return [];
+    // Nomination order (when configured) takes precedence over each team's
+    // static `order` field - the board should read left-to-right/top-to-
+    // bottom in the order teams will actually nominate in, not whatever
+    // order they were added to the league. Teams somehow missing from
+    // nominationOrder (shouldn't normally happen - see
+    // convex/draft/nominationOrder.ts) fall back to `order` as a tiebreak
+    // and sort after every team that is listed.
+    const nominationOrderIndex = new Map(
+      (nominationConfig?.nominationOrder ?? []).map((teamId, index) => [
+        teamId,
+        index,
+      ]),
+    );
     return [...teams]
-      .sort((a, b) => a.order - b.order)
+      .sort((a, b) => {
+        if (nominationOrderIndex.size > 0) {
+          const aIndex = nominationOrderIndex.get(a._id) ?? Infinity;
+          const bIndex = nominationOrderIndex.get(b._id) ?? Infinity;
+          if (aIndex !== bIndex) return aIndex - bIndex;
+        }
+        return a.order - b.order;
+      })
       .map((team) => {
         const teamPicks = picks
           .filter((pick) => pick.teamId === team._id)
@@ -83,7 +107,7 @@ export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
         );
         return { team, stats, slots, bySlot };
       });
-  }, [settings, teams, picks]);
+  }, [settings, teams, picks, nominationConfig]);
 
   const nominatingTeam = teams?.find(
     (team) => team._id === activeNomination?.nominatingTeamId,
@@ -118,12 +142,17 @@ export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
           <Title order={2}>{settings.name}</Title>
           <Group gap="xs" wrap="wrap">
             {activeNomination && nominatingTeam && (
-              <Badge size="xl" radius="md" variant="light" color="yellow">
+              <Badge size="xl" radius="md" variant="light" color="burlywood">
                 {nominatingTeam.name} nominated
               </Badge>
             )}
             {!activeNomination && turnTeam && (
-              <Badge size="xl" radius="md" variant="light" color="yellow">
+              <Badge
+                size="xl"
+                radius="md"
+                variant="light"
+                color="saddlebrown.6"
+              >
                 {turnTeam.name} is nominating
               </Badge>
             )}
@@ -185,10 +214,15 @@ export function DraftBoard({ draftSettingsId }: DraftBoardProps) {
                       >
                         {slot.label}
                       </Badge>
-                      <Text truncate size="md" ta="left" w="calc(100% - 120px)">
+                      <Text truncate size="sm" ta="left" w="calc(100% - 155px)">
                         {player?.name ?? "-"}
                       </Text>
-                      <Text size="md" ta="right" w={35} fw={600}>
+                      {pick?.isKeeper && (
+                        <Badge size="sm" variant="light" color="gray" w={30}>
+                          K{pick.keeperStreak ?? 1}
+                        </Badge>
+                      )}
+                      <Text size="sm" ta="right" w={35} fw={600}>
                         {pick ? `$${pick.price}` : ""}
                       </Text>
                     </Group>

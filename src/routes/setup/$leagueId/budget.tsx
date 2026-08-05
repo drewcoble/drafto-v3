@@ -18,7 +18,7 @@ function BudgetRoute() {
   }
   return (
     <BudgetTab
-      draftSettingsId={leagueId as Id<"draftSettings">}
+      seasonId={leagueId as Id<"seasons">}
       mode="predraft"
     />
   );

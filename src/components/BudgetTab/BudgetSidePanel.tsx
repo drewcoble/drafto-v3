@@ -1,9 +1,26 @@
-import { Button, Card, Group, Stack, Text } from "@mantine/core";
+import { type ReactNode } from "react";
+import {
+  Card,
+  Button,
+  Collapse,
+  Group,
+  SimpleGrid,
+  Stack,
+  Text,
+  UnstyledButton,
+} from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import type { OverspendBehavior } from "../../types";
 import { BUDGET_PRESETS, type BudgetPreset } from "../../lib/budgetPresets";
 import { OVERSPEND_OPTIONS } from "../../constants/budget";
 
 interface BudgetSidePanelProps {
+  // "Start from a shape" only makes sense pre-draft (mode: "predraft") -
+  // applying a preset mid-draft (mode: "live") would blow away whatever
+  // in-draft reallocations the live plan already reflects, so BudgetTab.tsx
+  // only sets this true in predraft mode.
+  showPresets: boolean;
   onApplyPreset: (preset: BudgetPreset) => void;
   perStarter: number;
   perRosterSpot: number;
@@ -13,7 +30,41 @@ interface BudgetSidePanelProps {
   onOverspendChange: (behavior: OverspendBehavior) => void;
 }
 
+// "Start from a shape" and "When I overspend" collapse (default closed) so
+// they don't eat vertical space once a preset/overspend choice is already
+// made - "Sanity checks" stays always-expanded (it's read-only feedback,
+// not a one-time setup choice you'd want to tuck away). Grid row alignment
+// is "start" below so those two collapsed cards don't get stretched tall to
+// match Sanity checks' full height on the same row.
+function CollapsibleCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  const [opened, { toggle }] = useDisclosure(false);
+  return (
+    <Card withBorder padding="md">
+      <Stack gap={8}>
+        <UnstyledButton onClick={toggle} aria-expanded={opened}>
+          <Group justify="space-between" wrap="nowrap">
+            <Text size="sm" fw={500} tt="uppercase" c="dimmed">
+              {title}
+            </Text>
+            {opened ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </Group>
+        </UnstyledButton>
+        <Collapse in={opened}>
+          <Stack gap={8}>{children}</Stack>
+        </Collapse>
+      </Stack>
+    </Card>
+  );
+}
+
 export function BudgetSidePanel({
+  showPresets,
   onApplyPreset,
   perStarter,
   perRosterSpot,
@@ -27,12 +78,13 @@ export function BudgetSidePanel({
   );
 
   return (
-    <Stack gap="md" w={280}>
-      <Card withBorder padding="md">
-        <Stack gap={8}>
-          <Text size="sm" fw={500} tt="uppercase" c="dimmed">
-            Start from a shape
-          </Text>
+    <SimpleGrid
+      cols={{ base: 1, sm: showPresets ? 3 : 2 }}
+      spacing="md"
+      style={{ alignItems: "start" }}
+    >
+      {showPresets && (
+        <CollapsibleCard title="Start from a shape">
           {BUDGET_PRESETS.map((preset) => (
             <Button
               key={preset.value}
@@ -46,8 +98,26 @@ export function BudgetSidePanel({
           <Text size="xs" c="dimmed">
             A preset lands as numbers you then tune.
           </Text>
-        </Stack>
-      </Card>
+        </CollapsibleCard>
+      )}
+
+      <CollapsibleCard title="When I overspend">
+        {OVERSPEND_OPTIONS.map((option) => (
+          <Button
+            key={option.value}
+            variant={option.value === overspendBehavior ? "light" : "default"}
+            fullWidth
+            onClick={() => onOverspendChange(option.value)}
+          >
+            {option.label}
+          </Button>
+        ))}
+        {selectedOverspend && (
+          <Text size="xs" c="dimmed">
+            {selectedOverspend.caption}
+          </Text>
+        )}
+      </CollapsibleCard>
 
       <Card withBorder padding="md">
         <Stack gap={6}>
@@ -80,29 +150,6 @@ export function BudgetSidePanel({
           </Group>
         </Stack>
       </Card>
-
-      <Card withBorder padding="md">
-        <Stack gap={8}>
-          <Text size="sm" fw={500} tt="uppercase" c="dimmed">
-            When I overspend
-          </Text>
-          {OVERSPEND_OPTIONS.map((option) => (
-            <Button
-              key={option.value}
-              variant={option.value === overspendBehavior ? "light" : "default"}
-              fullWidth
-              onClick={() => onOverspendChange(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-          {selectedOverspend && (
-            <Text size="xs" c="dimmed">
-              {selectedOverspend.caption}
-            </Text>
-          )}
-        </Stack>
-      </Card>
-    </Stack>
+    </SimpleGrid>
   );
 }

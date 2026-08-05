@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { InjuryReport } from "../../../pages/InjuryReport/InjuryReport";
-import { WEEK } from "../../../constants/general";
+import { MOBILE_HEADER_HEIGHT, WEEK } from "../../../constants/general";
 
 export const Route = createFileRoute("/setup/$leagueId/injuries")({
   component: InjuriesRoute,
@@ -12,9 +12,10 @@ function InjuriesRoute() {
   return (
     <InjuryReport
       week={WEEK}
-      draftSettingsId={
-        leagueId === "new" ? undefined : (leagueId as Id<"draftSettings">)
+      seasonId={
+        leagueId === "new" ? undefined : (leagueId as Id<"seasons">)
       }
+      filterBarTop={MOBILE_HEADER_HEIGHT}
     />
   );
 }

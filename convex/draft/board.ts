@@ -27,7 +27,7 @@ interface DraftValueRow {
 
 // Wraps draftValues.getDraftValues (the existing VBD $ engine) with tiers -
 // deliberately NOT joined with draftPicks here. This query's only read
-// dependencies are draftSettings + projections (+ getDraftValues' own
+// dependencies are the season + projections (+ getDraftValues' own
 // narrowly-scoped keeper read, see below), all stable for the duration of a
 // live draft, so it doesn't get invalidated/recomputed on every single pick
 // the way a picks-joined version would. Live "is this player drafted" status
@@ -44,18 +44,18 @@ interface DraftValueRow {
 // the live draft, which is what makes reading them here safe.
 export const getDraftBoard = query({
   args: {
-    draftSettingsId: v.id("draftSettings"),
+    seasonId: v.id("seasons"),
     week: v.string(),
     scoring: scoringValidator,
     position: v.optional(positionValidator),
   },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    await requireDraftOwner(ctx, args.seasonId);
 
     const values: DraftValueRow[] = await ctx.runQuery(
       api.draftValues.getDraftValues,
       {
-        draftSettingsId: args.draftSettingsId,
+        seasonId: args.seasonId,
         week: args.week,
         scoring: args.scoring,
         ...(args.position ? { position: args.position } : {}),
@@ -65,9 +65,9 @@ export const getDraftBoard = query({
     // ADP doesn't change during a live draft (same reasoning as the keepers
     // read documented above), so joining it here doesn't reintroduce the
     // per-pick recompute this query otherwise avoids. Positions are read off
-    // `values` itself (rather than re-deriving activePositions from
-    // draftSettings) since that's already exactly the set of positions this
-    // call needs.
+    // `values` itself (rather than re-deriving activePositions from the
+    // season) since that's already exactly the set of positions this call
+    // needs.
     const positions = Array.from(new Set(values.map((row) => row.position)));
     const adpByFpid = new Map<
       number,

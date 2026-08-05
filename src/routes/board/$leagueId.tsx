@@ -11,5 +11,5 @@ export const Route = createFileRoute("/board/$leagueId")({
 
 function BoardRoute() {
   const { leagueId } = Route.useParams();
-  return <DraftBoard draftSettingsId={leagueId as Id<"draftSettings">} />;
+  return <DraftBoard seasonId={leagueId as Id<"seasons">} />;
 }

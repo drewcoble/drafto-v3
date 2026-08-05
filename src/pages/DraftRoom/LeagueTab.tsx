@@ -24,22 +24,21 @@ import {
   computeTeamBudgetStats,
   resolveTeamSalaryCap,
 } from "../../lib/teamBudget";
-import { Position } from "../../types";
 
 interface LeagueTabProps {
-  draftSettingsId: Id<"draftSettings">;
-  teams: Doc<"draftTeams">[];
-  selfTeamId: Id<"draftTeams">;
+  seasonId: Id<"seasons">;
+  teams: Doc<"seasonTeams">[];
+  selfTeamId: Id<"seasonTeams">;
 }
 
 export function LeagueTab({
-  draftSettingsId,
+  seasonId,
   teams,
   selfTeamId,
 }: LeagueTabProps) {
-  const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const settings = settingsList?.find((s) => s._id === draftSettingsId);
-  const picks = useQuery(api.draft.picks.listDraftPicks, { draftSettingsId });
+  const settingsList = useQuery(api.leagues.listSeasons, {});
+  const settings = settingsList?.find((s) => s._id === seasonId);
+  const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
@@ -102,14 +101,36 @@ export function LeagueTab({
       const needs = slots
         .filter((slot) => !bySlot.has(slot.key))
         .map((slot) => slot.label);
-      console.log(stats);
+      // Same label-stripping as allNeedGroups below (see its comment) so a
+      // group here matches the fixed set of badge slots every team's card
+      // renders into.
+      const neededGroups = new Set(
+        needs.map((label) => label.replace(/\d+$/, "")),
+      );
       const fillPct = (stats.remaining / (stats.remaining + stats.spent)) * 100;
       // const fillPct = slots.length
       //   ? ((slots.length - needs.length) / slots.length) * 100
       //   : 0;
-      return { team, teamPicks, stats, slots, bySlot, needs, fillPct };
+      return { team, teamPicks, stats, slots, bySlot, needs, neededGroups, fillPct };
     });
   }, [teams, settings, picks]);
+
+  // The full, fixed set of position groups a "needs" row could ever show for
+  // this league (same roster shape for every team) - rendered in this same
+  // order for every card so a group's badge sits in the same horizontal spot
+  // whether or not that team still needs it, making it easy to scan across
+  // teams at a glance. Same label-stripping/sort as the old inline
+  // computation below, just against every roster slot instead of only the
+  // still-open ones.
+  const allNeedGroups = useMemo(() => {
+    if (!settings) return [];
+    const slots = expandRosterSlots(settings.rosterSlots);
+    return Array.from(
+      new Set(slots.map((slot) => slot.label.replace(/\d+$/, ""))),
+    )
+      .filter((group) => POSITION_ORDER.includes(group))
+      .sort((a, b) => POSITION_ORDER.indexOf(a) - POSITION_ORDER.indexOf(b));
+  }, [settings]);
 
   const sortedSummaries = useMemo(() => {
     const self = teamSummaries.filter((ts) => ts.team.isSelf);
@@ -139,8 +160,7 @@ export function LeagueTab({
 
   if (!settings || !picks) return null;
 
-  const thisSeason = settings.season ?? String(new Date().getFullYear());
-  console.log(settings.rosterSlots);
+  const thisSeason = settings.year;
 
   return (
     <Stack gap="md" py="sm">
@@ -155,9 +175,9 @@ export function LeagueTab({
           {removeError}
         </Text>
       )}
-      <SimpleGrid cols={3} spacing="md">
+      <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
         {sortedSummaries.map(
-          ({ team, stats, needs, fillPct, teamPicks, slots, bySlot }) => (
+          ({ team, stats, neededGroups, fillPct, teamPicks, slots, bySlot }) => (
             <Card
               key={team._id}
               withBorder
@@ -182,33 +202,29 @@ export function LeagueTab({
                   </Text>
                 </Group>
                 <Progress value={fillPct} size="lg" color="green" />
-                <Group>
-                  {Object.keys(settings.rosterSlots)
-                    .sort(
-                      (a, b) =>
-                        POSITION_ORDER.indexOf(a as Position) -
-                        POSITION_ORDER.indexOf(b as Position),
-                    )
-                    .map((slot) => {
-                      if (needs.some((p) => p.startsWith(slot))) {
-                        return (
-                          <Badge
-                            key={slot}
-                            color={positionColorOrDefault(slot)}
-                            size="xs"
-                            variant="light"
-                          >
-                            {slot}
-                          </Badge>
-                        );
+                <Group justify="space-between" wrap="nowrap" mt={8}>
+                  {/* Every group renders in the same order for every team
+                      (allNeedGroups), so a group's badge sits in the same
+                      horizontal slot whether or not this team still needs
+                      it - filled groups render invisible (same label, so
+                      same width) instead of disappearing, so the row
+                      doesn't reflow as picks come in. */}
+                  {allNeedGroups.map((group) => (
+                    <Badge
+                      key={group}
+                      color={positionColorOrDefault(group)}
+                      size="xs"
+                      variant="light"
+                      style={
+                        neededGroups.has(group)
+                          ? undefined
+                          : { visibility: "hidden" }
                       }
-                      return null;
-                    })}
+                    >
+                      {group}
+                    </Badge>
+                  ))}
                 </Group>
-                <Text size="xs" c="dimmed" lineClamp={1}>
-                  needs {needs.slice(0, 4).join(", ") || "nothing"}
-                  {needs.length > 4 ? ` +${needs.length - 4}` : ""}
-                </Text>
                 {expandedTeamIds.has(team._id) && (
                   <TeamSlotDetail
                     slots={slots}
@@ -233,7 +249,7 @@ export function LeagueTab({
         week={WEEK}
         scoring={settings.scoring}
         season={thisSeason}
-        draftSettingsId={draftSettingsId}
+        seasonId={seasonId}
       />
     </Stack>
   );

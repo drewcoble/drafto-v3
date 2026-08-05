@@ -186,7 +186,21 @@ async function fetchProjectionsHandler(
 
       const numericStats: Record<string, number> = {};
       for (const [key, value] of Object.entries(stats)) {
-        if (typeof value === "number" && !key.startsWith("pts_") && !key.startsWith("adp_")) {
+        if (
+          typeof value === "number" &&
+          !key.startsWith("pts_") &&
+          !key.startsWith("adp_") &&
+          // bonus_rec_wr/rb/te just mirror "rec" (PPR reception-bonus
+          // scoring inputs, not a distinct stat) - confirmed against live
+          // data the values are identical, so drop rather than show a
+          // duplicate "Bonus Rec X" column next to "Receptions".
+          !key.startsWith("bonus_rec_") &&
+          // idp_* (individual-defense stats: tackles, IDP int, ...) show up
+          // on the rare two-way player Sleeper tracks defensive stats for
+          // too (e.g. Travis Hunter) - this league doesn't score IDP, and
+          // one player's columns would otherwise sit empty for everyone else.
+          !key.startsWith("idp_")
+        ) {
           numericStats[key] = value;
         }
       }

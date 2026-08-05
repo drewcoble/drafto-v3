@@ -6,9 +6,12 @@ import {
   Card,
   Center,
   Group,
+  List,
   Loader,
+  Modal,
   SimpleGrid,
   Stack,
+  Switch,
   Text,
   TextInput,
   Title,
@@ -16,21 +19,24 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { positionColorOrDefault } from "../../lib/positionColors";
-import { guessNextSeason } from "../../lib/season";
 import {
   DEFAULT_FORM,
+  ROSTER_SLOT_KEYS,
   SCORING_OPTIONS,
   type LeagueSettingsFormValues,
 } from "../../constants/leagueSettings";
 import { SettingsForm } from "./components/SettingsForm";
 import { SeasonHistoryPanel } from "./components/SeasonHistoryPanel";
 import { TeamsPanel } from "./components/TeamsPanel";
+import { LeagueCreateChoice } from "./components/LeagueCreateChoice";
+import { LeagueImportWizard } from "./components/LeagueImportWizard";
 
 interface LeagueDetailsProps {
-  selectedLeagueId: Id<"draftSettings"> | undefined;
+  selectedLeagueId: Id<"seasons"> | undefined;
   isCreatingLeague: boolean;
-  onLeagueSaved: (id: Id<"draftSettings">) => void;
+  onLeagueSaved: (id: Id<"seasons">) => void;
   onDoneCreating: () => void;
+  onLeagueDeleted: () => void;
 }
 
 export function LeagueDetails({
@@ -38,26 +44,39 @@ export function LeagueDetails({
   isCreatingLeague,
   onLeagueSaved,
   onDoneCreating,
+  onLeagueDeleted,
 }: LeagueDetailsProps) {
-  const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const createSettings = useMutation(api.draftSettings.createDraftSettings);
-  const updateSettings = useMutation(api.draftSettings.updateDraftSettings);
+  const settingsList = useQuery(api.leagues.listSeasons, {});
+  const createSettings = useMutation(api.leagues.createLeague);
+  const updateSettings = useMutation(api.leagues.updateSeason);
   const draftTeams = useQuery(
-    api.draft.teams.listDraftTeams,
-    selectedLeagueId ? { draftSettingsId: selectedLeagueId } : "skip",
+    api.draft.teams.listSeasonTeams,
+    selectedLeagueId ? { seasonId: selectedLeagueId } : "skip",
   );
   const initializeDraftTeams = useMutation(
-    api.draft.teams.initializeDraftTeams,
+    api.draft.teams.initializeSeasonTeams,
   );
-  const renameDraftTeam = useMutation(api.draft.teams.renameDraftTeam);
+  const renameDraftTeam = useMutation(api.draft.teams.renameSeasonTeam);
   const setTeamSalaryCap = useMutation(api.draft.teams.setTeamSalaryCap);
+  const setUseKeepers = useMutation(api.leagues.setUseKeepers);
+  const deleteDraftSettings = useMutation(api.leagues.deleteLeague);
   const seasonLineage = useQuery(
     api.draft.history.listSeasonLineage,
-    selectedLeagueId ? { draftSettingsId: selectedLeagueId } : "skip",
+    selectedLeagueId ? { seasonId: selectedLeagueId } : "skip",
   );
-  const cloneDraftSettings = useMutation(api.draft.history.cloneDraftSettings);
+  const nominationConfig = useQuery(
+    api.draft.nominationOrder.getNominationConfig,
+    selectedLeagueId ? { seasonId: selectedLeagueId } : "skip",
+  );
 
   const [isEditing, setIsEditing] = useState(false);
+  // Gates the "+ New League" flow's first screen (Custom Setup vs. Import
+  // from Sleeper - see LeagueCreateChoice.tsx) ahead of isEditing/SettingsForm
+  // taking over for the custom path. null once a choice has been made or
+  // there's no creation in progress.
+  const [createMode, setCreateMode] = useState<"choice" | "import" | null>(
+    null,
+  );
   const [form, setForm] = useState<LeagueSettingsFormValues>(DEFAULT_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,20 +87,19 @@ export function LeagueDetails({
   const [teamsError, setTeamsError] = useState<string | null>(null);
 
   const [historySeasonId, setHistorySeasonId] =
-    useState<Id<"draftSettings"> | null>(null);
-  const [isStartingSeason, setIsStartingSeason] = useState(false);
-  const [nextSeasonLabel, setNextSeasonLabel] = useState("");
-  const [nextSeasonName, setNextSeasonName] = useState("");
-  const [isCloning, setIsCloning] = useState(false);
-  const [cloneError, setCloneError] = useState<string | null>(null);
+    useState<Id<"seasons"> | null>(null);
+  const [useKeepersError, setUseKeepersError] = useState<string | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Triggered by the "+ New League" option in the header dropdown, which can
   // fire regardless of which tab is currently active.
   useEffect(() => {
     if (isCreatingLeague) {
-      setForm(DEFAULT_FORM);
       setError(null);
-      setIsEditing(true);
+      setIsEditing(false);
+      setCreateMode("choice");
     }
   }, [isCreatingLeague]);
 
@@ -166,7 +184,7 @@ export function LeagueDetails({
     setTeamsError(null);
     try {
       await initializeDraftTeams({
-        draftSettingsId: settings._id,
+        seasonId: settings._id,
         selfName,
         opponentNames,
       });
@@ -179,7 +197,7 @@ export function LeagueDetails({
     }
   };
 
-  const handleRenameTeam = async (teamId: Id<"draftTeams">, name: string) => {
+  const handleRenameTeam = async (teamId: Id<"seasonTeams">, name: string) => {
     setTeamsError(null);
     try {
       await renameDraftTeam({ teamId, name });
@@ -191,7 +209,7 @@ export function LeagueDetails({
   };
 
   const handleSetTeamSalaryCap = async (
-    teamId: Id<"draftTeams">,
+    teamId: Id<"seasonTeams">,
     salaryCap: number | null,
   ) => {
     setTeamsError(null);
@@ -204,34 +222,70 @@ export function LeagueDetails({
     }
   };
 
-  const openStartSeasonForm = () => {
-    setNextSeasonLabel(guessNextSeason(settings?.season));
-    setNextSeasonName(settings?.name ?? "");
-    setCloneError(null);
-    setIsStartingSeason(true);
-  };
-
-  const handleStartSeason = async () => {
+  const handleToggleUseKeepers = async (checked: boolean) => {
     if (!settings) return;
-    setIsCloning(true);
-    setCloneError(null);
+    setUseKeepersError(null);
     try {
-      const newId = await cloneDraftSettings({
-        id: settings._id,
-        season: nextSeasonLabel,
-        name: nextSeasonName,
-      });
-      setIsStartingSeason(false);
-      setHistorySeasonId(null);
-      onLeagueSaved(newId);
+      await setUseKeepers({ id: settings._id, useKeepers: checked });
     } catch (err) {
-      setCloneError(
-        err instanceof Error ? err.message : "Failed to start next season.",
+      setUseKeepersError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update keepers setting.",
       );
-    } finally {
-      setIsCloning(false);
     }
   };
+
+  const handleDelete = async () => {
+    if (!settings) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteDraftSettings({ id: settings._id });
+      setDeleteModalOpen(false);
+      onLeagueDeleted();
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to delete league.",
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  if (createMode === "choice") {
+    return (
+      <LeagueCreateChoice
+        onChooseCustom={() => {
+          setCreateMode(null);
+          setForm(DEFAULT_FORM);
+          setError(null);
+          setIsEditing(true);
+        }}
+        onChooseSleeperImport={() => setCreateMode("import")}
+        onCancel={() => {
+          setCreateMode(null);
+          onDoneCreating();
+        }}
+      />
+    );
+  }
+
+  if (createMode === "import") {
+    return (
+      <LeagueImportWizard
+        onImported={(id) => {
+          setCreateMode(null);
+          onLeagueSaved(id);
+          onDoneCreating();
+        }}
+        onCancel={() => {
+          setCreateMode(null);
+          onDoneCreating();
+        }}
+      />
+    );
+  }
 
   if (isEditing) {
     return (
@@ -260,64 +314,62 @@ export function LeagueDetails({
     );
   }
 
-  const rosterEntries = Object.entries(settings.rosterSlots);
+  const rosterEntries = ROSTER_SLOT_KEYS.map(
+    (slot) => [slot, settings.rosterSlots[slot]] as const,
+  );
 
   return (
     <Stack gap="lg" py="sm">
       <Title order={4}>{settings.name}</Title>
 
-      <Card withBorder padding="md">
+      {/* No outer Card - SeasonHistoryPanel renders SeasonSummary's own
+          grid of per-team Cards when a past season is selected, so wrapping
+          this section would nest a Card inside a Card. */}
+      {seasonLineage !== undefined && seasonLineage.length > 1 && (
         <SeasonHistoryPanel
           seasonLineage={seasonLineage}
           currentSettingsId={settings._id}
           historySeasonId={historySeasonId}
           onSelectHistorySeason={setHistorySeasonId}
-          isStartingSeason={isStartingSeason}
-          onOpenStartSeason={openStartSeasonForm}
-          onCancelStartSeason={() => setIsStartingSeason(false)}
-          nextSeasonName={nextSeasonName}
-          onNextSeasonNameChange={setNextSeasonName}
-          nextSeasonLabel={nextSeasonLabel}
-          onNextSeasonLabelChange={setNextSeasonLabel}
-          cloneError={cloneError}
-          isCloning={isCloning}
-          onStartSeason={handleStartSeason}
         />
-      </Card>
+      )}
 
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <Card withBorder padding="md">
           <Stack gap="md">
             <Group justify="space-between" align="center">
-              <Text size="sm" fw={500}>
+              <Text size="md" fw={500}>
                 League Settings
               </Text>
               <Button
                 variant="default"
-                size="compact-sm"
+                size="md"
                 onClick={startEditing}
               >
                 Edit
               </Button>
             </Group>
+            {/* Plain stat blocks, not Cards - this whole panel is already
+                inside the "League Settings" Card above, and nesting Cards
+                inside a Card reads as boxes-in-boxes. */}
             <SimpleGrid cols={3} spacing="md">
-              <Card withBorder padding="sm">
+              <Stack gap={0}>
                 <Text size="sm" c="dimmed">
                   Teams
                 </Text>
                 <Text size="xl" fw={700}>
                   {settings.teamCount}
                 </Text>
-              </Card>
-              <Card withBorder padding="sm">
+              </Stack>
+              <Stack gap={0}>
                 <Text size="sm" c="dimmed">
                   Salary Cap
                 </Text>
                 <Text size="xl" fw={700}>
                   ${settings.salaryCap}
                 </Text>
-              </Card>
-              <Card withBorder padding="sm">
+              </Stack>
+              <Stack gap={0}>
                 <Text size="sm" c="dimmed">
                   Scoring
                 </Text>
@@ -326,7 +378,7 @@ export function LeagueDetails({
                     (option) => option.value === settings.scoring,
                   )?.label ?? settings.scoring}
                 </Text>
-              </Card>
+              </Stack>
             </SimpleGrid>
             <Stack gap={6}>
               <Text size="sm" c="dimmed">
@@ -353,20 +405,33 @@ export function LeagueDetails({
                 SUPERFLEX eligible: {settings.superflexPositions.join(", ")}
               </Text>
             </Group>
+            <Switch
+              label="Use Keepers"
+              description="Shows or hides the Keepers tab, where keeper rules and tiers are configured."
+              checked={settings.useKeepers ?? true}
+              onChange={(event) =>
+                handleToggleUseKeepers(event.currentTarget.checked)
+              }
+            />
+            {useKeepersError && (
+              <Text c="red" size="sm">
+                {useKeepersError}
+              </Text>
+            )}
           </Stack>
         </Card>
 
         <Card withBorder padding="md">
           {draftTeams === undefined ? (
             <Stack gap={6}>
-              <Text size="sm" fw={500}>
+              <Text size="md" fw={500}>
                 Teams
               </Text>
               <Loader size="sm" />
             </Stack>
           ) : draftTeams.length === 0 ? (
             <Stack gap="sm" maw={420}>
-              <Text size="sm" fw={500}>
+              <Text size="md" fw={500}>
                 Teams
               </Text>
               <Text size="sm" c="dimmed">
@@ -410,10 +475,10 @@ export function LeagueDetails({
             </Stack>
           ) : (
             <TeamsPanel
-              draftSettingsId={settings._id}
+              seasonId={settings._id}
               teams={draftTeams}
-              nominationOrder={settings.nominationOrder}
-              nominationOrderMode={settings.nominationOrderMode}
+              nominationOrder={nominationConfig?.nominationOrder}
+              nominationOrderMode={nominationConfig?.nominationOrderMode}
               salaryCap={settings.salaryCap}
               onRenameTeam={handleRenameTeam}
               onSetTeamSalaryCap={handleSetTeamSalaryCap}
@@ -422,6 +487,52 @@ export function LeagueDetails({
           )}
         </Card>
       </SimpleGrid>
+
+      <Group justify="flex-end">
+        <Button
+          color="red"
+          variant="outline"
+          onClick={() => setDeleteModalOpen(true)}
+        >
+          Delete League
+        </Button>
+      </Group>
+
+      <Modal
+        opened={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title="Delete league"
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            This will delete all seasons for this league. This cannot be
+            undone.
+          </Text>
+          <List size="sm">
+            {(seasonLineage ?? [settings]).map((season) => (
+              <List.Item key={season._id}>
+                {settings.name} ({season.year})
+              </List.Item>
+            ))}
+          </List>
+          {deleteError && (
+            <Text c="red" size="sm">
+              {deleteError}
+            </Text>
+          )}
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={() => setDeleteModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button color="red" loading={isDeleting} onClick={handleDelete}>
+              Delete League
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }

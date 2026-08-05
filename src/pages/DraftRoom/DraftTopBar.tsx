@@ -1,4 +1,4 @@
-import { Group, SimpleGrid } from "@mantine/core";
+import { Box, Group, SimpleGrid } from "@mantine/core";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
@@ -14,38 +14,45 @@ import {
 } from "../../lib/relevantPlayers";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { assignSlotForPick } from "../../lib/slotAssignment";
+import { POSITIONS } from "../../types";
+import { MobileNomination } from "./components/MobileNomination";
+import { MobileStatsRow } from "./components/MobileStatsRow";
 import { NominationPanel } from "./components/NominationPanel";
 import { StatTile } from "./components/StatTile";
 
 interface DraftTopBarProps {
-  draftSettingsId: Id<"draftSettings">;
-  selfTeamId: Id<"draftTeams">;
+  seasonId: Id<"seasons">;
+  selfTeamId: Id<"seasonTeams">;
 }
 
 // Persistent across every Draft Room tab (mounted once by the layout route),
 // so the whole auction - search, nominate, watch/bump the bid, log who won -
 // can be run from any tab without ever switching to a dedicated "Draft" tab.
-export function DraftTopBar({ draftSettingsId, selfTeamId }: DraftTopBarProps) {
+export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
   const [search, setSearch] = useState("");
   const [winnerTeamId, setWinnerTeamId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
 
-  const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const teams = useQuery(api.draft.teams.listDraftTeams, { draftSettingsId });
-  const picks = useQuery(api.draft.picks.listDraftPicks, { draftSettingsId });
+  const settingsList = useQuery(api.leagues.listSeasons, {});
+  const teams = useQuery(api.draft.teams.listSeasonTeams, { seasonId });
+  const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const activeNomination = useQuery(api.draft.picks.getActiveNomination, {
-    draftSettingsId,
+    seasonId,
   });
 
-  const settings = settingsList?.find((s) => s._id === draftSettingsId);
-  const thisSeason = settings?.season ?? String(new Date().getFullYear());
+  const settings = settingsList?.find((s) => s._id === seasonId);
+  const thisSeason = settings?.year ?? String(new Date().getFullYear());
 
+  const nominationConfig = useQuery(
+    api.draft.nominationOrder.getNominationConfig,
+    { seasonId },
+  );
   const currentNominator = useQuery(
     api.draft.nominationOrder.getCurrentNominator,
-    settings?.nominationOrder ? { draftSettingsId } : "skip",
+    nominationConfig?.nominationOrder ? { seasonId } : "skip",
   );
-  const planSlots = usePlanSlots(draftSettingsId, selfTeamId);
+  const planSlots = usePlanSlots(seasonId, selfTeamId);
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
@@ -53,7 +60,7 @@ export function DraftTopBar({ draftSettingsId, selfTeamId }: DraftTopBarProps) {
   const draftValues = useQuery(
     api.draftValues.getDraftValues,
     settings
-      ? { draftSettingsId, week: WEEK, scoring: settings.scoring }
+      ? { seasonId, week: WEEK, scoring: settings.scoring }
       : "skip",
   );
 
@@ -71,7 +78,7 @@ export function DraftTopBar({ draftSettingsId, selfTeamId }: DraftTopBarProps) {
   // (manual) state - no fallback team, since defaulting silently to someone
   // would misattribute the nomination. When no order is configured,
   // self-nominate is the only option.
-  const nominatingTeamId = settings?.nominationOrder
+  const nominatingTeamId = nominationConfig?.nominationOrder
     ? (currentNominator?.currentTeamId ?? undefined)
     : selfTeamId;
 
@@ -109,7 +116,7 @@ export function DraftTopBar({ draftSettingsId, selfTeamId }: DraftTopBarProps) {
 
   const activePositions = useMemo(() => {
     if (!settings) return [];
-    return (["QB", "RB", "WR", "TE", "DST", "K"] as const).filter(
+    return POSITIONS.filter(
       (pos) =>
         settings.rosterSlots[pos] > 0 ||
         settings.flexPositions.includes(pos) ||
@@ -157,7 +164,7 @@ export function DraftTopBar({ draftSettingsId, selfTeamId }: DraftTopBarProps) {
     : undefined;
 
   const stats = useTeamBudget(
-    draftSettingsId,
+    seasonId,
     selfTeamId,
     activeNomination?.position,
     nominatedValue?.dollarValue,
@@ -209,62 +216,120 @@ export function DraftTopBar({ draftSettingsId, selfTeamId }: DraftTopBarProps) {
     (team) => team._id === currentNominator?.currentTeamId,
   );
 
+  // Mobile-only unification of onLogWin/onLogWinner below - the desktop
+  // panel keeps its dedicated "I won" button (self team, with plan-slot
+  // tracking) separate from "someone else won" (no plan-slot tracking,
+  // since that's only relevant for the self team's own budget plan). The
+  // mobile bar drops the separate "I won" button in favor of always
+  // picking a team (self listed first) from one list, so this just
+  // branches on whether that pick was the self team.
+  const assignWinner = (teamId: Id<"seasonTeams">) => {
+    if (!activeNomination) return;
+    runAction(() => {
+      if (teamId === selfTeamId) {
+        const planSlotKey = assignSlotForPick(
+          activeNomination.position,
+          settings.rosterSlots,
+          selfFilledSlotKeys,
+          settings.flexPositions,
+          settings.superflexPositions,
+        );
+        return resolvePick({
+          seasonId,
+          fpid: activeNomination.fpid,
+          teamId,
+          price: activeNomination.currentBid,
+          ...(planSlotKey ? { planSlotKey } : {}),
+        });
+      }
+      return resolvePick({
+        seasonId,
+        fpid: activeNomination.fpid,
+        teamId,
+        price: activeNomination.currentBid,
+      });
+    });
+  };
+
   return (
     <Group align="flex-start" gap="sm" wrap="wrap">
-      <NominationPanel
-        nextPickNumber={nextPickNumber}
-        totalPicks={totalPicks}
-        teams={teams}
-        nominationOrderEnabled={!!settings.nominationOrder}
+      <Box visibleFrom="sm" style={{ flex: "1 1 380px" }}>
+        <NominationPanel
+          nextPickNumber={nextPickNumber}
+          totalPicks={totalPicks}
+          teams={teams}
+          nominationOrderEnabled={!!nominationConfig?.nominationOrder}
+          turnTeamId={currentNominator?.currentTeamId}
+          turnTeamName={turnTeam?.name}
+          onSetTurnTeam={(teamId) =>
+            runAction(() => setCurrentNominator({ seasonId, teamId }))
+          }
+          activeNomination={activeNomination ?? undefined}
+          nominatedPlayer={nominatedPlayer}
+          nominatedValue={nominatedValue}
+          planMatch={planMatch}
+          winnerTeamId={winnerTeamId}
+          onWinnerTeamIdChange={setWinnerTeamId}
+          onBumpBid={(delta) =>
+            runAction(() => bumpNominationBid({ seasonId, delta }))
+          }
+          onSetBid={(amount) =>
+            runAction(() => setNominationBid({ seasonId, amount }))
+          }
+          onLogWin={() => assignWinner(selfTeamId)}
+          onLogWinner={() =>
+            runAction(async () => {
+              if (!activeNomination || !winnerTeamId) return;
+              await resolvePick({
+                seasonId,
+                fpid: activeNomination.fpid,
+                teamId: winnerTeamId as Id<"seasonTeams">,
+                price: activeNomination.currentBid,
+              });
+              setWinnerTeamId(null);
+            })
+          }
+          onPass={() => runAction(() => passNomination({ seasonId }))}
+          search={search}
+          onSearchChange={setSearch}
+          searchResults={searchResults}
+          draftValueByFpid={draftValueByFpid}
+          onNominate={(fpid) => {
+            runAction(() =>
+              nominate({
+                seasonId,
+                fpid,
+                ...(nominatingTeamId ? { nominatingTeamId } : {}),
+                openingBid: 1,
+              }),
+            );
+            setSearch("");
+          }}
+          actionError={actionError}
+          onSelectPlayer={setSelectedFpid}
+        />
+      </Box>
+
+      <MobileNomination
+        nominationOrderEnabled={!!nominationConfig?.nominationOrder}
         turnTeamId={currentNominator?.currentTeamId}
         turnTeamName={turnTeam?.name}
         onSetTurnTeam={(teamId) =>
-          runAction(() => setCurrentNominator({ draftSettingsId, teamId }))
+          runAction(() => setCurrentNominator({ seasonId, teamId }))
         }
+        teams={teams}
+        selfTeamId={selfTeamId}
         activeNomination={activeNomination ?? undefined}
         nominatedPlayer={nominatedPlayer}
         nominatedValue={nominatedValue}
-        planMatch={planMatch}
-        winnerTeamId={winnerTeamId}
-        onWinnerTeamIdChange={setWinnerTeamId}
         onBumpBid={(delta) =>
-          runAction(() => bumpNominationBid({ draftSettingsId, delta }))
+          runAction(() => bumpNominationBid({ seasonId, delta }))
         }
         onSetBid={(amount) =>
-          runAction(() => setNominationBid({ draftSettingsId, amount }))
+          runAction(() => setNominationBid({ seasonId, amount }))
         }
-        onLogWin={() => {
-          if (!activeNomination) return;
-          runAction(() => {
-            const planSlotKey = assignSlotForPick(
-              activeNomination.position,
-              settings.rosterSlots,
-              selfFilledSlotKeys,
-              settings.flexPositions,
-              settings.superflexPositions,
-            );
-            return resolvePick({
-              draftSettingsId,
-              fpid: activeNomination.fpid,
-              teamId: selfTeamId,
-              price: activeNomination.currentBid,
-              ...(planSlotKey ? { planSlotKey } : {}),
-            });
-          });
-        }}
-        onLogWinner={() =>
-          runAction(async () => {
-            if (!activeNomination || !winnerTeamId) return;
-            await resolvePick({
-              draftSettingsId,
-              fpid: activeNomination.fpid,
-              teamId: winnerTeamId as Id<"draftTeams">,
-              price: activeNomination.currentBid,
-            });
-            setWinnerTeamId(null);
-          })
-        }
-        onPass={() => runAction(() => passNomination({ draftSettingsId }))}
+        onAssignWinner={assignWinner}
+        onPass={() => runAction(() => passNomination({ seasonId }))}
         search={search}
         onSearchChange={setSearch}
         searchResults={searchResults}
@@ -272,7 +337,7 @@ export function DraftTopBar({ draftSettingsId, selfTeamId }: DraftTopBarProps) {
         onNominate={(fpid) => {
           runAction(() =>
             nominate({
-              draftSettingsId,
+              seasonId,
               fpid,
               ...(nominatingTeamId ? { nominatingTeamId } : {}),
               openingBid: 1,
@@ -280,25 +345,48 @@ export function DraftTopBar({ draftSettingsId, selfTeamId }: DraftTopBarProps) {
           );
           setSearch("");
         }}
-        actionError={actionError}
         onSelectPlayer={setSelectedFpid}
       />
 
-      <SimpleGrid cols={stats.planSafe !== null ? 4 : 3} spacing="sm" h="100%">
-        <StatTile label="Remaining" value={`$${stats.remaining}`} />
-        <StatTile label="Max Bid" value={`$${Math.max(stats.maxBid, 0)}`} />
-        <StatTile label="Empty Spots" value={stats.openSlots.toString()} />
-        {/* {stats.planSafe !== null && (
+      <Box visibleFrom="sm">
+        <SimpleGrid
+          cols={stats.planSafe !== null ? 5 : 4}
+          spacing="sm"
+          h="100%"
+        >
+          <StatTile label="Remaining" value={`$${stats.remaining}`} />
+          <StatTile label="Max Bid" value={`$${Math.max(stats.maxBid, 0)}`} />
+          {stats.planSafe !== null && (
+            <StatTile
+              label="Budget +/-"
+              value={
+                stats.planSafe > 0
+                  ? `+$${stats.planSafe}`
+                  : `-$${Math.abs(stats.planSafe)}`
+              }
+              valueColor={
+                stats.planSafe > 0
+                  ? "green"
+                  : stats.planSafe < 0
+                    ? "red"
+                    : "inherit"
+              }
+            />
+          )}
+          <StatTile label="Empty Spots" value={stats.openSlots.toString()} />
           <StatTile
-            label="Plan-Safe"
-            value={`$${Math.max(stats.planSafe, 0)}`}
+            label="Per Open Slot"
+            value={`$${stats.perOpenSlot.toFixed(1)}`}
           />
-        )} */}
-        <StatTile
-          label="Per Open Slot"
-          value={`$${stats.perOpenSlot.toFixed(1)}`}
-        />
-      </SimpleGrid>
+        </SimpleGrid>
+      </Box>
+
+      <MobileStatsRow
+        maxBid={stats.maxBid}
+        planSafe={stats.planSafe}
+        openSlots={stats.openSlots}
+        perOpenSlot={stats.perOpenSlot}
+      />
 
       <PlayerDetailModal
         fpid={selectedFpid}
@@ -306,7 +394,7 @@ export function DraftTopBar({ draftSettingsId, selfTeamId }: DraftTopBarProps) {
         week={WEEK}
         scoring={settings.scoring}
         season={thisSeason}
-        draftSettingsId={draftSettingsId}
+        seasonId={seasonId}
       />
     </Group>
   );

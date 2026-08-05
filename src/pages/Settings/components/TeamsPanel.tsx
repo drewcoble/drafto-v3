@@ -5,25 +5,38 @@ import {
   Badge,
   Button,
   Group,
+  Menu,
   SegmentedControl,
   Stack,
   Text,
 } from "@mantine/core";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Check, GripVertical, MoreVertical, Pencil, Shuffle } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
-import { TeamNameField } from "./TeamNameField";
-import { TeamSalaryCapField } from "./TeamSalaryCapField";
+import { TeamOrderRow } from "./TeamOrderRow";
 
 interface TeamsPanelProps {
-  draftSettingsId: Id<"draftSettings">;
-  teams: Doc<"draftTeams">[];
-  nominationOrder: Id<"draftTeams">[] | undefined;
+  seasonId: Id<"seasons">;
+  teams: Doc<"seasonTeams">[];
+  nominationOrder: Id<"seasonTeams">[] | undefined;
   nominationOrderMode: "linear" | "snake" | undefined;
   salaryCap: number;
-  onRenameTeam: (teamId: Id<"draftTeams">, name: string) => void;
+  onRenameTeam: (teamId: Id<"seasonTeams">, name: string) => void;
   onSetTeamSalaryCap: (
-    teamId: Id<"draftTeams">,
+    teamId: Id<"seasonTeams">,
     salaryCap: number | null,
   ) => void;
   renameError: string | null;
@@ -39,7 +52,7 @@ interface TeamsPanelProps {
 // "whose turn" to none at all (e.g. for a pre-cycle top-X auction), at any
 // time.
 export function TeamsPanel({
-  draftSettingsId,
+  seasonId,
   teams,
   nominationOrder,
   nominationOrderMode,
@@ -49,7 +62,7 @@ export function TeamsPanel({
   renameError,
 }: TeamsPanelProps) {
   const teamById = useMemo(() => {
-    const map = new Map<string, Doc<"draftTeams">>();
+    const map = new Map<string, Doc<"seasonTeams">>();
     for (const team of teams) map.set(team._id, team);
     return map;
   }, [teams]);
@@ -59,7 +72,7 @@ export function TeamsPanel({
     [teams],
   );
 
-  const [localOrder, setLocalOrder] = useState<Id<"draftTeams">[]>(
+  const [localOrder, setLocalOrder] = useState<Id<"seasonTeams">[]>(
     nominationOrder ?? defaultOrder,
   );
   const [mode, setMode] = useState<"linear" | "snake">(
@@ -67,6 +80,15 @@ export function TeamsPanel({
   );
   const [orderError, setOrderError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingCaps, setEditingCaps] = useState(false);
+  const [reordering, setReordering] = useState(false);
+
+  // Distance constraint so tapping the grip handle to just view/scroll
+  // doesn't immediately start a drag - same reasoning as elsewhere in this
+  // panel about not letting a stray touch quietly change something.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
 
   useEffect(() => {
     setLocalOrder(nominationOrder ?? defaultOrder);
@@ -83,11 +105,27 @@ export function TeamsPanel({
     api.draft.nominationOrder.clearNominationOrder,
   );
 
-  const move = (index: number, delta: number) => {
-    const target = index + delta;
-    if (target < 0 || target >= localOrder.length) return;
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setLocalOrder((current) => {
+      const oldIndex = current.indexOf(active.id as Id<"seasonTeams">);
+      const newIndex = current.indexOf(over.id as Id<"seasonTeams">);
+      if (oldIndex === -1 || newIndex === -1) return current;
+      return arrayMove(current, oldIndex, newIndex);
+    });
+  };
+
+  // Fisher-Yates - only touches local state, same as a drag reorder, so it
+  // still goes through the existing Save Order flow rather than writing
+  // straight to the server (keeps "randomize, look it over, then commit or
+  // discard" possible instead of instantly locking in a shuffle).
+  const randomize = () => {
     const next = [...localOrder];
-    [next[index], next[target]] = [next[target]!, next[index]!];
+    for (let i = next.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [next[i], next[j]] = [next[j]!, next[i]!];
+    }
     setLocalOrder(next);
   };
 
@@ -96,7 +134,7 @@ export function TeamsPanel({
     setIsSaving(true);
     try {
       await setNominationOrder({
-        draftSettingsId,
+        seasonId,
         teamIds: localOrder,
         mode,
       });
@@ -112,7 +150,7 @@ export function TeamsPanel({
   const handleClear = async () => {
     setOrderError(null);
     try {
-      await clearNominationOrder({ draftSettingsId });
+      await clearNominationOrder({ seasonId });
     } catch (err) {
       setOrderError(
         err instanceof Error ? err.message : "Failed to clear order.",
@@ -133,18 +171,49 @@ export function TeamsPanel({
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
-        <Text size="sm" fw={500}>
+        <Text size="md" fw={500}>
           Teams
         </Text>
-        <SegmentedControl
-          size="xs"
-          value={mode}
-          onChange={(value) => setMode(value as "linear" | "snake")}
-          data={[
-            { label: "Linear", value: "linear" },
-            { label: "Snake", value: "snake" },
-          ]}
-        />
+        <Group gap="xs">
+          <SegmentedControl
+            size="sm"
+            value={mode}
+            onChange={(value) => setMode(value as "linear" | "snake")}
+            data={[
+              { label: "Linear", value: "linear" },
+              { label: "Snake", value: "snake" },
+            ]}
+          />
+          <Menu shadow="md" width={200} position="bottom-end">
+            <Menu.Target>
+              <ActionIcon variant="default" size={40} aria-label="Team actions">
+                <MoreVertical size={16} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                leftSection={<Pencil size={14} />}
+                rightSection={editingCaps ? <Check size={14} /> : undefined}
+                onClick={() => setEditingCaps((current) => !current)}
+              >
+                Edit Caps
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<GripVertical size={14} />}
+                rightSection={reordering ? <Check size={14} /> : undefined}
+                onClick={() => setReordering((current) => !current)}
+              >
+                Reorder
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<Shuffle size={14} />}
+                onClick={randomize}
+              >
+                Randomize
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </Group>
       </Group>
       <Text size="xs" c="dimmed">
         Rename teams and reorder to set who the nominate form suggests next
@@ -156,49 +225,32 @@ export function TeamsPanel({
           {renameError}
         </Text>
       )}
-      <Stack gap={4}>
-        {localOrder.map((teamId, index) => {
-          const team = teamById.get(teamId);
-          if (!team) return null;
-          return (
-            <Group key={teamId} gap="xs" wrap="nowrap">
-              <Text size="sm" w={20} c="dimmed">
-                {index + 1}
-              </Text>
-              <TeamNameField
-                team={team}
-                onRename={(name) => onRenameTeam(team._id, name)}
-              />
-              <TeamSalaryCapField
-                team={team}
-                leagueSalaryCap={salaryCap}
-                onSetSalaryCap={(cap) => onSetTeamSalaryCap(team._id, cap)}
-              />
-              {team.isSelf && (
-                <Badge variant="light" size="sm">
-                  you
-                </Badge>
-              )}
-              <ActionIcon
-                variant="default"
-                size="sm"
-                disabled={index === 0}
-                onClick={() => move(index, -1)}
-              >
-                <ChevronUp size={14} />
-              </ActionIcon>
-              <ActionIcon
-                variant="default"
-                size="sm"
-                disabled={index === localOrder.length - 1}
-                onClick={() => move(index, 1)}
-              >
-                <ChevronDown size={14} />
-              </ActionIcon>
-            </Group>
-          );
-        })}
-      </Stack>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={localOrder} strategy={verticalListSortingStrategy}>
+          <Stack gap={4}>
+            {localOrder.map((teamId, index) => {
+              const team = teamById.get(teamId);
+              if (!team) return null;
+              return (
+                <TeamOrderRow
+                  key={teamId}
+                  team={team}
+                  index={index}
+                  salaryCap={salaryCap}
+                  editingCaps={editingCaps}
+                  reordering={reordering}
+                  onRename={(name) => onRenameTeam(team._id, name)}
+                  onSetSalaryCap={(cap) => onSetTeamSalaryCap(team._id, cap)}
+                />
+              );
+            })}
+          </Stack>
+        </SortableContext>
+      </DndContext>
       {orderError && (
         <Text c="red" size="sm">
           {orderError}
@@ -206,7 +258,7 @@ export function TeamsPanel({
       )}
       <Group gap="xs">
         <Button
-          size="sm"
+          size="md"
           onClick={handleSave}
           loading={isSaving}
           disabled={!isDirty}
@@ -214,10 +266,13 @@ export function TeamsPanel({
           Save Order
         </Button>
         {nominationOrder && (
-          <Button size="sm" variant="default" onClick={handleClear}>
+          <Button size="md" variant="default" onClick={handleClear}>
             Clear (fully manual)
           </Button>
         )}
+        <Badge variant="light" color={isDirty ? "yellow" : "teal"}>
+          {isDirty ? "Unsaved changes" : "All changes saved"}
+        </Badge>
         {nominationOrder && (
           <Badge variant="light" color="teal">
             Order active

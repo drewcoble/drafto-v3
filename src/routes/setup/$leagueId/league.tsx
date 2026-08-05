@@ -17,7 +17,7 @@ function LeagueRoute() {
 
   return (
     <LeagueDetails
-      selectedLeagueId={isNew ? undefined : (leagueId as Id<"draftSettings">)}
+      selectedLeagueId={isNew ? undefined : (leagueId as Id<"seasons">)}
       isCreatingLeague={isNew}
       onLeagueSaved={(id) => {
         if (currentUser) setStoredLeagueId(currentUser._id, id);
@@ -28,6 +28,16 @@ function LeagueRoute() {
         });
       }}
       onDoneCreating={() => {}}
+      onLeagueDeleted={() => {
+        // Same "new" landing spot New League already uses - the header's
+        // league picker (or the "/" redirect, next visit) is how they get
+        // back to any of their other leagues.
+        void navigate({
+          to: "/setup/$leagueId/league",
+          params: { leagueId: "new" },
+          replace: true,
+        });
+      }}
     />
   );
 }

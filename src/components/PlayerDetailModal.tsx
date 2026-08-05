@@ -41,9 +41,9 @@ interface PlayerDetailModalProps {
   season: string;
   // Omit (or pass undefined) from read-only/historical contexts - e.g.
   // Settings' SeasonSummary passes undefined even though it has a
-  // draftSettingsId in scope, since writing a target/avoid tag to a
-  // finished draft has no effect anywhere that tag is read.
-  draftSettingsId: Id<"draftSettings"> | undefined;
+  // seasonId in scope, since writing a target/avoid tag to a finished
+  // draft has no effect anywhere that tag is read.
+  seasonId: Id<"seasons"> | undefined;
 }
 
 export function PlayerDetailModal({
@@ -52,12 +52,12 @@ export function PlayerDetailModal({
   week,
   scoring,
   season,
-  draftSettingsId,
+  seasonId,
 }: PlayerDetailModalProps) {
   const detail = useQuery(
     api.draft.playerDetail.getPlayerDetail,
     fpid !== null
-      ? { fpid, week, ...(draftSettingsId ? { draftSettingsId } : {}) }
+      ? { fpid, week, ...(seasonId ? { seasonId } : {}) }
       : "skip",
   );
   const news = useQuery(
@@ -75,8 +75,8 @@ export function PlayerDetailModal({
   });
   const draftValues = useQuery(
     api.draftValues.getDraftValues,
-    draftSettingsId && detail?.player
-      ? { draftSettingsId, week, scoring, position: detail.player.position }
+    seasonId && detail?.player
+      ? { seasonId, week, scoring, position: detail.player.position }
       : "skip",
   );
   const cyclePlayerTag = useMutation(api.draft.tags.cyclePlayerTag);
@@ -190,7 +190,7 @@ export function PlayerDetailModal({
             )}
             <Tooltip
               label={
-                !draftSettingsId
+                !seasonId
                   ? "Select a league to mark targets/avoids"
                   : detail.tag === "target"
                     ? "Target - click to mark avoid"
@@ -201,6 +201,7 @@ export function PlayerDetailModal({
             >
               <ActionIcon
                 variant={detail.tag ? "light" : "subtle"}
+                size={40}
                 color={
                   detail.tag === "target"
                     ? "green"
@@ -208,10 +209,10 @@ export function PlayerDetailModal({
                       ? "red"
                       : "gray"
                 }
-                disabled={!draftSettingsId}
+                disabled={!seasonId}
                 onClick={() =>
-                  draftSettingsId &&
-                  cyclePlayerTag({ draftSettingsId, fpid })
+                  seasonId &&
+                  cyclePlayerTag({ seasonId, fpid })
                 }
                 aria-label="Cycle target/avoid"
               >
@@ -259,7 +260,7 @@ export function PlayerDetailModal({
               <Text size="sm">Drafted for ${detail.pick.price}</Text>
               {detail.pick.isKeeper && (
                 <Badge variant="light" color="gray" size="sm">
-                  Keeper
+                  Keeper · Yr {detail.pick.keeperStreak ?? 1}
                 </Badge>
               )}
             </Group>

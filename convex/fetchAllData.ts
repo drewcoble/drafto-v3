@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { action, internalAction, ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireSuperAdmin, currentSeason } from "./fantasyPros/client";
-import { fetchCurrentNflWeek } from "./sleeper/state";
+import { fetchCurrentNflWeek, fetchNflSeasonState } from "./sleeper/state";
 import { Scoring } from "./scoring";
 
 // valueGaps.getAllValueGaps is only ever called with the current draft week
@@ -27,15 +27,16 @@ async function refreshCachedComputations(
     });
   }
 
-  const leagues = await ctx.runQuery(
-    internal.draftSettings.listAllDraftSettings,
-    {},
-  );
-  for (const league of leagues) {
+  const seasons = await ctx.runQuery(internal.leagues.listAllSeasons, {});
+  for (const season of seasons) {
+    const draft = await ctx.runQuery(internal.draft.fetchHelpers.getRealDraftInternal, {
+      seasonId: season._id,
+    });
+    if (!draft) continue;
     await ctx.runMutation(internal.draftValues.refreshDraftValues, {
-      draftSettingsId: league._id,
+      draftId: draft._id,
       week: args.week,
-      scoring: league.scoring,
+      scoring: season.scoring,
     });
   }
 }
@@ -54,6 +55,17 @@ async function fetchAllHandler(
 ): Promise<void> {
   const week = args.week ?? (await fetchCurrentNflWeek());
   const season = args.season ?? currentSeason();
+
+  // Persist Sleeper's live week/season state (see convex/nflState.ts) -
+  // independent of the week/season resolved above (which may be a manual
+  // backfill override), so in-season tooling always sees the real current
+  // week regardless of what this particular fetch was scoped to.
+  const nflState = await fetchNflSeasonState();
+  await ctx.runMutation(internal.nflState.upsertNflState, {
+    season: nflState.season,
+    week: String(nflState.week),
+    seasonType: nflState.seasonType,
+  });
 
   await ctx.runAction(internal.sleeper.projections.fetchProjectionsInternal, {
     week,

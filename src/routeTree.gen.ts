@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BoardLeagueIdRouteImport } from './routes/board/$leagueId'
 import { Route as DraftLeagueIdRouteRouteImport } from './routes/draft/$leagueId/route'
+import { Route as SeasonLeagueIdRouteRouteImport } from './routes/season/$leagueId/route'
 import { Route as SetupLeagueIdRouteRouteImport } from './routes/setup/$leagueId/route'
 import { Route as DraftLeagueIdIndexRouteImport } from './routes/draft/$leagueId/index'
 import { Route as DraftLeagueIdBudgetRouteImport } from './routes/draft/$leagueId/budget'
@@ -20,6 +21,9 @@ import { Route as DraftLeagueIdInjuriesRouteImport } from './routes/draft/$leagu
 import { Route as DraftLeagueIdLeagueRouteImport } from './routes/draft/$leagueId/league'
 import { Route as DraftLeagueIdMyTeamRouteImport } from './routes/draft/$leagueId/myTeam'
 import { Route as DraftLeagueIdPlayersRouteImport } from './routes/draft/$leagueId/players'
+import { Route as SeasonLeagueIdIndexRouteImport } from './routes/season/$leagueId/index'
+import { Route as SeasonLeagueIdFreeAgentsRouteImport } from './routes/season/$leagueId/freeAgents'
+import { Route as SeasonLeagueIdSettingsRouteImport } from './routes/season/$leagueId/settings'
 import { Route as SetupLeagueIdIndexRouteImport } from './routes/setup/$leagueId/index'
 import { Route as SetupLeagueIdBudgetRouteImport } from './routes/setup/$leagueId/budget'
 import { Route as SetupLeagueIdDataRouteImport } from './routes/setup/$leagueId/data'
@@ -41,6 +45,11 @@ const BoardLeagueIdRoute = BoardLeagueIdRouteImport.update({
 const DraftLeagueIdRouteRoute = DraftLeagueIdRouteRouteImport.update({
   id: '/draft/$leagueId',
   path: '/draft/$leagueId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SeasonLeagueIdRouteRoute = SeasonLeagueIdRouteRouteImport.update({
+  id: '/season/$leagueId',
+  path: '/season/$leagueId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupLeagueIdRouteRoute = SetupLeagueIdRouteRouteImport.update({
@@ -83,6 +92,22 @@ const DraftLeagueIdPlayersRoute = DraftLeagueIdPlayersRouteImport.update({
   path: '/players',
   getParentRoute: () => DraftLeagueIdRouteRoute,
 } as any)
+const SeasonLeagueIdIndexRoute = SeasonLeagueIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SeasonLeagueIdRouteRoute,
+} as any)
+const SeasonLeagueIdFreeAgentsRoute =
+  SeasonLeagueIdFreeAgentsRouteImport.update({
+    id: '/freeAgents',
+    path: '/freeAgents',
+    getParentRoute: () => SeasonLeagueIdRouteRoute,
+  } as any)
+const SeasonLeagueIdSettingsRoute = SeasonLeagueIdSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => SeasonLeagueIdRouteRoute,
+} as any)
 const SetupLeagueIdIndexRoute = SetupLeagueIdIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -122,6 +147,7 @@ const SetupLeagueIdPlayersRoute = SetupLeagueIdPlayersRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/draft/$leagueId': typeof DraftLeagueIdRouteRouteWithChildren
+  '/season/$leagueId': typeof SeasonLeagueIdRouteRouteWithChildren
   '/setup/$leagueId': typeof SetupLeagueIdRouteRouteWithChildren
   '/board/$leagueId': typeof BoardLeagueIdRoute
   '/draft/$leagueId/budget': typeof DraftLeagueIdBudgetRoute
@@ -130,6 +156,8 @@ export interface FileRoutesByFullPath {
   '/draft/$leagueId/league': typeof DraftLeagueIdLeagueRoute
   '/draft/$leagueId/myTeam': typeof DraftLeagueIdMyTeamRoute
   '/draft/$leagueId/players': typeof DraftLeagueIdPlayersRoute
+  '/season/$leagueId/freeAgents': typeof SeasonLeagueIdFreeAgentsRoute
+  '/season/$leagueId/settings': typeof SeasonLeagueIdSettingsRoute
   '/setup/$leagueId/budget': typeof SetupLeagueIdBudgetRoute
   '/setup/$leagueId/data': typeof SetupLeagueIdDataRoute
   '/setup/$leagueId/injuries': typeof SetupLeagueIdInjuriesRoute
@@ -137,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/setup/$leagueId/league': typeof SetupLeagueIdLeagueRoute
   '/setup/$leagueId/players': typeof SetupLeagueIdPlayersRoute
   '/draft/$leagueId/': typeof DraftLeagueIdIndexRoute
+  '/season/$leagueId/': typeof SeasonLeagueIdIndexRoute
   '/setup/$leagueId/': typeof SetupLeagueIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -148,6 +177,8 @@ export interface FileRoutesByTo {
   '/draft/$leagueId/league': typeof DraftLeagueIdLeagueRoute
   '/draft/$leagueId/myTeam': typeof DraftLeagueIdMyTeamRoute
   '/draft/$leagueId/players': typeof DraftLeagueIdPlayersRoute
+  '/season/$leagueId/freeAgents': typeof SeasonLeagueIdFreeAgentsRoute
+  '/season/$leagueId/settings': typeof SeasonLeagueIdSettingsRoute
   '/setup/$leagueId/budget': typeof SetupLeagueIdBudgetRoute
   '/setup/$leagueId/data': typeof SetupLeagueIdDataRoute
   '/setup/$leagueId/injuries': typeof SetupLeagueIdInjuriesRoute
@@ -155,12 +186,14 @@ export interface FileRoutesByTo {
   '/setup/$leagueId/league': typeof SetupLeagueIdLeagueRoute
   '/setup/$leagueId/players': typeof SetupLeagueIdPlayersRoute
   '/draft/$leagueId': typeof DraftLeagueIdIndexRoute
+  '/season/$leagueId': typeof SeasonLeagueIdIndexRoute
   '/setup/$leagueId': typeof SetupLeagueIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/draft/$leagueId': typeof DraftLeagueIdRouteRouteWithChildren
+  '/season/$leagueId': typeof SeasonLeagueIdRouteRouteWithChildren
   '/setup/$leagueId': typeof SetupLeagueIdRouteRouteWithChildren
   '/board/$leagueId': typeof BoardLeagueIdRoute
   '/draft/$leagueId/budget': typeof DraftLeagueIdBudgetRoute
@@ -169,6 +202,8 @@ export interface FileRoutesById {
   '/draft/$leagueId/league': typeof DraftLeagueIdLeagueRoute
   '/draft/$leagueId/myTeam': typeof DraftLeagueIdMyTeamRoute
   '/draft/$leagueId/players': typeof DraftLeagueIdPlayersRoute
+  '/season/$leagueId/freeAgents': typeof SeasonLeagueIdFreeAgentsRoute
+  '/season/$leagueId/settings': typeof SeasonLeagueIdSettingsRoute
   '/setup/$leagueId/budget': typeof SetupLeagueIdBudgetRoute
   '/setup/$leagueId/data': typeof SetupLeagueIdDataRoute
   '/setup/$leagueId/injuries': typeof SetupLeagueIdInjuriesRoute
@@ -176,6 +211,7 @@ export interface FileRoutesById {
   '/setup/$leagueId/league': typeof SetupLeagueIdLeagueRoute
   '/setup/$leagueId/players': typeof SetupLeagueIdPlayersRoute
   '/draft/$leagueId/': typeof DraftLeagueIdIndexRoute
+  '/season/$leagueId/': typeof SeasonLeagueIdIndexRoute
   '/setup/$leagueId/': typeof SetupLeagueIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -183,6 +219,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/draft/$leagueId'
+    | '/season/$leagueId'
     | '/setup/$leagueId'
     | '/board/$leagueId'
     | '/draft/$leagueId/budget'
@@ -191,6 +228,8 @@ export interface FileRouteTypes {
     | '/draft/$leagueId/league'
     | '/draft/$leagueId/myTeam'
     | '/draft/$leagueId/players'
+    | '/season/$leagueId/freeAgents'
+    | '/season/$leagueId/settings'
     | '/setup/$leagueId/budget'
     | '/setup/$leagueId/data'
     | '/setup/$leagueId/injuries'
@@ -198,6 +237,7 @@ export interface FileRouteTypes {
     | '/setup/$leagueId/league'
     | '/setup/$leagueId/players'
     | '/draft/$leagueId/'
+    | '/season/$leagueId/'
     | '/setup/$leagueId/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -209,6 +249,8 @@ export interface FileRouteTypes {
     | '/draft/$leagueId/league'
     | '/draft/$leagueId/myTeam'
     | '/draft/$leagueId/players'
+    | '/season/$leagueId/freeAgents'
+    | '/season/$leagueId/settings'
     | '/setup/$leagueId/budget'
     | '/setup/$leagueId/data'
     | '/setup/$leagueId/injuries'
@@ -216,11 +258,13 @@ export interface FileRouteTypes {
     | '/setup/$leagueId/league'
     | '/setup/$leagueId/players'
     | '/draft/$leagueId'
+    | '/season/$leagueId'
     | '/setup/$leagueId'
   id:
     | '__root__'
     | '/'
     | '/draft/$leagueId'
+    | '/season/$leagueId'
     | '/setup/$leagueId'
     | '/board/$leagueId'
     | '/draft/$leagueId/budget'
@@ -229,6 +273,8 @@ export interface FileRouteTypes {
     | '/draft/$leagueId/league'
     | '/draft/$leagueId/myTeam'
     | '/draft/$leagueId/players'
+    | '/season/$leagueId/freeAgents'
+    | '/season/$leagueId/settings'
     | '/setup/$leagueId/budget'
     | '/setup/$leagueId/data'
     | '/setup/$leagueId/injuries'
@@ -236,12 +282,14 @@ export interface FileRouteTypes {
     | '/setup/$leagueId/league'
     | '/setup/$leagueId/players'
     | '/draft/$leagueId/'
+    | '/season/$leagueId/'
     | '/setup/$leagueId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DraftLeagueIdRouteRoute: typeof DraftLeagueIdRouteRouteWithChildren
+  SeasonLeagueIdRouteRoute: typeof SeasonLeagueIdRouteRouteWithChildren
   SetupLeagueIdRouteRoute: typeof SetupLeagueIdRouteRouteWithChildren
   BoardLeagueIdRoute: typeof BoardLeagueIdRoute
 }
@@ -267,6 +315,13 @@ declare module '@tanstack/react-router' {
       path: '/draft/$leagueId'
       fullPath: '/draft/$leagueId'
       preLoaderRoute: typeof DraftLeagueIdRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/season/$leagueId': {
+      id: '/season/$leagueId'
+      path: '/season/$leagueId'
+      fullPath: '/season/$leagueId'
+      preLoaderRoute: typeof SeasonLeagueIdRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup/$leagueId': {
@@ -324,6 +379,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/draft/$leagueId/players'
       preLoaderRoute: typeof DraftLeagueIdPlayersRouteImport
       parentRoute: typeof DraftLeagueIdRouteRoute
+    }
+    '/season/$leagueId/': {
+      id: '/season/$leagueId/'
+      path: '/'
+      fullPath: '/season/$leagueId/'
+      preLoaderRoute: typeof SeasonLeagueIdIndexRouteImport
+      parentRoute: typeof SeasonLeagueIdRouteRoute
+    }
+    '/season/$leagueId/freeAgents': {
+      id: '/season/$leagueId/freeAgents'
+      path: '/freeAgents'
+      fullPath: '/season/$leagueId/freeAgents'
+      preLoaderRoute: typeof SeasonLeagueIdFreeAgentsRouteImport
+      parentRoute: typeof SeasonLeagueIdRouteRoute
+    }
+    '/season/$leagueId/settings': {
+      id: '/season/$leagueId/settings'
+      path: '/settings'
+      fullPath: '/season/$leagueId/settings'
+      preLoaderRoute: typeof SeasonLeagueIdSettingsRouteImport
+      parentRoute: typeof SeasonLeagueIdRouteRoute
     }
     '/setup/$leagueId/': {
       id: '/setup/$leagueId/'
@@ -400,6 +476,21 @@ const DraftLeagueIdRouteRouteChildren: DraftLeagueIdRouteRouteChildren = {
 const DraftLeagueIdRouteRouteWithChildren =
   DraftLeagueIdRouteRoute._addFileChildren(DraftLeagueIdRouteRouteChildren)
 
+interface SeasonLeagueIdRouteRouteChildren {
+  SeasonLeagueIdFreeAgentsRoute: typeof SeasonLeagueIdFreeAgentsRoute
+  SeasonLeagueIdSettingsRoute: typeof SeasonLeagueIdSettingsRoute
+  SeasonLeagueIdIndexRoute: typeof SeasonLeagueIdIndexRoute
+}
+
+const SeasonLeagueIdRouteRouteChildren: SeasonLeagueIdRouteRouteChildren = {
+  SeasonLeagueIdFreeAgentsRoute: SeasonLeagueIdFreeAgentsRoute,
+  SeasonLeagueIdSettingsRoute: SeasonLeagueIdSettingsRoute,
+  SeasonLeagueIdIndexRoute: SeasonLeagueIdIndexRoute,
+}
+
+const SeasonLeagueIdRouteRouteWithChildren =
+  SeasonLeagueIdRouteRoute._addFileChildren(SeasonLeagueIdRouteRouteChildren)
+
 interface SetupLeagueIdRouteRouteChildren {
   SetupLeagueIdBudgetRoute: typeof SetupLeagueIdBudgetRoute
   SetupLeagueIdDataRoute: typeof SetupLeagueIdDataRoute
@@ -426,6 +517,7 @@ const SetupLeagueIdRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DraftLeagueIdRouteRoute: DraftLeagueIdRouteRouteWithChildren,
+  SeasonLeagueIdRouteRoute: SeasonLeagueIdRouteRouteWithChildren,
   SetupLeagueIdRouteRoute: SetupLeagueIdRouteRouteWithChildren,
   BoardLeagueIdRoute: BoardLeagueIdRoute,
 }

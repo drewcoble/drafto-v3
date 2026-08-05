@@ -34,13 +34,13 @@ export function CategoryBreakdown({
           ) : null,
         )}
         {remaining > 0 && (
-          // Cap still available to spend - gold, matching the palette's
-          // "money/scarcity" accent, distinct from the position-colored
-          // spent segments to its left.
+          // Cap still available to spend - the accent color, matching the
+          // palette's "money/scarcity" accent, distinct from the
+          // position-colored spent segments to its left.
           <Box
             style={{
               width: `${(remaining / salaryCap) * 100}%`,
-              backgroundColor: "var(--mantine-color-gold-6)",
+              backgroundColor: "var(--mantine-color-saddlebrown-6)",
             }}
           />
         )}

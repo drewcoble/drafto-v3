@@ -1,4 +1,5 @@
-import { Anchor, Badge, Button, Stack, Table, Text } from "@mantine/core";
+import { ActionIcon, Anchor, Badge, Stack, Table, Text } from "@mantine/core";
+import { Trash2 } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 interface RecentPicksTableProps {
@@ -31,8 +32,8 @@ export function RecentPicksTable({
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Player</Table.Th>
-                <Table.Th>Price</Table.Th>
                 <Table.Th>Team</Table.Th>
+                <Table.Th>Price</Table.Th>
                 <Table.Th></Table.Th>
                 <Table.Th></Table.Th>
               </Table.Tr>
@@ -49,24 +50,24 @@ export function RecentPicksTable({
                       {nameByFpid.get(pick.fpid)?.name ?? `#${pick.fpid}`}
                     </Anchor>
                   </Table.Td>
-                  <Table.Td>${pick.price}</Table.Td>
                   <Table.Td>{teamNameById.get(pick.teamId) ?? "—"}</Table.Td>
+                  <Table.Td>${pick.price}</Table.Td>
                   <Table.Td>
                     {pick.isKeeper && (
                       <Badge variant="light" color="gray" size="sm">
-                        Keeper
+                        Keeper · Yr {pick.keeperStreak ?? 1}
                       </Badge>
                     )}
                   </Table.Td>
                   <Table.Td>
-                    <Button
-                      size="compact-sm"
+                    <ActionIcon
                       variant="subtle"
                       color="red"
+                      aria-label="Remove pick"
                       onClick={() => onRemove(pick._id)}
                     >
-                      Remove
-                    </Button>
+                      <Trash2 size={16} />
+                    </ActionIcon>
                   </Table.Td>
                 </Table.Tr>
               ))}

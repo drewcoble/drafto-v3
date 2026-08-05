@@ -72,3 +72,39 @@ export function matchPlanSlot(
     isExactPosition: best.position === position,
   };
 }
+
+// Broader companion to matchPlanSlot: whether a player's $ value falls
+// within `window` dollars of the budgeted amount for *any* of a team's
+// still-open roster slots eligible for their position (every open
+// exact-position slot, plus FLEX/SUPERFLEX slots if the position is
+// eligible for them) - not just the single best-matching slot matchPlanSlot
+// narrows down to under strict tier precedence. Deliberately a window
+// around the budget rather than strictly under it - the point is
+// surfacing a small, glanceable set of players actually worth bidding on
+// *right now*, not everything technically affordable. Used to flag "this
+// player is a plausible value pickup for *some* open spot" regardless of
+// which slot they'd eventually fill - matchPlanSlot's tier precedence only
+// matters once you're deciding which specific slot to measure a live
+// nomination against, not for a go/no-go read across the whole board.
+// Bench excluded, same reasoning as matchPlanSlot.
+export function isNearAnyOpenSlot(
+  position: Position,
+  dollarValue: number,
+  openSlots: readonly SlotDescriptor[],
+  amounts: Record<string, number>,
+  flexPositions: readonly Position[],
+  superflexPositions: readonly Position[],
+  window: number,
+): boolean {
+  const exactSlots = openSlots.filter((slot) => slot.position === position);
+  const superflexSlots = superflexPositions.includes(position)
+    ? openSlots.filter((slot) => slot.label.startsWith("SFLEX"))
+    : [];
+  const flexSlots = flexPositions.includes(position)
+    ? openSlots.filter((slot) => slot.label.startsWith("FLEX"))
+    : [];
+
+  return [...exactSlots, ...superflexSlots, ...flexSlots].some(
+    (slot) => Math.abs((amounts[slot.key] ?? 0) - dollarValue) <= window,
+  );
+}

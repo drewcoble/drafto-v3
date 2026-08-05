@@ -71,10 +71,10 @@ export function getConsistencyLabel(
   return null;
 }
 
-// Stoplight scheme: Reliable (green/go), Boom/Bust (yellow/caution), Low
+// Stoplight scheme: Reliable (green/go), Boom/Bust (orange/caution), Low
 // Output (red/stop).
 export function consistencyColor(label: ConsistencyLabel): string {
   if (label === "Reliable") return "green";
-  if (label === "Boom/Bust") return "yellow";
+  if (label === "Boom/Bust") return "orange";
   return "red";
 }

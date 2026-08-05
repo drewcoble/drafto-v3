@@ -2,17 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useQuery as useTanStackQuery } from "@tanstack/react-query";
 import { convexQuery } from "@convex-dev/react-query";
-import {
-  Anchor,
-  Button,
-  Center,
-  Chip,
-  Group,
-  Loader,
-  Stack,
-  Table,
-  Text,
-} from "@mantine/core";
+import { Card, Center, Group, Loader, Stack, Table, Text } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import {
@@ -27,19 +17,28 @@ import {
   filterRelevantPlayers,
   pointsForScoring,
 } from "../../lib/relevantPlayers";
-import { POSITION_COLORS } from "../../lib/positionColors";
 import { formatStatKey } from "../../lib/playerFormatting";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { PositionFilterBar } from "../../components/PositionFilterBar";
+import {
+  MOBILE_HEADER_HEIGHT,
+  POSITION_FILTER_BAR_HEIGHT,
+} from "../../constants/general";
 import {
   computeConsistencyThresholds,
   getConsistencyLabel,
   type ConsistencyLabel,
 } from "../../lib/consistency";
-import { PlayerRow } from "./components/PlayerRow";
+import {
+  computeKeeperCost,
+  formulaForFpid,
+  prospectiveKeeperStreak,
+} from "../../lib/keeperCost";
+import { PlayerRow, type KeeperInfo } from "./components/PlayerRow";
 
 interface PlayersTableProps {
   week: string;
-  selectedLeagueId: Id<"draftSettings"> | undefined;
+  selectedLeagueId: Id<"seasons"> | undefined;
 }
 
 export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
@@ -53,22 +52,17 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   });
   const allRankings = useQuery(api.rankings.getAllRankings, { week });
   const injuries = useQuery(api.injuries.getInjuries, {});
-  const draftSettingsList = useQuery(api.draftSettings.listDraftSettings, {});
+  const draftSettingsList = useQuery(api.leagues.listSeasons, {});
   const selectedSettings = draftSettingsList?.find(
     (league) => league._id === selectedLeagueId,
   );
-  const draftSettingsId = selectedSettings?._id;
+  const seasonId = selectedSettings?._id;
   // Scoring format now lives on the league settings (edited on the League
   // Details tab) instead of local component state, so it's shared/persisted
   // rather than resetting per-tab-visit.
   const scoring: ScoringFormat = selectedSettings?.scoring ?? "PPR";
-  // `season` is only set on leagues advanced through cloneDraftSettings, so
-  // a league created directly (or no league selected at all) falls back to
-  // the system clock's year - the same thing convex/fantasyPros/client.ts's
-  // currentSeason() does server-side (fine here since this is frontend
-  // code, not a Convex query).
   const thisSeason =
-    selectedSettings?.season ?? String(new Date().getFullYear());
+    selectedSettings?.year ?? String(new Date().getFullYear());
   const lastSeason = String(Number(thisSeason) - 1);
   const valueGaps = useQuery(api.valueGaps.getAllValueGaps, {
     week,
@@ -102,10 +96,10 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   }, [seasonStats]);
   // Same draftPlayerTags table the in-draft Players Left tab reads/writes
   // (see convex/draft/tags.ts) - marking a target/avoid here shows up there
-  // too, and vice versa, since both key off draftSettingsId.
+  // too, and vice versa, since both key off seasonId.
   const playerTags = useQuery(
     api.draft.tags.listPlayerTags,
-    draftSettingsId ? { draftSettingsId } : "skip",
+    seasonId ? { seasonId } : "skip",
   );
   const cyclePlayerTag = useMutation(api.draft.tags.cyclePlayerTag);
   const tagByFpid = useMemo(() => {
@@ -113,6 +107,66 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     for (const row of playerTags ?? []) map.set(row.fpid, row.tag);
     return map;
   }, [playerTags]);
+
+  // Keeper column (Phase II) - suggested cost/eligibility from the
+  // configured keeper rules (see src/lib/keeperCost.ts), evaluated against
+  // the self team specifically, same as KeepersTab's team-scoped actions
+  // already default to self.
+  const priceHistory = useQuery(
+    api.draft.history.getPlayerPriceHistory,
+    seasonId ? { seasonId } : "skip",
+  );
+  const draftTeams = useQuery(
+    api.draft.teams.listSeasonTeams,
+    seasonId ? { seasonId } : "skip",
+  );
+  const selfTeamId = useMemo(
+    () => draftTeams?.find((team) => team.isSelf)?._id,
+    [draftTeams],
+  );
+  const picks = useQuery(
+    api.draft.picks.listDraftPicks,
+    seasonId ? { seasonId } : "skip",
+  );
+  const selfKeptFpids = useMemo(() => {
+    const set = new Set<number>();
+    for (const pick of picks ?? []) {
+      if (pick.isKeeper && pick.teamId === selfTeamId) set.add(pick.fpid);
+    }
+    return set;
+  }, [picks, selfTeamId]);
+  const selfKeeperCount = selfKeptFpids.size;
+
+  const keeperInfoByFpid = useMemo(() => {
+    const map = new Map<number, KeeperInfo>();
+    const keeperRules = selectedSettings?.keeperRules;
+    if (!keeperRules || !priceHistory) return map;
+    for (const fpid of Object.keys(priceHistory).map(Number)) {
+      const entry = priceHistory[fpid];
+      const timesKept =
+        entry?.fromImmediateParent && entry.isKeeper
+          ? (entry.keeperStreak ?? 1)
+          : 0;
+      const alreadyKept = selfKeptFpids.has(fpid);
+      const prospectiveStreak = prospectiveKeeperStreak(entry);
+      const blockedByTeamCap =
+        keeperRules.maxKeepersPerTeam !== undefined &&
+        selfKeeperCount >= keeperRules.maxKeepersPerTeam &&
+        !alreadyKept;
+      const blockedByStreak =
+        keeperRules.maxConsecutiveYears !== undefined &&
+        prospectiveStreak > keeperRules.maxConsecutiveYears;
+      const value =
+        blockedByTeamCap || blockedByStreak
+          ? null
+          : computeKeeperCost(
+              formulaForFpid(keeperRules, fpid),
+              entry?.price,
+            );
+      map.set(fpid, { timesKept, value });
+    }
+    return map;
+  }, [selectedSettings, priceHistory, selfKeptFpids, selfKeeperCount]);
   // A position only matters to the selected league if it fills a dedicated
   // roster slot or is FLEX/SUPERFLEX-eligible - e.g. a 0-K league shouldn't
   // show a K pill or any kickers. Fall back to every position while the
@@ -139,7 +193,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   // is handled correctly.
   const draftValuesQueryOptions = convexQuery(
     api.draftValues.getDraftValues,
-    draftSettingsId ? { draftSettingsId, week, scoring } : "skip",
+    seasonId ? { seasonId, week, scoring } : "skip",
   );
   const { data: draftValues, isFetching: isRecalculatingValues } =
     useTanStackQuery<DraftValueRow[]>({
@@ -156,10 +210,10 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   // previous league's $ values in place while refetching), so the table
   // keeps updating in place instead of blanking out.
   //
-  // Gating on draftSettingsId alone flashes the table: draftSettingsList
-  // (and therefore draftSettingsId) starts undefined on mount, so the first
+  // Gating on seasonId alone flashes the table: draftSettingsList
+  // (and therefore seasonId) starts undefined on mount, so the first
   // render slips through as "no league selected" and shows the table
-  // points-sorted, then hides it again once draftSettingsId resolves and
+  // points-sorted, then hides it again once seasonId resolves and
   // draftValues is still loading. Waiting on draftSettingsList too closes
   // that gap - unless the selected league never resolves to a settings row
   // (e.g. it was deleted), in which case draftValues will never fire and we
@@ -167,7 +221,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   const isInitialValuesLoad =
     selectedLeagueId !== undefined &&
     (draftSettingsList === undefined ||
-      (draftSettingsId !== undefined && draftValues === undefined));
+      (seasonId !== undefined && draftValues === undefined));
 
   const fpids = useMemo(
     () => (allProjections ?? []).map((row) => row.fpid),
@@ -263,56 +317,45 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   }, [visibleRows, draftValues, draftValueByFpid, scoring]);
 
   // Stat columns depend on whichever positions are currently visible - e.g.
-  // toggling to just DST shows points-allowed tiers, toggling to just QB
-  // shows passing stats - and only keep a column if at least one *visible*
-  // player has a nonzero value for it.
+  // toggling to just QB shows passing stats - and only keep a column if at
+  // least one *visible* player has a nonzero value for it. DST and K each
+  // bring in a wide, unrelated set of columns (points-allowed tiers, FG
+  // distance buckets, ...) that swamp the table when mixed in with the
+  // skill positions, so their stats only surface when that's the only
+  // position toggled on.
+  const isOnlyDST = selectedPositions.length === 1 && selectedPositions[0] === "DST";
+  const isOnlyK = selectedPositions.length === 1 && selectedPositions[0] === "K";
   const statKeys = useMemo(() => {
-    if (visibleRows.length === 0) return [];
+    const rowsForStats = visibleRows.filter((row) => {
+      if (row.position === "DST" && !isOnlyDST) return false;
+      if (row.position === "K" && !isOnlyK) return false;
+      return true;
+    });
+    if (rowsForStats.length === 0) return [];
     const keys = new Set<string>();
-    for (const row of visibleRows) {
+    for (const row of rowsForStats) {
       for (const key of Object.keys(row.stats)) {
         keys.add(key);
       }
     }
     return Array.from(keys).filter((key) =>
-      visibleRows.some((row) => (row.stats[key] ?? 0) > 0),
+      rowsForStats.some((row) => (row.stats[key] ?? 0) > 0),
     );
-  }, [visibleRows]);
+  }, [visibleRows, isOnlyDST, isOnlyK]);
 
   return (
-    <Stack gap="md" py="sm">
+    <Stack
+      gap="md"
+      py="sm"
+      pt={{ base: POSITION_FILTER_BAR_HEIGHT, sm: "sm" }}
+    >
       <Group justify="space-between" align="center" wrap="wrap">
-        <Chip.Group
-          multiple
-          value={selectedPositions}
-          onChange={(value) => setSelectedPositions(value as Position[])}
-        >
-          <Group gap="xs">
-            <Button
-              size="compact-xs"
-              variant="default"
-              onClick={() => setSelectedPositions(activePositions)}
-            >
-              All
-            </Button>
-            {activePositions.map((pos) => (
-              <Group key={pos} gap={4} wrap="nowrap">
-                <Chip value={pos} color={POSITION_COLORS[pos]}>
-                  {pos}
-                </Chip>
-                <Anchor
-                  component="button"
-                  type="button"
-                  size="xs"
-                  c="dimmed"
-                  onClick={() => setSelectedPositions([pos])}
-                >
-                  only
-                </Anchor>
-              </Group>
-            ))}
-          </Group>
-        </Chip.Group>
+        <PositionFilterBar
+          positions={activePositions}
+          selected={selectedPositions}
+          onChange={setSelectedPositions}
+          top={MOBILE_HEADER_HEIGHT}
+        />
         {allProjections && (
           <Text size="xs" c="dimmed">
             Showing {relevantProjections.length} draft-relevant players (of{" "}
@@ -329,12 +372,13 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
         </Group>
       </Group>
 
+      <Card withBorder padding={0}>
       {allProjections === undefined || isInitialValuesLoad ? (
         <Center py="xl">
           <Loader />
         </Center>
       ) : visibleRows.length === 0 ? (
-        <Text c="dimmed">
+        <Text c="dimmed" p="md">
           No projections yet for the selected position(s) - fetch data first.
         </Text>
       ) : (
@@ -343,14 +387,17 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Rank</Table.Th>
+                {/* Action (target/avoid toggle) then flags (value-gap/
+                    consistency) - unlabeled columns right next to Player,
+                    same placement every icon-flag table in the app uses. */}
                 <Table.Th></Table.Th>
                 <Table.Th></Table.Th>
                 <Table.Th miw={220}>Player</Table.Th>
                 <Table.Th miw={70}>Pos</Table.Th>
-                {selectedSettings && <Table.Th>Consistency</Table.Th>}
                 <Table.Th>Team</Table.Th>
                 <Table.Th>FPTS</Table.Th>
                 {draftValues && <Table.Th>$</Table.Th>}
+                {selectedSettings && <Table.Th>Keeper</Table.Th>}
                 {statKeys.map((key) => (
                   <Table.Th key={key}>{formatStatKey(key)}</Table.Th>
                 ))}
@@ -371,9 +418,9 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                   statKeys={statKeys}
                   tag={tagByFpid.get(row.fpid)}
                   onCycleTag={
-                    draftSettingsId
+                    seasonId
                       ? () =>
-                          cyclePlayerTag({ draftSettingsId, fpid: row.fpid })
+                          cyclePlayerTag({ seasonId, fpid: row.fpid })
                       : undefined
                   }
                   onSelectPlayer={setSelectedFpid}
@@ -383,12 +430,19 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                       : undefined
                   }
                   showConsistencyColumn={!!selectedSettings}
+                  keeperInfo={
+                    selectedSettings
+                      ? keeperInfoByFpid.get(row.fpid)
+                      : undefined
+                  }
+                  showKeeperColumn={!!selectedSettings}
                 />
               ))}
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
       )}
+      </Card>
 
       <PlayerDetailModal
         fpid={selectedFpid}
@@ -396,7 +450,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
         week={week}
         scoring={scoring}
         season={thisSeason}
-        draftSettingsId={draftSettingsId}
+        seasonId={seasonId}
       />
     </Stack>
   );

@@ -20,7 +20,7 @@ import type { Position } from "../../../types";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 
-interface SearchResult {
+export interface SearchResult {
   fpid: number;
   name: string;
   position: Position;
@@ -30,14 +30,14 @@ interface SearchResult {
 interface NominationPanelProps {
   nextPickNumber: number;
   totalPicks: number;
-  teams: Doc<"draftTeams">[];
+  teams: Doc<"seasonTeams">[];
   // Turn selector - only rendered while nothing's on the block yet (once
   // bidding starts, "who nominates next" isn't actionable) and only when the
   // league has a configured nomination order to begin with.
   nominationOrderEnabled: boolean;
-  turnTeamId: Id<"draftTeams"> | null | undefined;
+  turnTeamId: Id<"seasonTeams"> | null | undefined;
   turnTeamName: string | undefined;
-  onSetTurnTeam: (teamId: Id<"draftTeams"> | null) => void;
+  onSetTurnTeam: (teamId: Id<"seasonTeams"> | null) => void;
 
   activeNomination: Doc<"draftNominations"> | undefined;
   nominatedPlayer: { name: string; team: string | null } | undefined;
@@ -132,7 +132,7 @@ export function NominationPanel({
                     onSetTurnTeam(
                       !value || value === "__manual__"
                         ? null
-                        : (value as Id<"draftTeams">),
+                        : (value as Id<"seasonTeams">),
                     )
                   }
                   allowDeselect={false}
@@ -186,7 +186,7 @@ interface ActiveNominationBodyProps {
   nominatedPlayer: { name: string; team: string | null } | undefined;
   nominatedValue: { dollarValue: number } | undefined;
   planMatch: PlanSlotMatch | undefined;
-  teams: Doc<"draftTeams">[];
+  teams: Doc<"seasonTeams">[];
   winnerTeamId: string | null;
   onWinnerTeamIdChange: (id: string | null) => void;
   onBumpBid: (delta: number) => void;
@@ -302,7 +302,7 @@ function ActiveNominationBody({
                 fontFamily: "var(--mantine-font-family-monospace)",
                 fontWeight: 700,
                 textAlign: "center",
-                color: "var(--mantine-color-gold-5)",
+                color: "var(--mantine-color-saddlebrown-5)",
               },
             }}
           />
@@ -346,7 +346,7 @@ function ActiveNominationBody({
   );
 }
 
-interface SearchBodyProps {
+export interface SearchBodyProps {
   search: string;
   onSearchChange: (value: string) => void;
   searchResults: SearchResult[];
@@ -355,7 +355,7 @@ interface SearchBodyProps {
   onSelectPlayer: (fpid: number) => void;
 }
 
-function SearchBody({
+export function SearchBody({
   search,
   onSearchChange,
   searchResults,

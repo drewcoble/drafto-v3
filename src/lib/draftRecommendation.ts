@@ -1,4 +1,4 @@
-import type { DraftBoardRow, PlayerTag } from "../types";
+import type { DraftBoardRow } from "../types";
 import type { ConsistencyLabel } from "./consistency";
 
 export function recommendationFor(
@@ -61,13 +61,14 @@ function budgetOpacity(
 // player who is also Reliable/green).
 function consistencyOutline(consistency: ConsistencyLabel | undefined): string {
   if (!consistency) return "none";
-  const color =
-    consistency === "Reliable"
-      ? "gold-4"
-      : consistency === "Boom/Bust"
-        ? "blue-9"
-        : "red-8";
-  return `2.5px solid var(--mantine-color-${color})`;
+  // const color =
+  //   consistency === "Reliable"
+  //     ? "saddlebrown-4"
+  //     : consistency === "Boom/Bust"
+  //       ? "blue-9"
+  //       : "red-8";
+  // return `2.5px solid var(--mantine-color-${color})`;
+  return `none`;
 }
 
 // Bar fill is just the target/avoid tag (green/red), defaulting to blue
@@ -75,14 +76,10 @@ function consistencyOutline(consistency: ConsistencyLabel | undefined): string {
 // consistencyOutline above), so both signals stay visible at once.
 export function barStyle(
   consistency: ConsistencyLabel | undefined,
-  tag: PlayerTag | undefined,
   dollarValue: number,
   budgetAmount: number | undefined,
 ): { backgroundColor: string; opacity: number; outline: string } {
-  const backgroundColor =
-    tag === "target"
-      ? "var(--mantine-color-gold-9)"
-      : "var(--mantine-color-green-9)";
+  const backgroundColor = "var(--mantine-color-indigo-9)";
 
   const outline = consistencyOutline(consistency);
   const opacity = budgetOpacity(dollarValue, budgetAmount);

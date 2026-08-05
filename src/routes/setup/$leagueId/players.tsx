@@ -13,7 +13,7 @@ function PlayersRoute() {
     <PlayersTable
       week={WEEK}
       selectedLeagueId={
-        leagueId === "new" ? undefined : (leagueId as Id<"draftSettings">)
+        leagueId === "new" ? undefined : (leagueId as Id<"seasons">)
       }
     />
   );

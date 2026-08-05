@@ -1,6 +1,15 @@
 import { useState } from "react";
-import { useAction, useQuery } from "convex/react";
-import { Alert, Button, Group, Stack, Text, TextInput } from "@mantine/core";
+import { useAction } from "convex/react";
+import {
+  Alert,
+  Button,
+  Card,
+  Group,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 
 interface DataPanelProps {
@@ -23,8 +32,6 @@ export function DataPanel({ week }: DataPanelProps) {
     api.sleeper.playerPoints.fetchAllPlayerPoints,
   );
   const refreshCaches = useAction(api.fetchAllData.refreshCaches);
-  const currentUser = useQuery(api.users.getCurrentUser);
-  const canFetchData = currentUser?.role === "super-admin";
 
   // Defaults to the current season server-side (see fetchAllPlayerPoints)
   // when left blank - only needs to be filled in to backfill a past season
@@ -125,54 +132,50 @@ export function DataPanel({ week }: DataPanelProps) {
         fetches its own data, so you don't need to refresh everything just to
         pull one update.
       </Text>
-      {!canFetchData && (
-        <Alert color="yellow" variant="light">
-          Fetching data requires super-admin access. Update your role in the
-          Convex dashboard.
-        </Alert>
-      )}
-      {actions.map((action) => {
-        const state = states[action.key];
-        return (
-          <Stack key={action.key} gap={4}>
-            <Group justify="space-between" align="center">
-              <div>
-                <Text fw={500}>{action.label}</Text>
-                <Text size="sm" c="dimmed">
-                  {action.description}
-                </Text>
-              </div>
-              <Group gap="xs" wrap="nowrap">
-                {action.key === "playerPoints" && (
-                  <TextInput
-                    placeholder="Year (optional)"
-                    value={playerPointsYear}
-                    onChange={(event) =>
-                      setPlayerPointsYear(event.currentTarget.value)
-                    }
-                    w={130}
-                  />
-                )}
-                <Button
-                  onClick={() => runAction(action)}
-                  loading={state.isRunning}
-                  disabled={!canFetchData}
-                >
-                  {action.label}
-                </Button>
-              </Group>
-            </Group>
-            {state.status && (
-              <Alert
-                color={state.status.kind === "success" ? "green" : "red"}
-                variant="light"
-              >
-                {state.status.message}
-              </Alert>
-            )}
-          </Stack>
-        );
-      })}
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+        {actions.map((action) => {
+          const state = states[action.key];
+          return (
+            <Card key={action.key} withBorder padding="md">
+              <Stack gap="sm" justify="space-between" h="100%">
+                <Stack gap={4}>
+                  <Text fw={500}>{action.label}</Text>
+                  <Text size="sm" c="dimmed">
+                    {action.description}
+                  </Text>
+                </Stack>
+                <Stack gap="xs">
+                  {action.key === "playerPoints" && (
+                    <TextInput
+                      placeholder="Year (optional)"
+                      value={playerPointsYear}
+                      onChange={(event) =>
+                        setPlayerPointsYear(event.currentTarget.value)
+                      }
+                    />
+                  )}
+                  <Group justify="space-between" align="center">
+                    <Button
+                      onClick={() => runAction(action)}
+                      loading={state.isRunning}
+                    >
+                      {action.label}
+                    </Button>
+                  </Group>
+                  {state.status && (
+                    <Alert
+                      color={state.status.kind === "success" ? "green" : "red"}
+                      variant="light"
+                    >
+                      {state.status.message}
+                    </Alert>
+                  )}
+                </Stack>
+              </Stack>
+            </Card>
+          );
+        })}
+      </SimpleGrid>
     </Stack>
   );
 }

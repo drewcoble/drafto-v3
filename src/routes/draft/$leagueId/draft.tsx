@@ -9,11 +9,11 @@ export const Route = createFileRoute("/draft/$leagueId/draft")({
 
 function DraftRouteLeaf() {
   const { leagueId } = Route.useParams();
-  const draftSettingsId = leagueId as Id<"draftSettings">;
-  const selfTeamResult = useSelfTeam(draftSettingsId);
+  const seasonId = leagueId as Id<"seasons">;
+  const selfTeamResult = useSelfTeam(seasonId);
   if (!selfTeamResult?.selfTeam) return null;
 
   return (
-    <DraftTab draftSettingsId={draftSettingsId} teams={selfTeamResult.teams} />
+    <DraftTab seasonId={seasonId} teams={selfTeamResult.teams} />
   );
 }

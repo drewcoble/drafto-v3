@@ -17,15 +17,15 @@ export const Route = createFileRoute("/")({
 function IndexRedirect() {
   const navigate = useNavigate();
   const currentUser = useQuery(api.users.getCurrentUser);
-  const draftSettingsList = useQuery(api.draftSettings.listDraftSettings, {});
+  const draftSettingsList = useQuery(api.leagues.listSeasons, {});
 
   useEffect(() => {
     if (!currentUser || !draftSettingsList) return;
     const validIds = new Set(draftSettingsList.map((league) => league._id));
     const stored = getStoredLeagueId(currentUser._id);
-    const leagueId: Id<"draftSettings"> | "new" =
-      stored && validIds.has(stored as Id<"draftSettings">)
-        ? (stored as Id<"draftSettings">)
+    const leagueId: Id<"seasons"> | "new" =
+      stored && validIds.has(stored as Id<"seasons">)
+        ? (stored as Id<"seasons">)
         : (draftSettingsList[0]?._id ?? "new");
     void navigate({
       to: "/setup/$leagueId/league",

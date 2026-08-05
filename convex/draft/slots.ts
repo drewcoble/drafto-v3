@@ -28,11 +28,11 @@ const SLOT_ORDER: Array<{
   position: Position | null;
 }> = [
   { countKey: "QB", label: "QB", position: "QB" },
+  { countKey: "SUPERFLEX", label: "SFLEX", position: null },
   { countKey: "RB", label: "RB", position: "RB" },
   { countKey: "WR", label: "WR", position: "WR" },
-  { countKey: "TE", label: "TE", position: "TE" },
   { countKey: "FLEX", label: "FLEX", position: null },
-  { countKey: "SUPERFLEX", label: "SFLEX", position: null },
+  { countKey: "TE", label: "TE", position: "TE" },
   { countKey: "DST", label: "DST", position: "DST" },
   { countKey: "K", label: "K", position: "K" },
   { countKey: "BENCH", label: "BN", position: null },

@@ -4,7 +4,7 @@ import { requireDraftOwner } from "./auth";
 
 // Single-player read composing every per-record (not pool-relative) field
 // the detail modal needs: identity, this-week projection/ranking, current
-// injury status, and - only when draftSettingsId is passed - this draft's
+// injury status, and - only when seasonId is passed - this draft's
 // pick/keeper status and target/avoid tag. Pool-relative fields (news list,
 // value-gap signal, $ draft value) are deliberately NOT here - the modal
 // reads those via news.getNewsForFpids / valueGaps.getAllValueGaps /
@@ -14,15 +14,17 @@ export const getPlayerDetail = query({
   args: {
     fpid: v.number(),
     week: v.string(),
-    draftSettingsId: v.optional(v.id("draftSettings")),
+    seasonId: v.optional(v.id("seasons")),
   },
   handler: async (ctx, args) => {
     // Only enforce draft ownership when draft-scoped fields are requested -
     // identity/projection/injury are public reads (same as players.getPlayer/
     // injuries.getInjuries today), so this still works with no league
     // selected (e.g. the pre-draft Players tab before any league exists).
-    if (args.draftSettingsId) {
-      await requireDraftOwner(ctx, args.draftSettingsId);
+    let draftId = null;
+    if (args.seasonId) {
+      const { draft } = await requireDraftOwner(ctx, args.seasonId);
+      draftId = draft._id;
     }
 
     const player = await ctx.db
@@ -58,19 +60,18 @@ export const getPlayerDetail = query({
 
     let pick = null;
     let tag: "target" | "avoid" | null = null;
-    if (args.draftSettingsId) {
-      const draftSettingsId = args.draftSettingsId;
+    if (draftId) {
       const [pickRow, tagRow] = await Promise.all([
         ctx.db
           .query("draftPicks")
           .withIndex("by_draft_fpid", (q) =>
-            q.eq("draftSettingsId", draftSettingsId).eq("fpid", args.fpid),
+            q.eq("draftId", draftId).eq("fpid", args.fpid),
           )
           .first(),
         ctx.db
           .query("draftPlayerTags")
           .withIndex("by_draft_fpid", (q) =>
-            q.eq("draftSettingsId", draftSettingsId).eq("fpid", args.fpid),
+            q.eq("draftId", draftId).eq("fpid", args.fpid),
           )
           .first(),
       ]);

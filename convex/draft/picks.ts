@@ -1,50 +1,49 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { requireDraftOwner } from "./auth";
+import type { Doc } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
+import { requireDraftOwner, requireSeasonOwner } from "./auth";
 import { nextNominator } from "./nominationOrder";
 import { expandRosterSlots, isEligibleForSlot } from "./slots";
+import { getPreviousSeason } from "./history";
 import { invalidateDraftValues } from "../draftValues";
 
 export const listDraftPicks = query({
-  args: { draftSettingsId: v.id("draftSettings") },
+  args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     return await ctx.db
       .query("draftPicks")
-      .withIndex("by_draft_sequence", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft_sequence", (q) => q.eq("draftId", draft._id))
       .collect();
   },
 });
 
 export const getActiveNomination = query({
-  args: { draftSettingsId: v.id("draftSettings") },
+  args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     return await ctx.db
       .query("draftNominations")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
   },
 });
 
 export const nominate = mutation({
   args: {
-    draftSettingsId: v.id("draftSettings"),
+    seasonId: v.id("seasons"),
     fpid: v.number(),
-    nominatingTeamId: v.optional(v.id("draftTeams")),
+    nominatingTeamId: v.optional(v.id("seasonTeams")),
     openingBid: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { season, draft } = await requireDraftOwner(ctx, args.seasonId);
 
     const alreadyPicked = await ctx.db
       .query("draftPicks")
       .withIndex("by_draft_fpid", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId).eq("fpid", args.fpid),
+        q.eq("draftId", draft._id).eq("fpid", args.fpid),
       )
       .first();
     if (alreadyPicked) {
@@ -53,9 +52,7 @@ export const nominate = mutation({
 
     const activeNomination = await ctx.db
       .query("draftNominations")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
     if (activeNomination) {
       throw new Error(
@@ -72,7 +69,7 @@ export const nominate = mutation({
     }
 
     const nominationId = await ctx.db.insert("draftNominations", {
-      draftSettingsId: args.draftSettingsId,
+      draftId: draft._id,
       fpid: args.fpid,
       position: player.position,
       ...(args.nominatingTeamId
@@ -88,13 +85,10 @@ export const nominate = mutation({
     // suggestion the nominate UI defaults to next; it never blocks who was
     // just allowed to nominate here (nominatingTeamId above is whatever the
     // frontend sent, which may already differ from the suggestion).
-    const draftSettings = await ctx.db.get(args.draftSettingsId);
-    if (draftSettings?.nominationOrder && draftSettings.nominationOrderMode) {
+    if (draft.nominationOrder && draft.nominationOrderMode) {
       const turn = await ctx.db
         .query("draftNominationTurns")
-        .withIndex("by_draft", (q) =>
-          q.eq("draftSettingsId", args.draftSettingsId),
-        )
+        .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
         .first();
       if (turn && turn.currentTeamId !== null) {
         // A team with no open roster slots (bench included) has nothing
@@ -102,9 +96,7 @@ export const nominate = mutation({
         // it - see nextNominator's isTeamFull param.
         const allPicks = await ctx.db
           .query("draftPicks")
-          .withIndex("by_draft_sequence", (q) =>
-            q.eq("draftSettingsId", args.draftSettingsId),
-          )
+          .withIndex("by_draft_sequence", (q) => q.eq("draftId", draft._id))
           .collect();
         const picksCountByTeam = new Map<string, number>();
         for (const pick of allPicks) {
@@ -113,12 +105,10 @@ export const nominate = mutation({
             (picksCountByTeam.get(pick.teamId) ?? 0) + 1,
           );
         }
-        const totalSlots = expandRosterSlots(
-          draftSettings.rosterSlots,
-        ).length;
+        const totalSlots = expandRosterSlots(season.rosterSlots).length;
         const next = nextNominator(
-          draftSettings.nominationOrder,
-          draftSettings.nominationOrderMode,
+          draft.nominationOrder,
+          draft.nominationOrderMode,
           turn.currentTeamId,
           turn.direction,
           (teamId) => (picksCountByTeam.get(teamId) ?? 0) >= totalSlots,
@@ -136,14 +126,12 @@ export const nominate = mutation({
 });
 
 export const bumpNominationBid = mutation({
-  args: { draftSettingsId: v.id("draftSettings"), delta: v.number() },
+  args: { seasonId: v.id("seasons"), delta: v.number() },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     const nomination = await ctx.db
       .query("draftNominations")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
     if (!nomination) {
       throw new Error("Nothing is currently on the block.");
@@ -158,14 +146,12 @@ export const bumpNominationBid = mutation({
 // final winning price directly (e.g. "$45") instead of clicking the +/-
 // stepper up one dollar at a time from wherever the bid last sat.
 export const setNominationBid = mutation({
-  args: { draftSettingsId: v.id("draftSettings"), amount: v.number() },
+  args: { seasonId: v.id("seasons"), amount: v.number() },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     const nomination = await ctx.db
       .query("draftNominations")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
     if (!nomination) {
       throw new Error("Nothing is currently on the block.");
@@ -177,14 +163,12 @@ export const setNominationBid = mutation({
 });
 
 export const passNomination = mutation({
-  args: { draftSettingsId: v.id("draftSettings") },
+  args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     const nomination = await ctx.db
       .query("draftNominations")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
     if (!nomination) {
       throw new Error("Nothing is currently on the block.");
@@ -198,20 +182,18 @@ export const passNomination = mutation({
 // just supplies which team the price is being logged against.
 export const resolvePick = mutation({
   args: {
-    draftSettingsId: v.id("draftSettings"),
+    seasonId: v.id("seasons"),
     fpid: v.number(),
-    teamId: v.id("draftTeams"),
+    teamId: v.id("seasonTeams"),
     price: v.number(),
     planSlotKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
 
     const nomination = await ctx.db
       .query("draftNominations")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
     if (!nomination || nomination.fpid !== args.fpid) {
       throw new Error("This player isn't currently on the block.");
@@ -219,15 +201,13 @@ export const resolvePick = mutation({
 
     const lastPick = await ctx.db
       .query("draftPicks")
-      .withIndex("by_draft_sequence", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft_sequence", (q) => q.eq("draftId", draft._id))
       .order("desc")
       .first();
     const sequence = (lastPick?.sequence ?? 0) + 1;
 
     const pickId = await ctx.db.insert("draftPicks", {
-      draftSettingsId: args.draftSettingsId,
+      draftId: draft._id,
       sequence,
       fpid: args.fpid,
       position: nomination.position,
@@ -260,18 +240,22 @@ export const setPickSlot = mutation({
     if (!pick) {
       throw new Error("Pick not found.");
     }
-    await requireDraftOwner(ctx, pick.draftSettingsId);
+    const draft = await ctx.db.get(pick.draftId);
+    if (!draft) {
+      throw new Error("Draft not found.");
+    }
+    await requireSeasonOwner(ctx, draft.seasonId);
 
     if (args.slotKey === null) {
       await ctx.db.patch(args.pickId, { planSlotKey: undefined });
       return null;
     }
 
-    const draftSettings = await ctx.db.get(pick.draftSettingsId);
-    if (!draftSettings) {
-      throw new Error("Draft not found.");
+    const season = await ctx.db.get(draft.seasonId);
+    if (!season) {
+      throw new Error("Season not found.");
     }
-    const slot = expandRosterSlots(draftSettings.rosterSlots).find(
+    const slot = expandRosterSlots(season.rosterSlots).find(
       (s) => s.key === args.slotKey,
     );
     if (!slot) {
@@ -281,8 +265,8 @@ export const setPickSlot = mutation({
       !isEligibleForSlot(
         pick.position,
         slot,
-        draftSettings.flexPositions,
-        draftSettings.superflexPositions,
+        season.flexPositions,
+        season.superflexPositions,
       )
     ) {
       throw new Error(`${pick.position} isn't eligible for ${slot.label}.`);
@@ -294,9 +278,7 @@ export const setPickSlot = mutation({
     // to bench to make room for the player being moved into FLEX).
     const teamPicks = await ctx.db
       .query("draftPicks")
-      .withIndex("by_draft", (q) =>
-        q.eq("draftSettingsId", pick.draftSettingsId),
-      )
+      .withIndex("by_draft", (q) => q.eq("draftId", pick.draftId))
       .collect();
     const occupant = teamPicks.find(
       (p) =>
@@ -312,6 +294,38 @@ export const setPickSlot = mutation({
   },
 });
 
+// Consecutive-seasons-kept count for a keeper about to be added: 1 for a
+// first-time keeper (or when this league has no prior season yet), or
+// (prior season's value + 1) when the immediately-prior season already had
+// this same fpid tagged as a keeper, regardless of which team held it either
+// season (a trade doesn't break the streak). Only checks one season back,
+// since a gap season (not kept at all) breaks the streak rather than
+// pausing it. Just the starting suggestion - always user-editable afterward
+// via setKeeperStreak below.
+async function computeKeeperStreak(
+  ctx: MutationCtx,
+  season: Doc<"seasons">,
+  fpid: number,
+): Promise<number> {
+  const previousSeason = await getPreviousSeason(ctx, season);
+  if (!previousSeason) return 1;
+  const previousDraft = await ctx.db
+    .query("drafts")
+    .withIndex("by_season_kind", (q) =>
+      q.eq("seasonId", previousSeason._id).eq("kind", "real"),
+    )
+    .first();
+  if (!previousDraft) return 1;
+  const parentPick = await ctx.db
+    .query("draftPicks")
+    .withIndex("by_draft_fpid", (q) =>
+      q.eq("draftId", previousDraft._id).eq("fpid", fpid),
+    )
+    .first();
+  if (!parentPick?.isKeeper) return 1;
+  return (parentPick.keeperStreak ?? 1) + 1;
+}
+
 // Pre-draft equivalent of resolvePick - assigns a player straight to a team
 // for a fixed price with no nomination to consume, so this can run any time
 // before (or independent of) the live auction. Tagged isKeeper: true so the
@@ -319,24 +333,24 @@ export const setPickSlot = mutation({
 // auction result.
 export const addKeeper = mutation({
   args: {
-    draftSettingsId: v.id("draftSettings"),
-    teamId: v.id("draftTeams"),
+    seasonId: v.id("seasons"),
+    teamId: v.id("seasonTeams"),
     fpid: v.number(),
     price: v.number(),
     planSlotKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { season, draft } = await requireDraftOwner(ctx, args.seasonId);
 
     const team = await ctx.db.get(args.teamId);
-    if (!team || team.draftSettingsId !== args.draftSettingsId) {
+    if (!team || team.seasonId !== args.seasonId) {
       throw new Error("Team not found in this draft.");
     }
 
     const alreadyPicked = await ctx.db
       .query("draftPicks")
       .withIndex("by_draft_fpid", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId).eq("fpid", args.fpid),
+        q.eq("draftId", draft._id).eq("fpid", args.fpid),
       )
       .first();
     if (alreadyPicked) {
@@ -353,21 +367,44 @@ export const addKeeper = mutation({
 
     const lastPick = await ctx.db
       .query("draftPicks")
-      .withIndex("by_draft_sequence", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft_sequence", (q) => q.eq("draftId", draft._id))
       .order("desc")
       .first();
     const sequence = (lastPick?.sequence ?? 0) + 1;
+    const keeperStreak = await computeKeeperStreak(ctx, season, args.fpid);
+
+    const keeperRules = season.keeperRules;
+    if (keeperRules?.maxConsecutiveYears !== undefined) {
+      if (keeperStreak > keeperRules.maxConsecutiveYears) {
+        throw new Error(
+          `This player has already been kept ${keeperRules.maxConsecutiveYears} consecutive season(s) - the league max.`,
+        );
+      }
+    }
+    if (keeperRules?.maxKeepersPerTeam !== undefined) {
+      const teamPicks = await ctx.db
+        .query("draftPicks")
+        .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+        .collect();
+      const teamKeeperCount = teamPicks.filter(
+        (p) => p.isKeeper && p.teamId === args.teamId,
+      ).length;
+      if (teamKeeperCount >= keeperRules.maxKeepersPerTeam) {
+        throw new Error(
+          `This team already has the maximum of ${keeperRules.maxKeepersPerTeam} keeper(s).`,
+        );
+      }
+    }
 
     const pickId = await ctx.db.insert("draftPicks", {
-      draftSettingsId: args.draftSettingsId,
+      draftId: draft._id,
       sequence,
       fpid: args.fpid,
       position: player.position,
       teamId: args.teamId,
       price: args.price,
       isKeeper: true,
+      keeperStreak,
       createdAt: Date.now(),
       ...(args.planSlotKey !== undefined
         ? { planSlotKey: args.planSlotKey }
@@ -375,10 +412,19 @@ export const addKeeper = mutation({
     });
     // Keepers shift getDraftValues' $ engine (excluded from the pool,
     // replacement demand reduced) - see convex/draftValues.ts.
-    await invalidateDraftValues(ctx, args.draftSettingsId);
+    await invalidateDraftValues(ctx, draft._id);
     return pickId;
   },
 });
+
+async function requireSeasonForPick(ctx: MutationCtx, pick: Doc<"draftPicks">) {
+  const draft = await ctx.db.get(pick.draftId);
+  if (!draft) {
+    throw new Error("Draft not found.");
+  }
+  await requireSeasonOwner(ctx, draft.seasonId);
+  return draft;
+}
 
 // Deletes a keeper specifically - throws on a normal auction pick so this
 // can't be used to silently undo a live result out of sequence the way
@@ -390,12 +436,36 @@ export const removeKeeper = mutation({
     if (!pick) {
       throw new Error("Pick not found.");
     }
-    await requireDraftOwner(ctx, pick.draftSettingsId);
+    await requireSeasonForPick(ctx, pick);
     if (!pick.isKeeper) {
       throw new Error("This pick isn't a keeper.");
     }
     await ctx.db.delete(args.pickId);
-    await invalidateDraftValues(ctx, pick.draftSettingsId);
+    await invalidateDraftValues(ctx, pick.draftId);
+    return null;
+  },
+});
+
+// Manual override for computeKeeperStreak's suggestion above - e.g.
+// correcting the very first season's default of 1 to reflect real-world
+// keeper history that predates this app. Whatever value is set here is
+// exactly what next season's computeKeeperStreak chains off of (+1), so
+// this is the single point of truth going forward. Doesn't touch
+// draftValues - streak doesn't feed the $ value engine.
+export const setKeeperStreak = mutation({
+  args: { pickId: v.id("draftPicks"), streak: v.number() },
+  handler: async (ctx, args) => {
+    const pick = await ctx.db.get(args.pickId);
+    if (!pick) {
+      throw new Error("Pick not found.");
+    }
+    await requireSeasonForPick(ctx, pick);
+    if (!pick.isKeeper) {
+      throw new Error("This pick isn't a keeper.");
+    }
+    await ctx.db.patch(args.pickId, {
+      keeperStreak: Math.max(Math.round(args.streak), 1),
+    });
     return null;
   },
 });
@@ -413,13 +483,13 @@ export const removePick = mutation({
     if (!pick) {
       throw new Error("Pick not found.");
     }
-    await requireDraftOwner(ctx, pick.draftSettingsId);
+    await requireSeasonForPick(ctx, pick);
     await ctx.db.delete(args.pickId);
     // Dropping a keeper (this can remove any pick, keeper or not - see
     // comment above) shifts getDraftValues' $ engine the same way
     // removeKeeper's dedicated path does.
     if (pick.isKeeper) {
-      await invalidateDraftValues(ctx, pick.draftSettingsId);
+      await invalidateDraftValues(ctx, pick.draftId);
     }
     return pick;
   },
@@ -428,14 +498,12 @@ export const removePick = mutation({
 // Undo is a plain delete of the highest-sequence pick - nothing stores a
 // running budget balance anywhere, so deleting the row is the entire refund.
 export const undoLastPick = mutation({
-  args: { draftSettingsId: v.id("draftSettings") },
+  args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
-    await requireDraftOwner(ctx, args.draftSettingsId);
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
     const lastPick = await ctx.db
       .query("draftPicks")
-      .withIndex("by_draft_sequence", (q) =>
-        q.eq("draftSettingsId", args.draftSettingsId),
-      )
+      .withIndex("by_draft_sequence", (q) => q.eq("draftId", draft._id))
       .order("desc")
       .first();
     if (!lastPick) {
@@ -446,7 +514,7 @@ export const undoLastPick = mutation({
     // picks) during setup, before the live auction starts - see removePick's
     // comment.
     if (lastPick.isKeeper) {
-      await invalidateDraftValues(ctx, args.draftSettingsId);
+      await invalidateDraftValues(ctx, draft._id);
     }
     return lastPick;
   },

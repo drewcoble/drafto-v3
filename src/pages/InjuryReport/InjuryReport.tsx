@@ -3,9 +3,8 @@ import { useQuery } from "convex/react";
 import {
   Anchor,
   Badge,
-  Button,
+  Card,
   Center,
-  Chip,
   Group,
   Loader,
   Stack,
@@ -22,13 +21,24 @@ import {
   pointsForScoring,
 } from "../../lib/relevantPlayers";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { PositionFilterBar } from "../../components/PositionFilterBar";
+import { POSITION_FILTER_BAR_HEIGHT } from "../../constants/general";
 
 interface InjuryReportProps {
   week: string;
-  draftSettingsId: Id<"draftSettings"> | undefined;
+  seasonId: Id<"seasons"> | undefined;
+  // Mobile fixed offset for PositionFilterBar - this page is mounted from
+  // both the Setup app (nothing else docked under the header) and the Draft
+  // Room (DraftTopBar's MobileStatsRow already docked there), so each route
+  // passes its own correct value rather than this component guessing.
+  filterBarTop: number;
 }
 
-export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
+export function InjuryReport({
+  week,
+  seasonId,
+  filterBarTop,
+}: InjuryReportProps) {
   const [selectedPositions, setSelectedPositions] = useState<Position[]>([
     ...POSITIONS,
   ]);
@@ -39,12 +49,12 @@ export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
     week,
   });
   const allRankings = useQuery(api.rankings.getAllRankings, { week });
-  const draftSettingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const settings = draftSettingsId
-    ? draftSettingsList?.find((league) => league._id === draftSettingsId)
+  const draftSettingsList = useQuery(api.leagues.listSeasons, {});
+  const settings = seasonId
+    ? draftSettingsList?.find((league) => league._id === seasonId)
     : undefined;
   const scoring: ScoringFormat = settings?.scoring ?? "PPR";
-  const thisSeason = settings?.season ?? String(new Date().getFullYear());
+  const thisSeason = settings?.year ?? String(new Date().getFullYear());
 
   // A position only matters to the selected league if it fills a dedicated
   // roster slot or is FLEX/SUPERFLEX-eligible - same rule PlayersTable.tsx
@@ -112,39 +122,18 @@ export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
     allRankings === undefined;
 
   return (
-    <Stack gap="md" py="sm">
+    <Stack
+      gap="md"
+      py="sm"
+      pt={{ base: POSITION_FILTER_BAR_HEIGHT, sm: "sm" }}
+    >
       <Group justify="space-between" align="center" wrap="wrap">
-        <Chip.Group
-          multiple
-          value={selectedPositions}
-          onChange={(value) => setSelectedPositions(value as Position[])}
-        >
-          <Group gap="xs">
-            <Button
-              size="compact-xs"
-              variant="default"
-              onClick={() => setSelectedPositions(activePositions)}
-            >
-              All
-            </Button>
-            {activePositions.map((pos) => (
-              <Group key={pos} gap={4} wrap="nowrap">
-                <Chip value={pos} color={POSITION_COLORS[pos]}>
-                  {pos}
-                </Chip>
-                <Anchor
-                  component="button"
-                  type="button"
-                  size="xs"
-                  c="dimmed"
-                  onClick={() => setSelectedPositions([pos])}
-                >
-                  only
-                </Anchor>
-              </Group>
-            ))}
-          </Group>
-        </Chip.Group>
+        <PositionFilterBar
+          positions={activePositions}
+          selected={selectedPositions}
+          onChange={setSelectedPositions}
+          top={filterBarTop}
+        />
         {!isLoading && (
           <Text size="xs" c="dimmed">
             {rows.length} currently injured
@@ -152,12 +141,15 @@ export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
         )}
       </Group>
 
+      <Card withBorder padding={0}>
       {isLoading ? (
         <Center py="xl">
           <Loader />
         </Center>
       ) : rows.length === 0 ? (
-        <Text c="dimmed">No currently-injured players for the selected position(s).</Text>
+        <Text c="dimmed" p="md">
+          No currently-injured players for the selected position(s).
+        </Text>
       ) : (
         <Table.ScrollContainer minWidth={800}>
           <Table striped highlightOnHover>
@@ -179,8 +171,6 @@ export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
                     <Anchor
                       component="button"
                       type="button"
-                      fw={500}
-                      c="inherit"
                       onClick={() => setSelectedFpid(injury.fpid)}
                     >
                       {player.name}
@@ -214,6 +204,7 @@ export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
           </Table>
         </Table.ScrollContainer>
       )}
+      </Card>
 
       <PlayerDetailModal
         fpid={selectedFpid}
@@ -221,7 +212,7 @@ export function InjuryReport({ week, draftSettingsId }: InjuryReportProps) {
         week={week}
         scoring={scoring}
         season={thisSeason}
-        draftSettingsId={draftSettingsId}
+        seasonId={seasonId}
       />
     </Stack>
   );

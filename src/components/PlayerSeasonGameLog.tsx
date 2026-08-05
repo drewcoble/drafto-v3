@@ -95,7 +95,7 @@ export function PlayerSeasonGameLog({
 
   return (
     <Table.ScrollContainer minWidth={minWidth}>
-      <Table fz="sm" verticalSpacing={4}>
+      <Table verticalSpacing={4}>
         <Table.Thead>
           <Table.Tr>
             <Table.Th style={noWrap}>Wk</Table.Th>

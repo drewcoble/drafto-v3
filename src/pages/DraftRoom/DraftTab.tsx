@@ -10,8 +10,8 @@ import { RecentPicksTable } from "./components/RecentPicksTable";
 import { TargetsTable } from "./components/ShortlistTable";
 
 interface DraftTabProps {
-  draftSettingsId: Id<"draftSettings">;
-  teams: Doc<"draftTeams">[];
+  seasonId: Id<"seasons">;
+  teams: Doc<"seasonTeams">[];
 }
 
 // Search/nominate/bid/resolve all live in DraftTopBar now (shared across
@@ -20,27 +20,27 @@ interface DraftTabProps {
 // (see convex/draft/tags.ts) in priority order. Tagging itself still happens
 // elsewhere (Players Left's bar click, or the Setup app's Players table);
 // this is purely for reviewing/reordering/pruning it.
-export function DraftTab({ draftSettingsId, teams }: DraftTabProps) {
+export function DraftTab({ seasonId, teams }: DraftTabProps) {
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const settingsList = useQuery(api.draftSettings.listDraftSettings, {});
-  const settings = settingsList?.find((s) => s._id === draftSettingsId);
-  const thisSeason = settings?.season ?? String(new Date().getFullYear());
+  const settingsList = useQuery(api.leagues.listSeasons, {});
+  const settings = settingsList?.find((s) => s._id === seasonId);
+  const thisSeason = settings?.year ?? String(new Date().getFullYear());
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
-  const picks = useQuery(api.draft.picks.listDraftPicks, { draftSettingsId });
+  const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const playerTags = useQuery(api.draft.tags.listPlayerTags, {
-    draftSettingsId,
+    seasonId,
   });
   // Same query/args PlayersLeftTab uses - stable for the draft's duration
-  // (draftSettings + projections only), so this is a shared subscription
+  // (season settings + projections only), so this is a shared subscription
   // whenever that tab is also mounted, not a second server-side compute.
   const tieredValues = useQuery(
     api.draft.board.getDraftBoard,
     settings
-      ? { draftSettingsId, week: WEEK, scoring: settings.scoring }
+      ? { seasonId, week: WEEK, scoring: settings.scoring }
       : "skip",
   ) as DraftTierRow[] | undefined;
 
@@ -65,7 +65,7 @@ export function DraftTab({ draftSettingsId, teams }: DraftTabProps) {
   }, [teams]);
 
   const teamById = useMemo(() => {
-    const map = new Map<string, Doc<"draftTeams">>();
+    const map = new Map<string, Doc<"seasonTeams">>();
     for (const team of teams) {
       map.set(team._id, team);
     }
@@ -127,7 +127,7 @@ export function DraftTab({ draftSettingsId, teams }: DraftTabProps) {
     if (target < 0 || target >= shortlist.length) return;
     const fpids = shortlist.map(({ tag }) => tag.fpid);
     [fpids[index], fpids[target]] = [fpids[target]!, fpids[index]!];
-    runAction(() => reorderShortlist({ draftSettingsId, fpids }));
+    runAction(() => reorderShortlist({ seasonId, fpids }));
   };
 
   return (
@@ -149,7 +149,7 @@ export function DraftTab({ draftSettingsId, teams }: DraftTabProps) {
           rows={shortlist}
           onMove={handleMoveShortlist}
           onRemove={(fpid) =>
-            runAction(() => clearPlayerTag({ draftSettingsId, fpid }))
+            runAction(() => clearPlayerTag({ seasonId, fpid }))
           }
           onSelectPlayer={setSelectedFpid}
         />
@@ -161,7 +161,7 @@ export function DraftTab({ draftSettingsId, teams }: DraftTabProps) {
         week={WEEK}
         scoring={settings?.scoring ?? "PPR"}
         season={thisSeason}
-        draftSettingsId={draftSettingsId}
+        seasonId={seasonId}
       />
     </Stack>
   );

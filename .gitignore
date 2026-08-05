@@ -4,3 +4,6 @@ node_modules
 dist
 *.tsbuildinfo
 .tanstack
+DEPLOY.md
+YAHOO.md
+TODO.md

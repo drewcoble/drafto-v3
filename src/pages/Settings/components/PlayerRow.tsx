@@ -2,6 +2,7 @@ import {
   ActionIcon,
   Anchor,
   Badge,
+  Box,
   Group,
   Table,
   Text,
@@ -13,8 +14,21 @@ import type { PlayerTag, ScoringFormat, ValueGap } from "../../../types";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { injuryColor } from "../../../lib/playerFormatting";
 import { pointsForScoring } from "../../../lib/relevantPlayers";
-import { consistencyColor, type ConsistencyLabel } from "../../../lib/consistency";
+import type { ConsistencyLabel } from "../../../lib/consistency";
+import { ConsistencyIcon } from "./ConsistencyIcon";
 import { ValueGapIcon } from "./ValueGapIcon";
+
+// One player's keeper status for the pre-draft rankings' Keeper column -
+// see src/lib/keeperCost.ts and PlayersTable.tsx's keeperInfoByFpid.
+export interface KeeperInfo {
+  // Consecutive seasons already kept (0 if never kept, or if last kept
+  // non-consecutively).
+  timesKept: number;
+  // Suggested keeper cost if kept again this season, or null when there's
+  // nothing to suggest (no prior price and no undraftedCost rule) or the
+  // player is ineligible (team keeper cap or consecutive-year cap reached).
+  value: number | null;
+}
 
 interface PlayerRowProps {
   row: Doc<"projections">;
@@ -31,6 +45,8 @@ interface PlayerRowProps {
   onSelectPlayer: (fpid: number) => void;
   consistency: ConsistencyLabel | undefined;
   showConsistencyColumn: boolean;
+  keeperInfo: KeeperInfo | undefined;
+  showKeeperColumn: boolean;
 }
 
 export function PlayerRow({
@@ -48,6 +64,8 @@ export function PlayerRow({
   onSelectPlayer,
   consistency,
   showConsistencyColumn,
+  keeperInfo,
+  showKeeperColumn,
 }: PlayerRowProps) {
   return (
     <Table.Tr>
@@ -66,6 +84,7 @@ export function PlayerRow({
         >
           <ActionIcon
             variant={tag ? "light" : "subtle"}
+            size={40}
             color={tag === "target" ? "green" : tag === "avoid" ? "red" : "gray"}
             disabled={!onCycleTag}
             onClick={onCycleTag}
@@ -76,19 +95,22 @@ export function PlayerRow({
         </Tooltip>
       </Table.Td>
       <Table.Td>
-        {valueGap ? (
-          <ValueGapIcon valueGap={valueGap} position={row.position} />
-        ) : (
-          ""
-        )}
+        <Group gap={4} wrap="nowrap">
+          <Box w={28} style={{ display: "flex", justifyContent: "center" }}>
+            {valueGap && (
+              <ValueGapIcon valueGap={valueGap} position={row.position} />
+            )}
+          </Box>
+          {showConsistencyColumn && consistency && (
+            <ConsistencyIcon label={consistency} />
+          )}
+        </Group>
       </Table.Td>
       <Table.Td miw={220}>
         <Group gap={6}>
           <Anchor
             component="button"
             type="button"
-            fw={500}
-            c="inherit"
             onClick={() => onSelectPlayer(row.fpid)}
           >
             {row.name}
@@ -110,17 +132,6 @@ export function PlayerRow({
           {row.position}
         </Badge>
       </Table.Td>
-      {showConsistencyColumn && (
-        <Table.Td>
-          {consistency ? (
-            <Badge color={consistencyColor(consistency)} variant="light">
-              {consistency}
-            </Badge>
-          ) : (
-            "—"
-          )}
-        </Table.Td>
-      )}
       <Table.Td>{row.team ?? "—"}</Table.Td>
       <Table.Td>{pointsForScoring(row, scoring).toFixed(1)}</Table.Td>
       {showValueColumn && (
@@ -140,6 +151,17 @@ export function PlayerRow({
             ) : (
               `$${Math.round(draftValue.dollarValue)}`
             )
+          ) : (
+            "—"
+          )}
+        </Table.Td>
+      )}
+      {showKeeperColumn && (
+        <Table.Td>
+          {keeperInfo && keeperInfo.value !== null ? (
+            `${keeperInfo.timesKept}× · $${keeperInfo.value}`
+          ) : keeperInfo && keeperInfo.timesKept > 0 ? (
+            `${keeperInfo.timesKept}× · -`
           ) : (
             "—"
           )}

@@ -9,6 +9,6 @@ export const Route = createFileRoute("/draft/$leagueId/budget")({
 function BudgetRoute() {
   const { leagueId } = Route.useParams();
   return (
-    <BudgetTab draftSettingsId={leagueId as Id<"draftSettings">} mode="live" />
+    <BudgetTab seasonId={leagueId as Id<"seasons">} mode="live" />
   );
 }
