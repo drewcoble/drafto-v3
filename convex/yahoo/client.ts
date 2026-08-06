@@ -129,3 +129,57 @@ export async function fetchYahooApi<T>(
   }
   return await response.json();
 }
+
+/**
+ * Yahoo's `?format=json` output is a direct translation of its XML schema -
+ * NOT verified against a live response (see YAHOO.md). From general
+ * knowledge, a resource's fields typically arrive as an array of small
+ * single-key objects to be merged (`[{"league_key": "..."}, {"name": "..."}, ...]`),
+ * and collections arrive as an object keyed by stringified index plus a
+ * "count" field (`{"0": {...}, "1": {...}, "count": 2}`) instead of a plain
+ * JSON array. The two helpers below are written to be resilient to that
+ * shape rather than assuming one exact path, since a wrong guess at an exact
+ * path would silently return nothing instead of a clear error - but they
+ * still need a real authenticated response to confirm against. Shared by
+ * every caller in convex/yahoo/league.ts and convex/yahoo/leagueSettingsMapping.ts.
+ */
+
+// Merges an array of small field objects (Yahoo's field-list pattern) into
+// one - no-op passthrough for anything not shaped that way.
+export function mergeYahooFields(node: unknown): Record<string, unknown> {
+  if (Array.isArray(node)) {
+    const merged: Record<string, unknown> = {};
+    for (const entry of node) {
+      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+        Object.assign(merged, entry);
+      }
+    }
+    return merged;
+  }
+  if (node && typeof node === "object") {
+    return node as Record<string, unknown>;
+  }
+  return {};
+}
+
+// Recursively finds every node that appears as the value of `key` at any
+// depth in a Yahoo JSON tree - e.g. findNodesByKey(json, "league") finds
+// every league resource regardless of how deeply the surrounding
+// users/games/leagues wrapper nests it.
+export function findNodesByKey(node: unknown, key: string): unknown[] {
+  const found: unknown[] = [];
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const [k, v2] of Object.entries(value as Record<string, unknown>)) {
+        if (k === key) found.push(v2);
+        else visit(v2);
+      }
+    }
+  };
+  visit(node);
+  return found;
+}

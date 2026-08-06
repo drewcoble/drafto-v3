@@ -51,6 +51,7 @@ import type * as users from "../users.js";
 import type * as valueGaps from "../valueGaps.js";
 import type * as yahoo_client from "../yahoo/client.js";
 import type * as yahoo_league from "../yahoo/league.js";
+import type * as yahoo_leagueSettingsMapping from "../yahoo/leagueSettingsMapping.js";
 import type * as yahoo_oauth from "../yahoo/oauth.js";
 
 import type {
@@ -103,6 +104,7 @@ declare const fullApi: ApiFromModules<{
   valueGaps: typeof valueGaps;
   "yahoo/client": typeof yahoo_client;
   "yahoo/league": typeof yahoo_league;
+  "yahoo/leagueSettingsMapping": typeof yahoo_leagueSettingsMapping;
   "yahoo/oauth": typeof yahoo_oauth;
 }>;
 

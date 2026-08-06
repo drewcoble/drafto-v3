@@ -22,9 +22,15 @@ export const getPlayerDetail = query({
     // injuries.getInjuries today), so this still works with no league
     // selected (e.g. the pre-draft Players tab before any league exists).
     let draftId = null;
+    // Absent means true - see schema.ts's trackConsecutiveYears comment.
+    // Only matters when a pick/keeper is actually returned below, but
+    // computed alongside draftId (same season lookup) rather than a second
+    // round trip.
+    let trackConsecutiveYears = true;
     if (args.seasonId) {
-      const { draft } = await requireDraftOwner(ctx, args.seasonId);
+      const { season, draft } = await requireDraftOwner(ctx, args.seasonId);
       draftId = draft._id;
+      trackConsecutiveYears = season.keeperRules?.trackConsecutiveYears ?? true;
     }
 
     const player = await ctx.db
@@ -79,6 +85,6 @@ export const getPlayerDetail = query({
       tag = tagRow?.tag ?? null;
     }
 
-    return { player, projection, ranking, injury, pick, tag };
+    return { player, projection, ranking, injury, pick, tag, trackConsecutiveYears };
   },
 });

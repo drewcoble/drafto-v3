@@ -290,6 +290,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                   onSetStreak={handleSetStreak}
                   onMove={handleMoveKeeper}
                   onSelectPlayer={setSelectedFpid}
+                  showStreakInput={settings.keeperRules?.trackConsecutiveYears ?? true}
                 />
               </Card>
               <KeeperCardList
@@ -303,6 +304,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 onSetStreak={handleSetStreak}
                 onMove={handleMoveKeeper}
                 onSelectPlayer={setSelectedFpid}
+                showStreakInput={settings.keeperRules?.trackConsecutiveYears ?? true}
               />
             </>
           )}

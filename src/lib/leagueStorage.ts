@@ -3,7 +3,7 @@
 // a fallback for the next time a user lands on "/", not the source of truth
 // once a leagueId is already in the URL.
 function leagueStorageKey(userId: string): string {
-  return `drafto:selectedLeagueId:${userId}`;
+  return `infinidraft:selectedLeagueId:${userId}`;
 }
 
 export function getStoredLeagueId(userId: string): string | null {

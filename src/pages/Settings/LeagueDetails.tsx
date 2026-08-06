@@ -30,6 +30,7 @@ import { SeasonHistoryPanel } from "./components/SeasonHistoryPanel";
 import { TeamsPanel } from "./components/TeamsPanel";
 import { LeagueCreateChoice } from "./components/LeagueCreateChoice";
 import { LeagueImportWizard } from "./components/LeagueImportWizard";
+import { YahooLeagueImportWizard } from "./components/YahooLeagueImportWizard";
 
 interface LeagueDetailsProps {
   selectedLeagueId: Id<"seasons"> | undefined;
@@ -71,10 +72,12 @@ export function LeagueDetails({
 
   const [isEditing, setIsEditing] = useState(false);
   // Gates the "+ New League" flow's first screen (Custom Setup vs. Import
-  // from Sleeper - see LeagueCreateChoice.tsx) ahead of isEditing/SettingsForm
-  // taking over for the custom path. null once a choice has been made or
-  // there's no creation in progress.
-  const [createMode, setCreateMode] = useState<"choice" | "import" | null>(
+  // from Sleeper/Yahoo - see LeagueCreateChoice.tsx) ahead of isEditing/
+  // SettingsForm taking over for the custom path. null once a choice has
+  // been made or there's no creation in progress.
+  const [createMode, setCreateMode] = useState<
+    "choice" | "sleeperImport" | "yahooImport" | null
+  >(
     null,
   );
   const [form, setForm] = useState<LeagueSettingsFormValues>(DEFAULT_FORM);
@@ -262,7 +265,8 @@ export function LeagueDetails({
           setError(null);
           setIsEditing(true);
         }}
-        onChooseSleeperImport={() => setCreateMode("import")}
+        onChooseSleeperImport={() => setCreateMode("sleeperImport")}
+        onChooseYahooImport={() => setCreateMode("yahooImport")}
         onCancel={() => {
           setCreateMode(null);
           onDoneCreating();
@@ -271,9 +275,25 @@ export function LeagueDetails({
     );
   }
 
-  if (createMode === "import") {
+  if (createMode === "sleeperImport") {
     return (
       <LeagueImportWizard
+        onImported={(id) => {
+          setCreateMode(null);
+          onLeagueSaved(id);
+          onDoneCreating();
+        }}
+        onCancel={() => {
+          setCreateMode(null);
+          onDoneCreating();
+        }}
+      />
+    );
+  }
+
+  if (createMode === "yahooImport") {
+    return (
+      <YahooLeagueImportWizard
         onImported={(id) => {
           setCreateMode(null);
           onLeagueSaved(id);

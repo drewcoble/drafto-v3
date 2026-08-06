@@ -16,6 +16,9 @@ interface SlotTableProps {
   onRemove: (pickId: Id<"draftPicks">) => void;
   onMove: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer: (fpid: number) => void;
+  // Gates the "· Yr X" suffix on the Keeper badge below - see
+  // KeeperRulesPanel.tsx's trackConsecutiveYears toggle.
+  trackConsecutiveYears: boolean;
 }
 
 export function SlotTable({
@@ -28,6 +31,7 @@ export function SlotTable({
   onRemove,
   onMove,
   onSelectPlayer,
+  trackConsecutiveYears,
 }: SlotTableProps) {
   return (
     <Table.ScrollContainer minWidth={500}>
@@ -79,7 +83,9 @@ export function SlotTable({
                     )}
                     {pick?.isKeeper && (
                       <Badge variant="light" color="gray" size="sm">
-                        Keeper · Yr {pick.keeperStreak ?? 1}
+                        {trackConsecutiveYears
+                          ? `Keeper · Yr ${pick.keeperStreak ?? 1}`
+                          : "Keeper"}
                       </Badge>
                     )}
                   </Group>

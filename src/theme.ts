@@ -218,6 +218,39 @@ const bn = [
   "#4b5465",
 ] as const;
 
+// Provider brand colors, generated via @mantine/colors-generator the same
+// way as the palette above - Sleeper's dark navy blue (base #1F2A44, lands
+// at shade 9) and Yahoo's purple (base #6001D2, lands at shade 8). Eyeballed
+// from each provider's own branding rather than an official brand kit, so
+// nudge the base hex above and regenerate if either reads off. Used only on
+// LeagueCreateChoice.tsx's "Import from Sleeper"/"Import from Yahoo"
+// buttons - not wired into positionColors.ts or anything provider-neutral.
+const sleeper = [
+  "#f1f3f9",
+  "#e1e4eb",
+  "#bec6d8",
+  "#99a6c6",
+  "#7b8bb6",
+  "#677aad",
+  "#5c72aa",
+  "#4c6095",
+  "#435686",
+  "#1f2a44",
+] as const;
+
+const yahoo = [
+  "#f5eaff",
+  "#e5d0ff",
+  "#c89dfc",
+  "#aa66fb",
+  "#9139fa",
+  "#811efa",
+  "#7911fb",
+  "#6805e0",
+  "#6001d2",
+  "#4e00b0",
+] as const;
+
 export const theme = createTheme({
   fontFamily: "Inter, sans-serif",
   fontFamilyMonospace: "IBM Plex Mono, monospace",
@@ -244,6 +277,8 @@ export const theme = createTheme({
     k,
     dst,
     bn,
+    sleeper,
+    yahoo,
     // Dark-mode surfaces retinted to a very dark, desaturated forest green
     // instead of the plain blue-black ink used before (too close to every
     // other fantasy football site's dark-blue theme) and Mantine's neutral

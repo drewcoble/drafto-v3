@@ -145,6 +145,7 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
         onRemove={handleRemove}
         onMove={handleMove}
         onSelectPlayer={setSelectedFpid}
+        trackConsecutiveYears={settings?.keeperRules?.trackConsecutiveYears ?? true}
       />
 
       {unassignedPicks.length > 0 && (
@@ -167,7 +168,9 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
               </Text>
               {pick.isKeeper && (
                 <Badge variant="light" color="gray" size="sm">
-                  Keeper · Yr {pick.keeperStreak ?? 1}
+                  {settings?.keeperRules?.trackConsecutiveYears ?? true
+                    ? `Keeper · Yr ${pick.keeperStreak ?? 1}`
+                    : "Keeper"}
                 </Badge>
               )}
               <ActionIcon

@@ -8,6 +8,9 @@ interface RecentPicksTableProps {
   teamNameById: Map<string, string>;
   onRemove: (pickId: Id<"draftPicks">) => void;
   onSelectPlayer: (fpid: number) => void;
+  // Gates the "· Yr X" suffix on the Keeper badge below - see
+  // KeeperRulesPanel.tsx's trackConsecutiveYears toggle.
+  trackConsecutiveYears: boolean;
 }
 
 export function RecentPicksTable({
@@ -16,6 +19,7 @@ export function RecentPicksTable({
   teamNameById,
   onRemove,
   onSelectPlayer,
+  trackConsecutiveYears,
 }: RecentPicksTableProps) {
   return (
     <Stack gap={6}>
@@ -55,7 +59,9 @@ export function RecentPicksTable({
                   <Table.Td>
                     {pick.isKeeper && (
                       <Badge variant="light" color="gray" size="sm">
-                        Keeper · Yr {pick.keeperStreak ?? 1}
+                        {trackConsecutiveYears
+                          ? `Keeper · Yr ${pick.keeperStreak ?? 1}`
+                          : "Keeper"}
                       </Badge>
                     )}
                   </Table.Td>

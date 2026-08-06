@@ -112,6 +112,9 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
                     bySlot={bySlot}
                     nameByFpid={nameByFpid}
                     onSelectPlayer={setSelectedFpid}
+                    trackConsecutiveYears={
+                      settings.keeperRules?.trackConsecutiveYears ?? true
+                    }
                   />
                 )}
               </Stack>

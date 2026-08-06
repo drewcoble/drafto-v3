@@ -260,7 +260,9 @@ export function PlayerDetailModal({
               <Text size="sm">Drafted for ${detail.pick.price}</Text>
               {detail.pick.isKeeper && (
                 <Badge variant="light" color="gray" size="sm">
-                  Keeper · Yr {detail.pick.keeperStreak ?? 1}
+                  {detail.trackConsecutiveYears
+                    ? `Keeper · Yr ${detail.pick.keeperStreak ?? 1}`
+                    : "Keeper"}
                 </Badge>
               )}
             </Group>

@@ -235,6 +235,9 @@ export function LeagueTab({
                     onRemove={handleRemove}
                     onMove={handleMove}
                     onSelectPlayer={setSelectedFpid}
+                    trackConsecutiveYears={
+                      settings.keeperRules?.trackConsecutiveYears ?? true
+                    }
                   />
                 )}
               </Stack>

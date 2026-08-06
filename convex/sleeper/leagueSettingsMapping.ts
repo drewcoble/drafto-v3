@@ -15,7 +15,7 @@ export interface MappedRosterSlots {
     SUPERFLEX: number;
     BENCH: number;
   };
-  // drafto's flex/superflex eligibility is league-wide, not per-slot, so any
+  // infinidraft's flex/superflex eligibility is league-wide, not per-slot, so any
   // FLEX-shaped slot just turns on the standard RB/WR/TE (or QB/RB/WR/TE)
   // eligibility set rather than trying to derive an exact eligibility list
   // per slot code (Sleeper's WRRB_FLEX is narrower than FLEX, for instance -
@@ -84,8 +84,8 @@ export function mapRosterPositions(rosterPositions: string[]): MappedRosterSlots
   };
 }
 
-// Nearest-bucket match against drafto's fixed STD/HALF/PPR trio using
-// points-per-reception - drafto's own projections data only ever exists in
+// Nearest-bucket match against infinidraft's fixed STD/HALF/PPR trio using
+// points-per-reception - infinidraft's own projections data only ever exists in
 // these three formats, so a league with genuinely custom scoring (bonus
 // yardage thresholds, etc.) can't be represented exactly regardless of which
 // bucket this picks.

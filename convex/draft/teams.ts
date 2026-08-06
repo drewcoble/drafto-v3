@@ -59,6 +59,14 @@ export const initializeSeasonTeams = mutation({
     opponentSleeperLinks: v.optional(
       v.array(v.union(sleeperLinkValidator, v.null())),
     ),
+    // Yahoo equivalent, set by the "Import from Yahoo" creation wizard (see
+    // convex/yahoo/league.ts's previewYahooImport) - just the team_key
+    // string, since Yahoo has no separate roster/owner id split the way
+    // Sleeper's link does (see seasonTeams.yahooTeamKey's schema comment).
+    selfYahooTeamKey: v.optional(v.string()),
+    opponentYahooTeamKeys: v.optional(
+      v.array(v.union(v.string(), v.null())),
+    ),
   },
   handler: async (ctx, args) => {
     const { season } = await requireSeasonOwner(ctx, args.seasonId);
@@ -87,10 +95,12 @@ export const initializeSeasonTeams = mutation({
       order: 0,
       createdAt: now,
       ...(args.selfSleeperLink ?? {}),
+      ...(args.selfYahooTeamKey ? { yahooTeamKey: args.selfYahooTeamKey } : {}),
     });
     const teamIds = [selfId];
     for (const [index, name] of args.opponentNames.entries()) {
       const link = args.opponentSleeperLinks?.[index];
+      const yahooTeamKey = args.opponentYahooTeamKeys?.[index];
       teamIds.push(
         await ctx.db.insert("seasonTeams", {
           seasonId: args.seasonId,
@@ -99,6 +109,7 @@ export const initializeSeasonTeams = mutation({
           order: index + 1,
           createdAt: now,
           ...(link ?? {}),
+          ...(yahooTeamKey ? { yahooTeamKey } : {}),
         }),
       );
     }

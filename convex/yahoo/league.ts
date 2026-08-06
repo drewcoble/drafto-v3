@@ -1,63 +1,15 @@
 import { v } from "convex/values";
-import { action, internalQuery } from "../_generated/server";
+import { action, internalQuery, type ActionCtx, type QueryCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { Doc, Id } from "../_generated/dataModel";
-import { fetchYahooApi } from "./client";
+import { fetchYahooApi, mergeYahooFields, findNodesByKey } from "./client";
 import { withYahooToken } from "./oauth";
-
-/**
- * Yahoo's `?format=json` output is a direct translation of its XML schema -
- * NOT verified against a live response (see YAHOO.md at the project root).
- * From general knowledge, a resource's fields typically arrive as an array
- * of small single-key objects to be merged
- * (`[{"league_key": "..."}, {"name": "..."}, ...]`), and collections arrive
- * as an object keyed by stringified index plus a "count" field
- * (`{"0": {...}, "1": {...}, "count": 2}`) instead of a plain JSON array.
- * The two helpers below are written to be resilient to that shape rather
- * than assuming one exact path, since a wrong guess at an exact path would
- * silently return nothing instead of a clear error - but they still need a
- * real authenticated response to confirm against.
- */
-
-// Merges an array of small field objects (Yahoo's field-list pattern) into
-// one - no-op passthrough for anything not shaped that way.
-function mergeYahooFields(node: unknown): Record<string, unknown> {
-  if (Array.isArray(node)) {
-    const merged: Record<string, unknown> = {};
-    for (const entry of node) {
-      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-        Object.assign(merged, entry);
-      }
-    }
-    return merged;
-  }
-  if (node && typeof node === "object") {
-    return node as Record<string, unknown>;
-  }
-  return {};
-}
-
-// Recursively finds every node that appears as the value of `key` at any
-// depth in a Yahoo JSON tree - e.g. findNodesByKey(json, "league") finds
-// every league resource regardless of how deeply the surrounding
-// users/games/leagues wrapper nests it.
-function findNodesByKey(node: unknown, key: string): unknown[] {
-  const found: unknown[] = [];
-  const visit = (value: unknown) => {
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
-    }
-    if (value && typeof value === "object") {
-      for (const [k, v2] of Object.entries(value as Record<string, unknown>)) {
-        if (k === key) found.push(v2);
-        else visit(v2);
-      }
-    }
-  };
-  visit(node);
-  return found;
-}
+import {
+  mapYahooRosterPositions,
+  mapYahooScoringSettings,
+  type MappedRosterSlots,
+} from "./leagueSettingsMapping";
+import type { Scoring } from "../scoring";
 
 export const listMyYahooLeagues = action({
   args: {},
@@ -85,37 +37,62 @@ export const listMyYahooLeagues = action({
   },
 });
 
+export interface YahooTeamRow {
+  teamKey: string;
+  teamName: string;
+  managerName: string;
+  // Yahoo's team resource sets is_owned_by_current_login: 1 on whichever
+  // team belongs to the signed-in account - unverified against a live
+  // response (see YAHOO.md), used by previewYahooImport below to
+  // auto-select "which team is me" the same way previewSleeperImport uses
+  // the resolved Sleeper user_id.
+  isCurrentUser: boolean;
+}
+
+// Shared by fetchYahooLeagueTeams (Season Settings' team-mapping step) and
+// previewYahooImport below (creation-time import) - both need "every team
+// in this league, with its manager name and whether it's the signed-in
+// user's own team."
+async function fetchYahooTeamsForLeague(
+  accessToken: string,
+  leagueKey: string,
+): Promise<YahooTeamRow[]> {
+  const json = await fetchYahooApi<unknown>(
+    accessToken,
+    `/league/${leagueKey}/teams`,
+  );
+  return findNodesByKey(json, "team")
+    .map((node) => {
+      const fields = mergeYahooFields(node);
+      const managerFields = findNodesByKey(node, "manager").map((m) =>
+        mergeYahooFields(m),
+      );
+      const managerName = managerFields[0]?.nickname;
+      const isCurrentUser =
+        fields.is_owned_by_current_login === 1 ||
+        fields.is_owned_by_current_login === "1" ||
+        fields.is_owned_by_current_login === true;
+      return {
+        teamKey: typeof fields.team_key === "string" ? fields.team_key : "",
+        teamName: typeof fields.name === "string" ? fields.name : "Unknown team",
+        managerName:
+          typeof managerName === "string" ? managerName : "Unknown manager",
+        isCurrentUser,
+      };
+    })
+    .filter((team) => team.teamKey !== "");
+}
+
 export const fetchYahooLeagueTeams = action({
   args: { leagueKey: v.string() },
-  handler: async (
-    ctx,
-    args,
-  ): Promise<Array<{ teamKey: string; teamName: string; managerName: string }>> => {
+  handler: async (ctx, args): Promise<YahooTeamRow[]> => {
     const userId: Id<"users"> = await ctx.runQuery(
       internal.yahoo.oauth.requireSignedInUserId,
       {},
     );
-    return await withYahooToken(ctx, userId, async (accessToken) => {
-      const json = await fetchYahooApi<unknown>(
-        accessToken,
-        `/league/${args.leagueKey}/teams`,
-      );
-      return findNodesByKey(json, "team")
-        .map((node) => {
-          const fields = mergeYahooFields(node);
-          const managerFields = findNodesByKey(node, "manager").map((m) =>
-            mergeYahooFields(m),
-          );
-          const managerName = managerFields[0]?.nickname;
-          return {
-            teamKey: typeof fields.team_key === "string" ? fields.team_key : "",
-            teamName: typeof fields.name === "string" ? fields.name : "Unknown team",
-            managerName:
-              typeof managerName === "string" ? managerName : "Unknown manager",
-          };
-        })
-        .filter((team) => team.teamKey !== "");
-    });
+    return await withYahooToken(ctx, userId, (accessToken) =>
+      fetchYahooTeamsForLeague(accessToken, args.leagueKey),
+    );
   },
 });
 
@@ -138,28 +115,64 @@ function normalizeYahooPlayerName(name: string): string {
     .trim();
 }
 
+// Shared match core for both resolveFpidsByName (live roster sync, only
+// needs the resulting fpid set) and resolvePlayerKeysToFpids below (keeper-
+// history import, which needs the fpid correlated back to a specific draft
+// pick) - `index` lets each caller re-associate a match with whatever it
+// sent in at that position, since unmatched/DEF entries are dropped rather
+// than returned as null (a dense, positional array would force every caller
+// to filter out placeholders anyway).
+async function matchPlayersToFpids(
+  ctx: QueryCtx,
+  players: Array<{ name: string; position: string }>,
+): Promise<Array<{ index: number; fpid: number }>> {
+  const allPlayers: Doc<"players">[] = await ctx.db.query("players").collect();
+  const byKey = new Map<string, number>();
+  for (const player of allPlayers) {
+    byKey.set(
+      `${normalizeYahooPlayerName(player.name)}|${player.position}`,
+      player.fpid,
+    );
+  }
+  const matches: Array<{ index: number; fpid: number }> = [];
+  players.forEach((player, index) => {
+    if (player.position === "DEF" || player.position === "DST") return;
+    const fpid = byKey.get(
+      `${normalizeYahooPlayerName(player.name)}|${player.position}`,
+    );
+    if (fpid !== undefined) matches.push({ index, fpid });
+  });
+  return matches;
+}
+
 export const resolveFpidsByName = internalQuery({
   args: {
     players: v.array(v.object({ name: v.string(), position: v.string() })),
   },
   handler: async (ctx, args): Promise<number[]> => {
-    const allPlayers: Doc<"players">[] = await ctx.db.query("players").collect();
-    const byKey = new Map<string, number>();
-    for (const player of allPlayers) {
-      byKey.set(
-        `${normalizeYahooPlayerName(player.name)}|${player.position}`,
-        player.fpid,
-      );
-    }
-    const fpids: number[] = [];
-    for (const player of args.players) {
-      if (player.position === "DEF" || player.position === "DST") continue;
-      const fpid = byKey.get(
-        `${normalizeYahooPlayerName(player.name)}|${player.position}`,
-      );
-      if (fpid !== undefined) fpids.push(fpid);
-    }
-    return fpids;
+    const matches = await matchPlayersToFpids(ctx, args.players);
+    return matches.map((m) => m.fpid);
+  },
+});
+
+// Keeper-history counterpart to resolveFpidsByName - preserves which
+// player_key each resolved fpid came from, so fetchPreviousYahooSeasonPreview
+// below can re-attach a draft pick's price to the right fpid.
+export const resolvePlayerKeysToFpids = internalQuery({
+  args: {
+    players: v.array(
+      v.object({ playerKey: v.string(), name: v.string(), position: v.string() }),
+    ),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<Array<{ playerKey: string; fpid: number }>> => {
+    const matches = await matchPlayersToFpids(ctx, args.players);
+    return matches.map((m) => ({
+      playerKey: args.players[m.index]!.playerKey,
+      fpid: m.fpid,
+    }));
   },
 });
 
@@ -248,5 +261,246 @@ export const syncYahooLeagueRoster = action({
     });
 
     return { syncedTeams };
+  },
+});
+
+interface YahooLeagueSettingsSummary {
+  name: string;
+  season: string;
+  teamCount: number;
+  // Community-documented field marking a league renewed from a prior
+  // season, format "{prior_game_id}_{prior_league_id}" (e.g. "423_9034") -
+  // unverified against a live response, see YAHOO.md. Absent for a
+  // brand-new (first-year) league.
+  renew: string | undefined;
+  // The full settings response, handed to mapYahooRosterPositions/
+  // mapYahooScoringSettings, which each do their own deep search rather
+  // than assume one exact nesting.
+  raw: unknown;
+}
+
+async function fetchYahooLeagueSettings(
+  accessToken: string,
+  leagueKey: string,
+): Promise<YahooLeagueSettingsSummary> {
+  const json = await fetchYahooApi<unknown>(
+    accessToken,
+    `/league/${leagueKey}/settings`,
+  );
+  // Merge every node literally keyed "league" (not just the first) - Yahoo's
+  // tree nests general league metadata (name/season/num_teams/renew) and the
+  // settings sub-resource separately, and it's not confirmed which exact
+  // depth each lands at. See YAHOO.md.
+  const leagueFields = findNodesByKey(json, "league").reduce<
+    Record<string, unknown>
+  >((acc, node) => ({ ...acc, ...mergeYahooFields(node) }), {});
+  return {
+    name: typeof leagueFields.name === "string" ? leagueFields.name : "Unknown league",
+    season:
+      typeof leagueFields.season === "string"
+        ? leagueFields.season
+        : String(new Date().getFullYear()),
+    teamCount: Number(leagueFields.num_teams) || 0,
+    renew:
+      typeof leagueFields.renew === "string" && leagueFields.renew
+        ? leagueFields.renew
+        : undefined,
+    raw: json,
+  };
+}
+
+function priorLeagueKeyFromRenew(renew: string): string | undefined {
+  const match = /^(\d+)_(\d+)$/.exec(renew);
+  if (!match) return undefined;
+  return `${match[1]}.l.${match[2]}`;
+}
+
+interface YahooDraftPick {
+  teamKey: string;
+  playerKey: string;
+  // Only present for auction drafts - absent (not zero) for a snake draft,
+  // same "isAuction detected from whether any pick has a price" approach
+  // convex/sleeper/league.ts's fetchPreviousSeasonPreview uses.
+  cost: number | undefined;
+}
+
+// Sub-resource name ("draftresults", no underscore) is from general
+// knowledge of the Yahoo Fantasy API, not a confirmed live response - see
+// YAHOO.md.
+async function fetchYahooDraftResults(
+  accessToken: string,
+  leagueKey: string,
+): Promise<YahooDraftPick[]> {
+  const json = await fetchYahooApi<unknown>(
+    accessToken,
+    `/league/${leagueKey}/draftresults`,
+  );
+  return findNodesByKey(json, "draft_result")
+    .map((node) => mergeYahooFields(node))
+    .map((fields) => ({
+      teamKey: typeof fields.team_key === "string" ? fields.team_key : "",
+      playerKey: typeof fields.player_key === "string" ? fields.player_key : "",
+      cost:
+        fields.cost !== undefined && fields.cost !== null
+          ? Number(fields.cost)
+          : undefined,
+    }))
+    .filter((pick) => pick.teamKey && pick.playerKey);
+}
+
+// Batched (Yahoo caps how many resources one request can return) player_key
+// -> name/position lookup, needed because draftresults only gives ids, not
+// names - draft picks are the one place this app needs player identity by
+// key instead of by roster (see extractRosterPlayers above for the roster
+// case, which gets names directly from the roster response).
+async function fetchYahooPlayersByKeys(
+  accessToken: string,
+  playerKeys: string[],
+): Promise<Map<string, { name: string; position: string }>> {
+  const map = new Map<string, { name: string; position: string }>();
+  const BATCH_SIZE = 25;
+  for (let i = 0; i < playerKeys.length; i += BATCH_SIZE) {
+    const batch = playerKeys.slice(i, i + BATCH_SIZE);
+    if (batch.length === 0) continue;
+    const json = await fetchYahooApi<unknown>(
+      accessToken,
+      `/players;player_keys=${batch.join(",")}`,
+    );
+    for (const node of findNodesByKey(json, "player")) {
+      const fields = mergeYahooFields(node);
+      const key = typeof fields.player_key === "string" ? fields.player_key : undefined;
+      const nameField = fields.name as { full?: string } | undefined;
+      const fullName = nameField?.full;
+      const position = fields.display_position;
+      if (key && typeof fullName === "string" && typeof position === "string") {
+        map.set(key, { name: fullName, position });
+      }
+    }
+  }
+  return map;
+}
+
+export interface PreviousYahooSeasonTeamPreview {
+  ownerId: string;
+  teamName: string;
+  players: Array<{ fpid: number; price: number | undefined }>;
+}
+
+export interface PreviousYahooSeasonPreview {
+  season: string;
+  isAuction: boolean;
+  teams: PreviousYahooSeasonTeamPreview[];
+}
+
+// Best-effort, same degrade-gracefully contract as convex/sleeper/league.ts's
+// fetchPreviousSeasonPreview: a missing `renew` field, an unreachable prior
+// league, or any failure anywhere in this chain (settings/teams/draft
+// results/player lookup) just means "no price data" for the import wizard,
+// never a failed import.
+async function fetchPreviousYahooSeasonPreview(
+  ctx: ActionCtx,
+  accessToken: string,
+  renew: string | undefined,
+): Promise<PreviousYahooSeasonPreview | undefined> {
+  if (!renew) return undefined;
+  const priorLeagueKey = priorLeagueKeyFromRenew(renew);
+  if (!priorLeagueKey) return undefined;
+  try {
+    const [priorSettings, priorTeams, draftPicks] = await Promise.all([
+      fetchYahooLeagueSettings(accessToken, priorLeagueKey),
+      fetchYahooTeamsForLeague(accessToken, priorLeagueKey),
+      fetchYahooDraftResults(accessToken, priorLeagueKey),
+    ]);
+
+    const isAuction = draftPicks.some((pick) => pick.cost !== undefined);
+    const playerKeys = [...new Set(draftPicks.map((pick) => pick.playerKey))];
+    const playersByKey = await fetchYahooPlayersByKeys(accessToken, playerKeys);
+
+    const playerList = [...playersByKey.entries()].map(([playerKey, info]) => ({
+      playerKey,
+      ...info,
+    }));
+    const resolved: Array<{ playerKey: string; fpid: number }> = await ctx.runQuery(
+      internal.yahoo.league.resolvePlayerKeysToFpids,
+      { players: playerList },
+    );
+    const fpidByPlayerKey = new Map(resolved.map((r) => [r.playerKey, r.fpid]));
+
+    const picksByTeam = new Map<string, YahooDraftPick[]>();
+    for (const pick of draftPicks) {
+      const list = picksByTeam.get(pick.teamKey) ?? [];
+      list.push(pick);
+      picksByTeam.set(pick.teamKey, list);
+    }
+
+    const teams: PreviousYahooSeasonTeamPreview[] = priorTeams.map((team) => ({
+      ownerId: team.teamKey,
+      teamName: team.teamName,
+      players: (picksByTeam.get(team.teamKey) ?? [])
+        .map((pick) => {
+          const fpid = fpidByPlayerKey.get(pick.playerKey);
+          if (fpid === undefined) return null;
+          return { fpid, price: pick.cost };
+        })
+        .filter((p): p is { fpid: number; price: number | undefined } => p !== null),
+    }));
+
+    return { season: priorSettings.season, isAuction, teams };
+  } catch {
+    return undefined;
+  }
+}
+
+export interface YahooImportPreview {
+  name: string;
+  season: string;
+  teamCount: number;
+  scoring: Scoring;
+  rosterSlots: MappedRosterSlots["rosterSlots"];
+  flexPositions: MappedRosterSlots["flexPositions"];
+  superflexPositions: MappedRosterSlots["superflexPositions"];
+  droppedSlots: string[];
+  teams: YahooTeamRow[];
+  previousSeason: PreviousYahooSeasonPreview | undefined;
+}
+
+// Powers the "Import from Yahoo" league-creation wizard: one round trip
+// that returns everything needed to pre-fill SettingsForm, the team/self-
+// mapping step, and (if this league renews from a prior season) enough
+// data to seed keeper price history - mirrors convex/sleeper/league.ts's
+// previewSleeperImport. Requires the caller to already have a connected
+// Yahoo account (see convex/yahoo/oauth.ts) - the wizard checks
+// getConnectionStatus and prompts to connect first if not.
+export const previewYahooImport = action({
+  args: { leagueKey: v.string() },
+  handler: async (ctx, args): Promise<YahooImportPreview> => {
+    const userId: Id<"users"> = await ctx.runQuery(
+      internal.yahoo.oauth.requireSignedInUserId,
+      {},
+    );
+    return await withYahooToken(ctx, userId, async (accessToken) => {
+      const settings = await fetchYahooLeagueSettings(accessToken, args.leagueKey);
+      const mappedRoster = mapYahooRosterPositions(settings.raw);
+      const scoring = mapYahooScoringSettings(settings.raw);
+      const teams = await fetchYahooTeamsForLeague(accessToken, args.leagueKey);
+      const previousSeason = await fetchPreviousYahooSeasonPreview(
+        ctx,
+        accessToken,
+        settings.renew,
+      );
+
+      return {
+        name: settings.name,
+        season: settings.season,
+        teamCount: settings.teamCount || teams.length,
+        scoring,
+        rosterSlots: mappedRoster.rosterSlots,
+        flexPositions: mappedRoster.flexPositions,
+        superflexPositions: mappedRoster.superflexPositions,
+        droppedSlots: mappedRoster.droppedSlots,
+        teams,
+        previousSeason,
+      };
+    });
   },
 });

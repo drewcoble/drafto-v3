@@ -40,6 +40,15 @@ const keeperRulesValidator = v.object({
   ),
   maxKeepersPerTeam: v.optional(v.number()),
   maxConsecutiveYears: v.optional(v.number()),
+  // Whether the Keepers tab shows the manual "years kept" streak editor at
+  // all - absent means true (leagues that already relied on it shouldn't
+  // lose it by default, same "absent means enabled" convention as
+  // seasons.useKeepers). Purely a UI toggle: computeKeeperStreak (convex/
+  // draft/picks.ts) still auto-computes and stores keeperStreak on every
+  // keeper pick either way, and maxConsecutiveYears above still enforces
+  // against it - turning this off only hides the manual override control
+  // for leagues that don't care to fine-tune it.
+  trackConsecutiveYears: v.optional(v.boolean()),
 });
 
 export default defineSchema({
@@ -376,7 +385,7 @@ export default defineSchema({
 
   // One row per app user (not per league) - connecting a Yahoo account is a
   // one-time action that then lets that user link any of their Yahoo leagues
-  // to any of their drafto leagues, mirroring how leagues.ownerId already
+  // to any of their infinidraft leagues, mirroring how leagues.ownerId already
   // scopes everything else per-user. See convex/yahoo/oauth.ts.
   yahooOAuthTokens: defineTable({
     userId: v.id("users"),

@@ -37,7 +37,12 @@ function RootComponent() {
     return (
       <Container size="lg" py="xl">
         <Stack gap="md">
-          <Title order={2}>drafto</Title>
+          <Title order={2}>
+            <Text component="span" inherit c="saddlebrown.6">
+              infini
+            </Text>
+            draft
+          </Title>
           <Text c="dimmed">Sign in to view projections and draft.</Text>
           <AuthPanel />
         </Stack>

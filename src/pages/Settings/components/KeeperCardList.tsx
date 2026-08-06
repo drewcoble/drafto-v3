@@ -19,6 +19,9 @@ interface KeeperCardListProps {
   onSetStreak: (pickId: Id<"draftPicks">, streak: number) => void;
   onMove: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer: (fpid: number) => void;
+  // Gates the "Yrs kept" editor below - see KeeperRulesPanel.tsx's
+  // trackConsecutiveYears toggle.
+  showStreakInput: boolean;
 }
 
 // Mobile replacement for KeeperTable.tsx (hidden from "sm" up via
@@ -36,6 +39,7 @@ export function KeeperCardList({
   onSetStreak,
   onMove,
   onSelectPlayer,
+  showStreakInput,
 }: KeeperCardListProps) {
   const slotLabelByKey = useMemo(
     () => new Map(slots.map((slot) => [slot.key, slot.label])),
@@ -142,12 +146,11 @@ export function KeeperCardList({
                 )}
               </Group>
 
-              <Group gap={6} wrap="nowrap">
-                <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                  Years kept
-                </Text>
-                <KeeperStreakCell pick={pick} onSetStreak={onSetStreak} />
-              </Group>
+              {showStreakInput && (
+                <Group gap={6} wrap="nowrap">
+                  <KeeperStreakCell pick={pick} onSetStreak={onSetStreak} />
+                </Group>
+              )}
             </Stack>
           </Card>
         );

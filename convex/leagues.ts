@@ -87,6 +87,9 @@ export const createLeague = mutation({
     // linked from creation, so it never needs the separate Season Settings
     // linking step Part 3 built for leagues that started out unlinked.
     sleeperLeagueId: v.optional(v.string()),
+    // Yahoo equivalent, set by the "Import from Yahoo" wizard (see
+    // convex/yahoo/league.ts's previewYahooImport).
+    yahooLeagueKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -94,7 +97,7 @@ export const createLeague = mutation({
       throw new Error("You must be signed in.");
     }
     const now = Date.now();
-    const { name, sleeperLeagueId, ...seasonFields } = args;
+    const { name, sleeperLeagueId, yahooLeagueKey, ...seasonFields } = args;
 
     const leagueId = await ctx.db.insert("leagues", {
       ownerId: userId,
@@ -108,6 +111,7 @@ export const createLeague = mutation({
       year: thisSeason,
       ...seasonFields,
       ...(sleeperLeagueId ? { sleeperLeagueId } : {}),
+      ...(yahooLeagueKey ? { yahooLeagueKey } : {}),
       createdAt: now,
     });
 
@@ -167,22 +171,28 @@ export const updateSeason = mutation({
 });
 
 // Builds a synthetic prior-season entry for a just-created league from an
-// imported Sleeper league's previous-season roster/auction results (see
-// convex/sleeper/league.ts's previewSleeperImport), inserted as an earlier
-// season of the SAME league - seasons.by_league_year naturally orders it
-// before the new season, no separate lineage-chain field needed the way
-// draftSettings.clonedFromId used to require. The tradeoff (same as before):
-// a fabricated season shows up in that league's history/delete-cascade like
-// a real one.
+// imported Sleeper or Yahoo league's previous-season roster/auction results
+// (see convex/sleeper/league.ts's previewSleeperImport and convex/yahoo/
+// league.ts's previewYahooImport), inserted as an earlier season of the SAME
+// league - seasons.by_league_year naturally orders it before the new season,
+// no separate lineage-chain field needed the way draftSettings.clonedFromId
+// used to require. The tradeoff (same as before): a fabricated season shows
+// up in that league's history/delete-cascade like a real one.
 export const importPreviousSeasonHistory = mutation({
   args: {
     newSeasonId: v.id("seasons"),
     season: v.string(),
-    sleeperLeagueId: v.string(),
-    // Sleeper user id of "me" in the imported league, used only to flag
-    // which synthetic team is isSelf (cosmetic - getPlayerPriceHistory
-    // returns prices for every fpid league-wide regardless of which team
-    // held them, so this doesn't affect keeper suggestions themselves).
+    // Exactly one of these two is expected, matching whichever provider the
+    // import wizard is running against - neither is required at the type
+    // level so one mutation can serve both wizards instead of forking it.
+    sleeperLeagueId: v.optional(v.string()),
+    yahooLeagueKey: v.optional(v.string()),
+    // Provider-specific "me" identifier in the imported league (Sleeper
+    // user_id, or a Yahoo team_key - Yahoo has no separate owner id, see
+    // seasonTeams.yahooTeamKey's schema comment) used only to flag which
+    // synthetic team is isSelf (cosmetic - getPlayerPriceHistory returns
+    // prices for every fpid league-wide regardless of which team held them,
+    // so this doesn't affect keeper suggestions themselves).
     selfOwnerId: v.optional(v.string()),
     teams: v.array(
       v.object({
@@ -223,7 +233,8 @@ export const importPreviousSeasonHistory = mutation({
       rosterSlots: newSeason.rosterSlots,
       flexPositions: newSeason.flexPositions,
       superflexPositions: newSeason.superflexPositions,
-      sleeperLeagueId: args.sleeperLeagueId,
+      ...(args.sleeperLeagueId ? { sleeperLeagueId: args.sleeperLeagueId } : {}),
+      ...(args.yahooLeagueKey ? { yahooLeagueKey: args.yahooLeagueKey } : {}),
       createdAt: now,
     });
     const historyDraftId = await ctx.db.insert("drafts", {

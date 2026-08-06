@@ -28,6 +28,9 @@ interface KeeperTableProps {
   onSetStreak: (pickId: Id<"draftPicks">, streak: number) => void;
   onMove: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer: (fpid: number) => void;
+  // Gates the "Yrs kept" column below - see KeeperRulesPanel.tsx's
+  // trackConsecutiveYears toggle.
+  showStreakInput: boolean;
 }
 
 export function KeeperTable({
@@ -41,6 +44,7 @@ export function KeeperTable({
   onSetStreak,
   onMove,
   onSelectPlayer,
+  showStreakInput,
 }: KeeperTableProps) {
   const slotLabelByKey = useMemo(
     () => new Map(slots.map((slot) => [slot.key, slot.label])),
@@ -108,9 +112,11 @@ export function KeeperTable({
                     </Text>
                   )}
                 </Table.Td>
-                <Table.Td>
-                  <KeeperStreakCell pick={pick} onSetStreak={onSetStreak} />
-                </Table.Td>
+                {showStreakInput && (
+                  <Table.Td>
+                    <KeeperStreakCell pick={pick} onSetStreak={onSetStreak} />
+                  </Table.Td>
+                )}
                 <Table.Td>
                   <Group gap={4} wrap="nowrap" justify="flex-end">
                     <Menu shadow="md" width={170} position="bottom-end">

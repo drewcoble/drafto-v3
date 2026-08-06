@@ -8,6 +8,7 @@ import {
   Group,
   NumberInput,
   Stack,
+  Switch,
   Text,
   TextInput,
 } from "@mantine/core";
@@ -103,6 +104,7 @@ function definitionSignature(rules: {
   defaultFormula: DefaultFormulaDraft;
   maxKeepersPerTeam: number | undefined;
   maxConsecutiveYears: number | undefined;
+  trackConsecutiveYears: boolean;
   tiers: TierDraft[];
 }): string {
   return JSON.stringify(rules);
@@ -135,6 +137,10 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
   const [maxConsecutiveYears, setMaxConsecutiveYears] = useState<
     number | undefined
   >(keeperRules.maxConsecutiveYears);
+  // Absent means true - see schema.ts's trackConsecutiveYears comment.
+  const [trackConsecutiveYears, setTrackConsecutiveYears] = useState<boolean>(
+    keeperRules.trackConsecutiveYears ?? true,
+  );
   const [tierDrafts, setTierDrafts] = useState<TierDraft[]>(
     toTierDrafts(keeperRules.tiers),
   );
@@ -146,6 +152,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     defaultFormula: toDefaultFormulaDraft(keeperRules.defaultFormula),
     maxKeepersPerTeam: keeperRules.maxKeepersPerTeam,
     maxConsecutiveYears: keeperRules.maxConsecutiveYears,
+    trackConsecutiveYears: keeperRules.trackConsecutiveYears ?? true,
     tiers: toTierDrafts(keeperRules.tiers),
   });
 
@@ -153,6 +160,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     setDefaultFormula(toDefaultFormulaDraft(keeperRules.defaultFormula));
     setMaxKeepersPerTeam(keeperRules.maxKeepersPerTeam);
     setMaxConsecutiveYears(keeperRules.maxConsecutiveYears);
+    setTrackConsecutiveYears(keeperRules.trackConsecutiveYears ?? true);
     setTierDrafts(toTierDrafts(keeperRules.tiers));
     // Only the definition signature (not the whole keeperRules object, which
     // also changes on every fpids-only picker click) should trigger a
@@ -164,6 +172,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     defaultFormula,
     maxKeepersPerTeam,
     maxConsecutiveYears,
+    trackConsecutiveYears,
     tiers: tierDrafts,
   });
   const isDirty = localSignature !== committedSignature;
@@ -303,6 +312,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
           ...(maxConsecutiveYears !== undefined
             ? { maxConsecutiveYears }
             : {}),
+          trackConsecutiveYears,
           tiers: tierDrafts.map((draft) => ({
             id: draft.id,
             name: draft.name,
@@ -396,6 +406,15 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
             />
           </Group>
         </Stack>
+      </Card>
+
+      <Card withBorder padding="sm">
+        <Switch
+          label="Track consecutive years kept"
+          description="Shows a Yrs Kept field on the Keepers tab for reviewing/correcting each keeper's streak. Turn off if your league doesn't track this."
+          checked={trackConsecutiveYears}
+          onChange={(e) => setTrackConsecutiveYears(e.currentTarget.checked)}
+        />
       </Card>
 
       <Card withBorder padding="sm">

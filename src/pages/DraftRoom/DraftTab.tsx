@@ -144,6 +144,7 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
           teamNameById={teamNameById}
           onRemove={(pickId) => runAction(() => removePick({ pickId }))}
           onSelectPlayer={setSelectedFpid}
+          trackConsecutiveYears={settings?.keeperRules?.trackConsecutiveYears ?? true}
         />
         <TargetsTable
           rows={shortlist}

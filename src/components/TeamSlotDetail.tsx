@@ -15,6 +15,9 @@ interface TeamSlotDetailProps {
   onRemove?: (pickId: Id<"draftPicks">) => void;
   onMove?: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer?: (fpid: number) => void;
+  // Gates the ", yr X" suffix on a keeper's inline label below - see
+  // KeeperRulesPanel.tsx's trackConsecutiveYears toggle.
+  trackConsecutiveYears: boolean;
 }
 
 // Expandable per-slot roster breakdown for one team - used by both the live
@@ -33,6 +36,7 @@ export function TeamSlotDetail({
   onRemove,
   onMove,
   onSelectPlayer,
+  trackConsecutiveYears,
 }: TeamSlotDetailProps) {
   const canMove = onMove && flexPositions && superflexPositions;
   return (
@@ -83,7 +87,11 @@ export function TeamSlotDetail({
                 (player?.name ?? "—")
               )}
               {pick ? ` · $${pick.price}` : ""}
-              {pick?.isKeeper ? ` (keeper, yr ${pick.keeperStreak ?? 1})` : ""}
+              {pick?.isKeeper
+                ? trackConsecutiveYears
+                  ? ` (keeper, yr ${pick.keeperStreak ?? 1})`
+                  : " (keeper)"
+                : ""}
             </Text>
             {hasActions && (
               <Menu shadow="md" width={170} position="bottom-end">

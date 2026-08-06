@@ -29,8 +29,9 @@ export function KeeperStreakCell({
   }, [savedStreak]);
 
   return (
-    <Group gap={4} wrap="nowrap">
+    <Group gap={4} wrap="nowrap" align="flex-end">
       <NumberInput
+        label="Yrs kept"
         size="xs"
         w={width}
         min={1}

@@ -219,7 +219,9 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                       </Text>
                       {pick?.isKeeper && (
                         <Badge size="sm" variant="light" color="gray" w={30}>
-                          K{pick.keeperStreak ?? 1}
+                          {settings.keeperRules?.trackConsecutiveYears ?? true
+                            ? `K${pick.keeperStreak ?? 1}`
+                            : "K"}
                         </Badge>
                       )}
                       <Text size="sm" ta="right" w={35} fw={600}>

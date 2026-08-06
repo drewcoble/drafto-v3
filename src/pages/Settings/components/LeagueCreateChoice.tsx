@@ -4,16 +4,17 @@ import { Import, Wrench } from "lucide-react";
 interface LeagueCreateChoiceProps {
   onChooseCustom: () => void;
   onChooseSleeperImport: () => void;
+  onChooseYahooImport: () => void;
   onCancel: () => void;
 }
 
 // First screen of the "+ New League" flow (see LeagueDetails.tsx) - a fork
 // between today's blank-form setup and importing settings/teams from a real
-// Sleeper league (see Part 4 of the plan doc / LeagueImportWizard.tsx).
-// Yahoo import isn't offered yet - it depends on Part 3's OAuth flow.
+// Sleeper or Yahoo league (see LeagueImportWizard.tsx / YahooLeagueImportWizard.tsx).
 export function LeagueCreateChoice({
   onChooseCustom,
   onChooseSleeperImport,
+  onChooseYahooImport,
   onCancel,
 }: LeagueCreateChoiceProps) {
   return (
@@ -21,7 +22,7 @@ export function LeagueCreateChoice({
       <Title order={4}>New League</Title>
       <Card withBorder padding="md">
         <Group justify="space-between" wrap="nowrap">
-          <Stack gap={2}>
+          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
             <Text fw={500}>Custom Setup</Text>
             <Text size="sm" c="dimmed">
               Start from a blank league and set roster slots, scoring, and
@@ -32,6 +33,7 @@ export function LeagueCreateChoice({
             variant="default"
             leftSection={<Wrench size={16} />}
             onClick={onChooseCustom}
+            style={{ flexShrink: 0 }}
           >
             Start
           </Button>
@@ -39,7 +41,7 @@ export function LeagueCreateChoice({
       </Card>
       <Card withBorder padding="md">
         <Group justify="space-between" wrap="nowrap">
-          <Stack gap={2}>
+          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
             <Text fw={500}>Import from Sleeper</Text>
             <Text size="sm" c="dimmed">
               Pull roster slots, scoring, and team names from a real Sleeper
@@ -47,7 +49,32 @@ export function LeagueCreateChoice({
               season's roster.
             </Text>
           </Stack>
-          <Button leftSection={<Import size={16} />} onClick={onChooseSleeperImport}>
+          <Button
+            leftSection={<Import size={16} />}
+            onClick={onChooseSleeperImport}
+            color="sleeper.9"
+            style={{ flexShrink: 0 }}
+          >
+            Import
+          </Button>
+        </Group>
+      </Card>
+      <Card withBorder padding="md">
+        <Group justify="space-between" wrap="nowrap">
+          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+            <Text fw={500}>Import from Yahoo</Text>
+            <Text size="sm" c="dimmed">
+              Same as above, from a real Yahoo league. Connects your Yahoo
+              account first if you haven't already (Season Settings also
+              offers this).
+            </Text>
+          </Stack>
+          <Button
+            leftSection={<Import size={16} />}
+            onClick={onChooseYahooImport}
+            color="yahoo.8"
+            style={{ flexShrink: 0 }}
+          >
             Import
           </Button>
         </Group>
