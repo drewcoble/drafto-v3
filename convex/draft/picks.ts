@@ -7,6 +7,7 @@ import { nextNominator } from "./nominationOrder";
 import { expandRosterSlots, isEligibleForSlot } from "./slots";
 import { getPreviousSeason } from "./history";
 import { invalidateDraftValues } from "../draftValues";
+import { syncDraftStatus } from "./status";
 
 export const listDraftPicks = query({
   args: { seasonId: v.id("seasons") },
@@ -219,6 +220,7 @@ export const resolvePick = mutation({
         : {}),
     });
     await ctx.db.delete(nomination._id);
+    await syncDraftStatus(ctx, draft._id);
     return pickId;
   },
 });
@@ -413,6 +415,7 @@ export const addKeeper = mutation({
     // Keepers shift getDraftValues' $ engine (excluded from the pool,
     // replacement demand reduced) - see convex/draftValues.ts.
     await invalidateDraftValues(ctx, draft._id);
+    await syncDraftStatus(ctx, draft._id);
     return pickId;
   },
 });
@@ -442,6 +445,7 @@ export const removeKeeper = mutation({
     }
     await ctx.db.delete(args.pickId);
     await invalidateDraftValues(ctx, pick.draftId);
+    await syncDraftStatus(ctx, pick.draftId);
     return null;
   },
 });
@@ -491,6 +495,7 @@ export const removePick = mutation({
     if (pick.isKeeper) {
       await invalidateDraftValues(ctx, pick.draftId);
     }
+    await syncDraftStatus(ctx, pick.draftId);
     return pick;
   },
 });
@@ -516,6 +521,7 @@ export const undoLastPick = mutation({
     if (lastPick.isKeeper) {
       await invalidateDraftValues(ctx, draft._id);
     }
+    await syncDraftStatus(ctx, draft._id);
     return lastPick;
   },
 });

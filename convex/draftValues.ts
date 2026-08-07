@@ -5,9 +5,12 @@ import {
   QueryCtx,
   MutationCtx,
 } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { positionValidator, POSITIONS } from "./positions";
 import { scoringValidator, pointsForScoring, Scoring } from "./scoring";
 import { Doc, Id } from "./_generated/dataModel";
+import type { RosterSlotCounts } from "./draft/slots";
+import { hasProAccess } from "./billing/entitlements";
 
 type Position = (typeof POSITIONS)[number];
 
@@ -24,9 +27,45 @@ export interface DraftValueRow {
   dollarValue: number;
 }
 
+// Canonical "generic" league shape served to free-plan users instead of
+// their real league's settings - mirrors src/constants/leagueSettings.ts's
+// DEFAULT_FORM (12 teams, $200 cap, standard roster). Duplicated here rather
+// than imported since Convex functions can't import from src/ - same
+// reasoning as DRAFT_PREP_WEEK in convex/leagues.ts duplicating a frontend
+// constant.
+const DEFAULT_GENERIC_LEAGUE_SETTINGS: {
+  teamCount: number;
+  salaryCap: number;
+  rosterSlots: RosterSlotCounts;
+  flexPositions: Position[];
+  superflexPositions: Position[];
+} = {
+  teamCount: 12,
+  salaryCap: 200,
+  rosterSlots: {
+    QB: 1,
+    RB: 2,
+    WR: 2,
+    TE: 1,
+    DST: 1,
+    K: 0,
+    FLEX: 1,
+    SUPERFLEX: 0,
+    BENCH: 8,
+  },
+  flexPositions: ["RB", "WR", "TE"],
+  superflexPositions: ["QB", "RB", "WR", "TE"],
+};
+
 /**
  * Auction/salary-cap $ value per player, computed from current projections +
- * the draft's season settings.
+ * an explicit league shape (roster slots, team count, total cap dollars,
+ * keepers already off the board). Pure with respect to any one draft/season
+ * - the only ctx.db read left in here is `projections`, which is
+ * league-independent - so the exact same VBD engine can be pointed at a
+ * real league's settings (computeDraftValues below) or the shared generic
+ * default settings (computeGenericDraftValues below) without duplicating
+ * the math.
  *
  * Value-Based Drafting: find each position's replacement-level player (the
  * last one who'd realistically be rostered given league settings, including
@@ -34,35 +73,36 @@ export interface DraftValueRow {
  * positions are eligible for each), then split the league's total spendable
  * auction dollars proportionally to how far above that replacement level
  * each player projects.
- *
- * Keepers (pre-draft picks tagged isKeeper on draftPicks) are excluded from
- * the pool entirely, and both the per-position replacement demand and the
- * total spendable dollars are reduced to reflect the slots/$ they've
- * already claimed - see the keeper read below.
- *
- * Always computes every active position at once - the cross-position
- * replacement/flex computation needs the whole pool regardless, so
- * getDraftValues' optional `position` arg only filters this function's
- * output, never its inputs. Factored out (mirrors convex/valueGaps.ts) so
- * both the cache-miss fallback in getDraftValues and refreshDraftValues'
- * daily precompute share one implementation.
  */
-async function computeDraftValues(
+async function computeDraftValuesForSettings(
   ctx: QueryCtx | MutationCtx,
   args: {
-    draftId: Id<"drafts">;
     week: string;
     scoring: Scoring;
+    rosterSlots: RosterSlotCounts;
+    flexPositions: Position[];
+    superflexPositions: Position[];
+    teamCount: number;
+    totalCapDollars: number;
+    keptFpids: Set<number>;
+    keptCountByPos: Partial<Record<Position, number>>;
+    keptDollars: number;
+    keeperCount: number;
   },
 ): Promise<DraftValueRow[]> {
-  const draft = await ctx.db.get(args.draftId);
-  if (!draft) {
-    throw new Error("Draft not found");
-  }
-  const settings = await ctx.db.get(draft.seasonId);
-  if (!settings) {
-    throw new Error("Season not found");
-  }
+  const {
+    week,
+    scoring,
+    rosterSlots,
+    flexPositions,
+    superflexPositions,
+    teamCount,
+    totalCapDollars,
+    keptFpids,
+    keptCountByPos,
+    keptDollars,
+    keeperCount,
+  } = args;
 
   // A position only matters to this league if it fills a dedicated roster
   // slot or is eligible for FLEX/SUPERFLEX - e.g. a 0-K league shouldn't
@@ -70,35 +110,10 @@ async function computeDraftValues(
   // is scoped to this list instead of the full POSITIONS union.
   const activePositions = POSITIONS.filter(
     (pos) =>
-      settings.rosterSlots[pos] > 0 ||
-      settings.flexPositions.includes(pos) ||
-      settings.superflexPositions.includes(pos),
+      rosterSlots[pos] > 0 ||
+      flexPositions.includes(pos) ||
+      superflexPositions.includes(pos),
   );
-
-  // Keepers are pre-draft picks (convex/draft/picks.ts's addKeeper) that
-  // take a player off the board before the auction even starts. Read via
-  // the isKeeper-scoped index rather than the general by_draft index so
-  // this query's read range only covers keeper rows - regular auction
-  // picks (isKeeper absent) fall outside that range and don't invalidate
-  // this computation. That distinction is deliberate: convex/draft/
-  // board.ts documents why re-running this whole VBD engine on every
-  // single live pick would be too expensive, but keepers are set once
-  // during setup and don't change during the live draft, so reacting to
-  // them here is cheap and safe.
-  const keepers = await ctx.db
-    .query("draftPicks")
-    .withIndex("by_draft_keeper", (q) =>
-      q.eq("draftId", args.draftId).eq("isKeeper", true),
-    )
-    .collect();
-  const keptFpids = new Set(keepers.map((keeper) => keeper.fpid));
-  const keptCountByPos = {} as Record<Position, number>;
-  let keptDollars = 0;
-  for (const keeper of keepers) {
-    keptCountByPos[keeper.position] =
-      (keptCountByPos[keeper.position] ?? 0) + 1;
-    keptDollars += keeper.price;
-  }
 
   // Load + rank every active position's projections for this week -
   // replacement level depends on the whole league's player pool, not just
@@ -109,14 +124,11 @@ async function computeDraftValues(
   for (const pos of activePositions) {
     const rows = await ctx.db
       .query("projections")
-      .withIndex("by_position_week", (q) =>
-        q.eq("position", pos).eq("week", args.week),
-      )
+      .withIndex("by_position_week", (q) => q.eq("position", pos).eq("week", week))
       .collect();
     const available = rows.filter((row) => !keptFpids.has(row.fpid));
     available.sort(
-      (a, b) =>
-        pointsForScoring(b, args.scoring) - pointsForScoring(a, args.scoring),
+      (a, b) => pointsForScoring(b, scoring) - pointsForScoring(a, scoring),
     );
     byPosition.set(pos, available);
   }
@@ -129,30 +141,12 @@ async function computeDraftValues(
   // approximation in the same spirit as this file's other tuned
   // heuristics (FALLOFF_EXPONENT, etc).
   const nonFlexDemand: Record<Position, number> = {
-    QB: Math.max(
-      settings.teamCount * settings.rosterSlots.QB - (keptCountByPos.QB ?? 0),
-      0,
-    ),
-    RB: Math.max(
-      settings.teamCount * settings.rosterSlots.RB - (keptCountByPos.RB ?? 0),
-      0,
-    ),
-    WR: Math.max(
-      settings.teamCount * settings.rosterSlots.WR - (keptCountByPos.WR ?? 0),
-      0,
-    ),
-    TE: Math.max(
-      settings.teamCount * settings.rosterSlots.TE - (keptCountByPos.TE ?? 0),
-      0,
-    ),
-    DST: Math.max(
-      settings.teamCount * settings.rosterSlots.DST - (keptCountByPos.DST ?? 0),
-      0,
-    ),
-    K: Math.max(
-      settings.teamCount * settings.rosterSlots.K - (keptCountByPos.K ?? 0),
-      0,
-    ),
+    QB: Math.max(teamCount * rosterSlots.QB - (keptCountByPos.QB ?? 0), 0),
+    RB: Math.max(teamCount * rosterSlots.RB - (keptCountByPos.RB ?? 0), 0),
+    WR: Math.max(teamCount * rosterSlots.WR - (keptCountByPos.WR ?? 0), 0),
+    TE: Math.max(teamCount * rosterSlots.TE - (keptCountByPos.TE ?? 0), 0),
+    DST: Math.max(teamCount * rosterSlots.DST - (keptCountByPos.DST ?? 0), 0),
+    K: Math.max(teamCount * rosterSlots.K - (keptCountByPos.K ?? 0), 0),
   };
 
   // Flex candidates: players ranked beyond their own position's non-flex
@@ -160,25 +154,19 @@ async function computeDraftValues(
   // Whoever wins a flex slot pushes their position's true replacement rank
   // down by one.
   const flexCandidates: Array<{ position: Position; points: number }> = [];
-  for (const pos of settings.flexPositions) {
+  for (const pos of flexPositions) {
     const sorted = byPosition.get(pos) ?? [];
     for (const row of sorted.slice(nonFlexDemand[pos])) {
-      flexCandidates.push({
-        position: pos,
-        points: pointsForScoring(row, args.scoring),
-      });
+      flexCandidates.push({ position: pos, points: pointsForScoring(row, scoring) });
     }
   }
   flexCandidates.sort((a, b) => b.points - a.points);
-  const flexDemand = settings.teamCount * settings.rosterSlots.FLEX;
+  const flexDemand = teamCount * rosterSlots.FLEX;
   const wonFlex = flexCandidates.slice(0, flexDemand);
 
   const flexWonCount = new Map<Position, number>();
   for (const candidate of wonFlex) {
-    flexWonCount.set(
-      candidate.position,
-      (flexWonCount.get(candidate.position) ?? 0) + 1,
-    );
+    flexWonCount.set(candidate.position, (flexWonCount.get(candidate.position) ?? 0) + 1);
   }
 
   // SUPERFLEX candidates: same idea as FLEX, one tier up - pooled from
@@ -192,18 +180,15 @@ async function computeDraftValues(
   // flexWonCount.get("QB") is always 0/undefined, which is exactly why this
   // still works correctly for a QB-only-superflex-eligible position.
   const superflexCandidates: Array<{ position: Position; points: number }> = [];
-  for (const pos of settings.superflexPositions) {
+  for (const pos of superflexPositions) {
     const sorted = byPosition.get(pos) ?? [];
     const alreadyClaimed = nonFlexDemand[pos] + (flexWonCount.get(pos) ?? 0);
     for (const row of sorted.slice(alreadyClaimed)) {
-      superflexCandidates.push({
-        position: pos,
-        points: pointsForScoring(row, args.scoring),
-      });
+      superflexCandidates.push({ position: pos, points: pointsForScoring(row, scoring) });
     }
   }
   superflexCandidates.sort((a, b) => b.points - a.points);
-  const superflexDemand = settings.teamCount * settings.rosterSlots.SUPERFLEX;
+  const superflexDemand = teamCount * rosterSlots.SUPERFLEX;
   const wonSuperflex = superflexCandidates.slice(0, superflexDemand);
 
   const superflexWonCount = new Map<Position, number>();
@@ -232,10 +217,10 @@ async function computeDraftValues(
     const last = sorted[sorted.length - 1];
 
     if (replacement) {
-      replacementPoints[pos] = pointsForScoring(replacement, args.scoring);
+      replacementPoints[pos] = pointsForScoring(replacement, scoring);
       usedFallback[pos] = false;
     } else if (last) {
-      replacementPoints[pos] = pointsForScoring(last, args.scoring);
+      replacementPoints[pos] = pointsForScoring(last, scoring);
       usedFallback[pos] = true;
     } else {
       replacementPoints[pos] = 0;
@@ -246,38 +231,20 @@ async function computeDraftValues(
   // $1 reserved per roster slot league-wide; remaining surplus split
   // proportionally to value-over-replacement across every player.
   const totalRosterSlots =
-    settings.rosterSlots.QB +
-    settings.rosterSlots.RB +
-    settings.rosterSlots.WR +
-    settings.rosterSlots.TE +
-    settings.rosterSlots.DST +
-    settings.rosterSlots.K +
-    settings.rosterSlots.FLEX +
-    settings.rosterSlots.SUPERFLEX +
-    settings.rosterSlots.BENCH;
-  // Sum each team's actual cap (its override, or the league default) rather
-  // than assuming every team uses the league default - a team with a custom
-  // salaryCapOverride (convex/draft/teams.ts) changes the total money in the
-  // room. Teams may not exist yet the first time this runs (createLeague
-  // seeds the cache before initializeSeasonTeams has ever run), so fall back
-  // to the settings-only formula in that case.
-  const teams = await ctx.db
-    .query("seasonTeams")
-    .withIndex("by_season", (q) => q.eq("seasonId", draft.seasonId))
-    .collect();
-  const totalCapDollars =
-    teams.length > 0
-      ? teams.reduce(
-          (sum, team) => sum + (team.salaryCapOverride ?? settings.salaryCap),
-          0,
-        )
-      : settings.teamCount * settings.salaryCap;
+    rosterSlots.QB +
+    rosterSlots.RB +
+    rosterSlots.WR +
+    rosterSlots.TE +
+    rosterSlots.DST +
+    rosterSlots.K +
+    rosterSlots.FLEX +
+    rosterSlots.SUPERFLEX +
+    rosterSlots.BENCH;
   // Dollars already committed to keepers are off the auction table, and
   // each kept player fills a roster slot that no longer needs its $1
   // reservation out of the surplus pool.
   const totalDraftDollars = totalCapDollars - keptDollars;
-  const baselineDollars =
-    settings.teamCount * totalRosterSlots - keepers.length;
+  const baselineDollars = teamCount * totalRosterSlots - keeperCount;
   const surplusDollars = totalDraftDollars - baselineDollars;
 
   // Splitting the surplus purely linearly by VOR over-concentrates dollars
@@ -293,10 +260,7 @@ async function computeDraftValues(
   const weightByFpid = new Map<number, number>();
   for (const pos of activePositions) {
     for (const row of byPosition.get(pos) ?? []) {
-      const vor = Math.max(
-        pointsForScoring(row, args.scoring) - replacementPoints[pos],
-        0,
-      );
+      const vor = Math.max(pointsForScoring(row, scoring) - replacementPoints[pos], 0);
       const weight = Math.pow(vor, FALLOFF_EXPONENT);
       vorByFpid.set(row.fpid, vor);
       weightByFpid.set(row.fpid, weight);
@@ -309,7 +273,7 @@ async function computeDraftValues(
     const targetRows = byPosition.get(pos) ?? [];
     output.push(
       ...targetRows.map((row, index) => {
-        const points = pointsForScoring(row, args.scoring);
+        const points = pointsForScoring(row, scoring);
         const vor = vorByFpid.get(row.fpid) ?? 0;
         const weight = weightByFpid.get(row.fpid) ?? 0;
         const dollarValue =
@@ -333,11 +297,148 @@ async function computeDraftValues(
   return output;
 }
 
+// Real per-league values - loads this draft's actual season settings,
+// keepers, and teams (for any per-team salary cap overrides), then defers to
+// computeDraftValuesForSettings for the shared VBD math. Only Pro users see
+// this (see getDraftValues below) - free users get computeGenericDraftValues
+// instead.
+async function computeDraftValues(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    draftId: Id<"drafts">;
+    week: string;
+    scoring: Scoring;
+  },
+): Promise<DraftValueRow[]> {
+  const draft = await ctx.db.get(args.draftId);
+  if (!draft) {
+    throw new Error("Draft not found");
+  }
+  const settings = await ctx.db.get(draft.seasonId);
+  if (!settings) {
+    throw new Error("Season not found");
+  }
+
+  // Keepers are pre-draft picks (convex/draft/picks.ts's addKeeper) that
+  // take a player off the board before the auction even starts. Read via
+  // the isKeeper-scoped index rather than the general by_draft index so
+  // this query's read range only covers keeper rows - regular auction
+  // picks (isKeeper absent) fall outside that range and don't invalidate
+  // this computation. That distinction is deliberate: convex/draft/
+  // board.ts documents why re-running this whole VBD engine on every
+  // single live pick would be too expensive, but keepers are set once
+  // during setup and don't change during the live draft, so reacting to
+  // them here is cheap and safe.
+  const keepers = await ctx.db
+    .query("draftPicks")
+    .withIndex("by_draft_keeper", (q) =>
+      q.eq("draftId", args.draftId).eq("isKeeper", true),
+    )
+    .collect();
+  const keptFpids = new Set(keepers.map((keeper) => keeper.fpid));
+  const keptCountByPos: Partial<Record<Position, number>> = {};
+  let keptDollars = 0;
+  for (const keeper of keepers) {
+    keptCountByPos[keeper.position] = (keptCountByPos[keeper.position] ?? 0) + 1;
+    keptDollars += keeper.price;
+  }
+
+  // Sum each team's actual cap (its override, or the league default) rather
+  // than assuming every team uses the league default - a team with a custom
+  // salaryCapOverride (convex/draft/teams.ts) changes the total money in the
+  // room. Teams may not exist yet the first time this runs (createLeague
+  // seeds the cache before initializeSeasonTeams has ever run), so fall back
+  // to the settings-only formula in that case.
+  const teams = await ctx.db
+    .query("seasonTeams")
+    .withIndex("by_season", (q) => q.eq("seasonId", draft.seasonId))
+    .collect();
+  const totalCapDollars =
+    teams.length > 0
+      ? teams.reduce((sum, team) => sum + (team.salaryCapOverride ?? settings.salaryCap), 0)
+      : settings.teamCount * settings.salaryCap;
+
+  return await computeDraftValuesForSettings(ctx, {
+    week: args.week,
+    scoring: args.scoring,
+    rosterSlots: settings.rosterSlots,
+    flexPositions: settings.flexPositions,
+    superflexPositions: settings.superflexPositions,
+    teamCount: settings.teamCount,
+    totalCapDollars,
+    keptFpids,
+    keptCountByPos,
+    keptDollars,
+    keeperCount: keepers.length,
+  });
+}
+
+// Free-plan equivalent - same VBD engine, but pointed at a fixed shared
+// default league shape instead of any real league's settings, and with no
+// keepers (a generic estimate has no notion of any one league's keeper
+// picks). See getGenericDraftValues below for the (week, scoring)-keyed
+// cache this feeds.
+async function computeGenericDraftValues(
+  ctx: QueryCtx | MutationCtx,
+  args: { week: string; scoring: Scoring },
+): Promise<DraftValueRow[]> {
+  const defaults = DEFAULT_GENERIC_LEAGUE_SETTINGS;
+  return await computeDraftValuesForSettings(ctx, {
+    week: args.week,
+    scoring: args.scoring,
+    rosterSlots: defaults.rosterSlots,
+    flexPositions: defaults.flexPositions,
+    superflexPositions: defaults.superflexPositions,
+    teamCount: defaults.teamCount,
+    totalCapDollars: defaults.teamCount * defaults.salaryCap,
+    keptFpids: new Set(),
+    keptCountByPos: {},
+    keptDollars: 0,
+    keeperCount: 0,
+  });
+}
+
+async function getGenericDraftValues(
+  ctx: QueryCtx,
+  args: { week: string; scoring: Scoring },
+): Promise<DraftValueRow[]> {
+  const cached = await ctx.db
+    .query("genericDraftValues")
+    .withIndex("by_week_scoring", (q) =>
+      q.eq("week", args.week).eq("scoring", args.scoring),
+    )
+    .collect();
+  if (cached.length > 0) {
+    return cached.map((row): DraftValueRow => ({
+      fpid: row.fpid,
+      name: row.name,
+      team: row.team,
+      position: row.position,
+      points: row.points,
+      positionRank: row.positionRank,
+      replacementPoints: row.replacementPoints,
+      usedFallback: row.usedFallback,
+      valueOverReplacement: row.valueOverReplacement,
+      dollarValue: row.dollarValue,
+    }));
+  }
+  return await computeGenericDraftValues(ctx, args);
+}
+
 // Public, frontend-facing entry point - takes a seasonId (what every route/
 // component actually has on hand) and resolves it to that season's real
 // draft internally, same lookup convex/draft/auth.ts's requireRealDraft
-// does. Deliberately not auth-gated (same as before the league/season/draft
-// split): draft values are read-only derived data, cheap to expose by id.
+// does.
+//
+// Gated on the caller's Pro plan: a free-plan (or signed-out) caller gets
+// generic default-league-settings values (isGeneric: true) instead of this
+// season's real ones, so free users still see directionally-useful numbers
+// without leaking a specific league's exact auction math. This is a
+// deliberate, narrow change to this query's contract - previously it had no
+// auth check at all (read-only derived data, cheap to expose by id) - see
+// the monetization plan for why. Report Card (convex/draft/reportCard.ts) is
+// entirely Pro-gated before it ever calls this, so it always gets real
+// values.
 export const getDraftValues = query({
   args: {
     seasonId: v.id("seasons"),
@@ -349,13 +450,27 @@ export const getDraftValues = query({
     position: v.optional(positionValidator),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    const proAccess = userId ? await hasProAccess(ctx, userId) : false;
+
+    if (!proAccess) {
+      const rows = await getGenericDraftValues(ctx, {
+        week: args.week,
+        scoring: args.scoring,
+      });
+      return {
+        isGeneric: true,
+        values: args.position ? rows.filter((row) => row.position === args.position) : rows,
+      };
+    }
+
     const draft = await ctx.db
       .query("drafts")
       .withIndex("by_season_kind", (q) =>
         q.eq("seasonId", args.seasonId).eq("kind", "real"),
       )
       .first();
-    if (!draft) return [];
+    if (!draft) return { isGeneric: false, values: [] };
 
     const cached = await ctx.db
       .query("draftValues")
@@ -387,9 +502,10 @@ export const getDraftValues = query({
             scoring: args.scoring,
           });
 
-    return args.position
-      ? rows.filter((row) => row.position === args.position)
-      : rows;
+    return {
+      isGeneric: false,
+      values: args.position ? rows.filter((row) => row.position === args.position) : rows,
+    };
   },
 });
 
@@ -437,6 +553,35 @@ export const refreshDraftValues = internalMutation({
   },
   handler: async (ctx, args) => {
     await refreshDraftValuesForLeague(ctx, args);
+  },
+});
+
+// Generic-values equivalent of refreshDraftValuesForLeague above - called
+// once daily (for every scoring format) from fetchAllData, so free users
+// aren't hitting the expensive live-compute fallback on every cold cache.
+export async function refreshGenericDraftValuesForWeek(
+  ctx: MutationCtx,
+  args: { week: string; scoring: Scoring },
+) {
+  const rows = await computeGenericDraftValues(ctx, args);
+
+  const existing = await ctx.db
+    .query("genericDraftValues")
+    .withIndex("by_week_scoring", (q) =>
+      q.eq("week", args.week).eq("scoring", args.scoring),
+    )
+    .collect();
+  for (const row of existing) await ctx.db.delete(row._id);
+
+  for (const row of rows) {
+    await ctx.db.insert("genericDraftValues", { ...row, ...args });
+  }
+}
+
+export const refreshGenericDraftValues = internalMutation({
+  args: { week: v.string(), scoring: scoringValidator },
+  handler: async (ctx, args) => {
+    await refreshGenericDraftValuesForWeek(ctx, args);
   },
 });
 

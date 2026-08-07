@@ -52,15 +52,14 @@ export const getDraftBoard = query({
   handler: async (ctx, args) => {
     await requireDraftOwner(ctx, args.seasonId);
 
-    const values: DraftValueRow[] = await ctx.runQuery(
-      api.draftValues.getDraftValues,
-      {
+    const valuesResult: { isGeneric: boolean; values: DraftValueRow[] } =
+      await ctx.runQuery(api.draftValues.getDraftValues, {
         seasonId: args.seasonId,
         week: args.week,
         scoring: args.scoring,
         ...(args.position ? { position: args.position } : {}),
-      },
-    );
+      });
+    const { isGeneric, values } = valuesResult;
 
     // ADP doesn't change during a live draft (same reasoning as the keepers
     // read documented above), so joining it here doesn't reintroduce the
@@ -104,6 +103,9 @@ export const getDraftBoard = query({
       list.sort((a, b) => a.tierRank - b.tierRank);
     }
 
-    return positions.flatMap((position) => byPosition.get(position) ?? []);
+    return {
+      isGeneric,
+      rows: positions.flatMap((position) => byPosition.get(position) ?? []),
+    };
   },
 });

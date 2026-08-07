@@ -1,7 +1,7 @@
 import { Box, Button, Center, Container, Loader, Stack, Tabs, Text } from "@mantine/core";
 import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { Settings2, UserSearch } from "lucide-react";
+import { GraduationCap, Settings2, UserSearch } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { AppHeader } from "../../../components/AppHeader";
@@ -22,6 +22,12 @@ const TABS = [
     label: "Free Agents",
     icon: UserSearch,
     to: "/season/$leagueId/freeAgents",
+  },
+  {
+    value: "reportCard",
+    label: "Report Card",
+    icon: GraduationCap,
+    to: "/season/$leagueId/reportCard",
   },
   {
     value: "settings",

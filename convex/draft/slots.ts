@@ -81,3 +81,106 @@ export function isEligibleForSlot(
   if (slot.label.startsWith("BN")) return true;
   return false;
 }
+
+// Whether every roster slot, league-wide, has been filled - server-side
+// counterpart to src/lib/rosterSlots.ts's isDraftComplete (duplicated rather
+// than imported, same as expandRosterSlots above - Convex's bundler doesn't
+// allow importing across the convex/ boundary). Formula and argument order
+// must match the client version exactly so the two never disagree; used by
+// convex/draft/status.ts's syncDraftStatus to persist drafts.status.
+export function isDraftComplete(
+  rosterSlots: RosterSlotCounts,
+  teamCount: number,
+  picksCount: number,
+): boolean {
+  return picksCount >= expandRosterSlots(rosterSlots).length * teamCount;
+}
+
+// Greedily picks the best open roster slot for a newly-drafted player:
+// prefer a slot dedicated to their exact position, then FLEX (if
+// flex-eligible), then SUPERFLEX, then bench. Server-side port of
+// src/lib/slotAssignment.ts's assignSlotForPick (duplicated, not imported -
+// same convex/ bundler boundary as above), needed by the lineup optimizer's
+// "actual" side (convex/draft/lineupOptimizer.ts) to reconstruct which slot
+// each pick fills the same way the live UI does.
+export function assignSlotForPick(
+  position: Position,
+  rosterSlots: RosterSlotCounts,
+  filledSlotKeys: ReadonlySet<string>,
+  flexPositions: readonly Position[],
+  superflexPositions: readonly Position[],
+): string | undefined {
+  const openSlots = expandRosterSlots(rosterSlots).filter(
+    (slot) => !filledSlotKeys.has(slot.key),
+  );
+
+  const exact = openSlots.find((slot) => slot.position === position);
+  if (exact) return exact.key;
+
+  if (flexPositions.includes(position)) {
+    const flexSlot = openSlots.find((slot) => slot.label.startsWith("FLEX"));
+    if (flexSlot) return flexSlot.key;
+  }
+
+  if (superflexPositions.includes(position)) {
+    const superflexSlot = openSlots.find((slot) =>
+      slot.label.startsWith("SFLEX"),
+    );
+    if (superflexSlot) return superflexSlot.key;
+  }
+
+  const benchSlot = openSlots.find((slot) => slot.label.startsWith("BN"));
+  if (benchSlot) return benchSlot.key;
+
+  return undefined;
+}
+
+// Replays a team's picks (in draft order) through assignSlotForPick to
+// reconstruct which slot each one fills - a pick with an explicit
+// planSlotKey always wins that slot outright; only picks with no stored (or
+// a stale) assignment fall through to greedy auto-placement. Server-side
+// port of src/lib/slotAssignment.ts's assignPicksToSlots (same duplication
+// convention as above).
+export function assignPicksToSlots<
+  T extends { position: Position; planSlotKey?: string },
+>(
+  picksInSequenceOrder: readonly T[],
+  rosterSlots: RosterSlotCounts,
+  flexPositions: readonly Position[],
+  superflexPositions: readonly Position[],
+): Map<string, T> {
+  const validSlotKeys = new Set(
+    expandRosterSlots(rosterSlots).map((slot) => slot.key),
+  );
+  const bySlot = new Map<string, T>();
+  const filled = new Set<string>();
+  const unassigned: T[] = [];
+
+  for (const pick of picksInSequenceOrder) {
+    if (
+      pick.planSlotKey &&
+      validSlotKeys.has(pick.planSlotKey) &&
+      !filled.has(pick.planSlotKey)
+    ) {
+      filled.add(pick.planSlotKey);
+      bySlot.set(pick.planSlotKey, pick);
+    } else {
+      unassigned.push(pick);
+    }
+  }
+
+  for (const pick of unassigned) {
+    const slotKey = assignSlotForPick(
+      pick.position,
+      rosterSlots,
+      filled,
+      flexPositions,
+      superflexPositions,
+    );
+    if (slotKey) {
+      filled.add(slotKey);
+      bySlot.set(slotKey, pick);
+    }
+  }
+  return bySlot;
+}

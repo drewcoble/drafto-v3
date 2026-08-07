@@ -62,7 +62,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
     settings
       ? { seasonId, week: WEEK, scoring: settings.scoring }
       : "skip",
-  );
+  )?.values;
 
   const nominate = useMutation(api.draft.picks.nominate);
   const bumpNominationBid = useMutation(api.draft.picks.bumpNominationBid);

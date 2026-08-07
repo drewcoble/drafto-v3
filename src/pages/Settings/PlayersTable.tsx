@@ -195,13 +195,18 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     api.draftValues.getDraftValues,
     seasonId ? { seasonId, week, scoring } : "skip",
   );
-  const { data: draftValues, isFetching: isRecalculatingValues } =
-    useTanStackQuery<DraftValueRow[]>({
+  interface DraftValuesResult {
+    isGeneric: boolean;
+    values: DraftValueRow[];
+  }
+  const { data: draftValuesResult, isFetching: isRecalculatingValues } =
+    useTanStackQuery<DraftValuesResult>({
       ...draftValuesQueryOptions,
-      placeholderData: (previousData: DraftValueRow[] | undefined) =>
+      placeholderData: (previousData: DraftValuesResult | undefined) =>
         previousData,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
+  const draftValues = draftValuesResult?.values;
   // True only for the very first fetch of $ values for a selected league -
   // sortedRows falls back to raw-points sort until draftValues exists, so
   // rendering the table during this window would show players in points
@@ -396,7 +401,9 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                 <Table.Th miw={70}>Pos</Table.Th>
                 <Table.Th>Team</Table.Th>
                 <Table.Th>FPTS</Table.Th>
-                {draftValues && <Table.Th>$</Table.Th>}
+                {draftValues && (
+                  <Table.Th>{draftValuesResult?.isGeneric ? "$ (est.)" : "$"}</Table.Th>
+                )}
                 {selectedSettings && <Table.Th>Keeper</Table.Th>}
                 {statKeys.map((key) => (
                   <Table.Th key={key}>{formatStatKey(key)}</Table.Th>

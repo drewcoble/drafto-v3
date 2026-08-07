@@ -98,7 +98,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
     settings
       ? { seasonId, week: WEEK, scoring: settings.scoring }
       : "skip",
-  );
+  )?.values;
 
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);

@@ -39,6 +39,17 @@ async function refreshCachedComputations(
       scoring: season.scoring,
     });
   }
+
+  // Free-plan users get a shared, league-independent value set (see
+  // convex/draftValues.ts's computeGenericDraftValues) instead of any real
+  // league's numbers - refreshed for every scoring format so its cache is
+  // never cold for whichever format a free user's league happens to use.
+  for (const scoring of VALUE_GAP_SCORINGS) {
+    await ctx.runMutation(internal.draftValues.refreshGenericDraftValues, {
+      week: args.week,
+      scoring,
+    });
+  }
 }
 
 // Runs every working data-fetch across both providers. players/projections/

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { Link } from "@tanstack/react-router";
 import {
+  Anchor,
   Badge,
   Box,
   Group,
@@ -76,12 +78,14 @@ export function PlayersLeftTab({
   // doesn't get invalidated/recomputed (the expensive VBD ranking) every
   // time a pick happens elsewhere in the draft. Live drafted-status is
   // joined in client-side from `picks` instead (see `board` below).
-  const tieredValues = useQuery(
+  const draftBoardResult = useQuery(
     api.draft.board.getDraftBoard,
     settings
       ? { seasonId, week: WEEK, scoring: settings.scoring }
       : "skip",
-  ) as DraftTierRow[] | undefined;
+  ) as { isGeneric: boolean; rows: DraftTierRow[] } | undefined;
+  const tieredValues = draftBoardResult?.rows;
+  const usingGenericValues = draftBoardResult?.isGeneric ?? false;
   const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const activeNomination = useQuery(api.draft.picks.getActiveNomination, {
     seasonId,
@@ -365,6 +369,16 @@ export function PlayersLeftTab({
           ]}
         />
       </Group>
+      {usingGenericValues && (
+        <Text size="xs" c="dimmed" px={4} mt={-8}>
+          Showing estimated values based on a standard 12-team/$200 league,
+          not your league's actual settings.{" "}
+          <Anchor component={Link} to="/billing" size="xs">
+            Upgrade to Pro
+          </Anchor>{" "}
+          for accurate values.
+        </Text>
+      )}
       {view === "table" && (
         <Box px={4}>
           <PositionFilterBar

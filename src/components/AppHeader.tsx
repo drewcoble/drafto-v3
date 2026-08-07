@@ -19,13 +19,16 @@ import { useQuery } from "convex/react";
 import {
   Check,
   ChevronDown,
+  CreditCard,
   LogOut,
   Moon,
   MoreVertical,
   Plus,
+  ShieldCheck,
   Sun,
   Tv,
 } from "lucide-react";
+import { useMemo } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { MOBILE_HEADER_HEIGHT } from "../constants/general";
@@ -64,6 +67,23 @@ export function AppHeader() {
   const hasRealLeague = !!leagueId && leagueId !== NEW_LEAGUE_VALUE;
   const isDark = colorScheme === "dark";
   const selectedLeague = seasonsList?.find((l) => l._id === leagueId);
+  // The picker shows one entry per real-world league, not one per year -
+  // group the flat seasons list (see leagues.listSeasons) by leagueId and
+  // surface only the most recent season of each so "New League" duplicates
+  // from prior-season imports/rollovers don't clutter the dropdown.
+  const leagueGroups = useMemo(() => {
+    if (!seasonsList) return [];
+    const byLeague = new Map<string, typeof seasonsList>();
+    for (const season of seasonsList) {
+      const group = byLeague.get(season.leagueId);
+      if (group) group.push(season);
+      else byLeague.set(season.leagueId, [season]);
+    }
+    return Array.from(byLeague.values()).map((seasons) => ({
+      latest: seasons.reduce((a, b) => (b.year > a.year ? b : a)),
+      seasons,
+    }));
+  }, [seasonsList]);
   // "Enter Season" only ever makes sense once every roster slot, league-wide,
   // has been filled - see isDraftComplete's comment. Skipped entirely
   // (rather than shown disabled) while not viewing a real league, so this
@@ -97,13 +117,15 @@ export function AppHeader() {
 
   const leagueMenuItems = (
     <>
-      {(seasonsList ?? []).map((league) => (
+      {leagueGroups.map(({ latest, seasons }) => (
         <Menu.Item
-          key={league._id}
-          leftSection={league._id === leagueId ? <Check size={16} /> : null}
-          onClick={() => handleLeagueChange(league._id)}
+          key={latest.leagueId}
+          leftSection={
+            seasons.some((s) => s._id === leagueId) ? <Check size={16} /> : null
+          }
+          onClick={() => handleLeagueChange(latest._id)}
         >
-          {league.name}
+          {latest.name}
         </Menu.Item>
       ))}
       <Menu.Divider />
@@ -237,6 +259,18 @@ export function AppHeader() {
                 >
                   <Menu.Item component="span" leftSection={<Tv size={16} />}>
                     TV Board
+                  </Menu.Item>
+                </Link>
+              )}
+              <Link to="/billing">
+                <Menu.Item component="span" leftSection={<CreditCard size={16} />}>
+                  Billing
+                </Menu.Item>
+              </Link>
+              {currentUser?.role === "super-admin" && (
+                <Link to="/admin">
+                  <Menu.Item component="span" leftSection={<ShieldCheck size={16} />}>
+                    Admin
                   </Menu.Item>
                 </Link>
               )}

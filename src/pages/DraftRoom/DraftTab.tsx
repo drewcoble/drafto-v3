@@ -37,12 +37,14 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
   // Same query/args PlayersLeftTab uses - stable for the draft's duration
   // (season settings + projections only), so this is a shared subscription
   // whenever that tab is also mounted, not a second server-side compute.
-  const tieredValues = useQuery(
-    api.draft.board.getDraftBoard,
-    settings
-      ? { seasonId, week: WEEK, scoring: settings.scoring }
-      : "skip",
-  ) as DraftTierRow[] | undefined;
+  const tieredValues = (
+    useQuery(
+      api.draft.board.getDraftBoard,
+      settings
+        ? { seasonId, week: WEEK, scoring: settings.scoring }
+        : "skip",
+    ) as { isGeneric: boolean; rows: DraftTierRow[] } | undefined
+  )?.rows;
 
   const removePick = useMutation(api.draft.picks.removePick);
   const reorderShortlist = useMutation(api.draft.tags.reorderShortlist);

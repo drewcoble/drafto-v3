@@ -31,6 +31,7 @@ import { TeamsPanel } from "./components/TeamsPanel";
 import { LeagueCreateChoice } from "./components/LeagueCreateChoice";
 import { LeagueImportWizard } from "./components/LeagueImportWizard";
 import { YahooLeagueImportWizard } from "./components/YahooLeagueImportWizard";
+import { UpgradePrompt } from "../../components/UpgradePrompt";
 
 interface LeagueDetailsProps {
   selectedLeagueId: Id<"seasons"> | undefined;
@@ -48,6 +49,7 @@ export function LeagueDetails({
   onLeagueDeleted,
 }: LeagueDetailsProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
+  const entitlement = useQuery(api.billing.queries.getMyEntitlement);
   const createSettings = useMutation(api.leagues.createLeague);
   const updateSettings = useMutation(api.leagues.updateSeason);
   const draftTeams = useQuery(
@@ -255,6 +257,20 @@ export function LeagueDetails({
       setIsDeleting(false);
     }
   };
+
+  if (
+    createMode === "choice" &&
+    entitlement &&
+    !entitlement.hasProAccess &&
+    !entitlement.canCreateFreeLeague
+  ) {
+    return (
+      <UpgradePrompt
+        title="Free plan is limited to 1 league per year"
+        message="You've already created your free league for this year. Upgrade to Pro for more, or come back next year."
+      />
+    );
+  }
 
   if (createMode === "choice") {
     return (

@@ -68,6 +68,50 @@ export default defineSchema({
     .index("by_token_identifier", ["tokenIdentifier"])
     .index("by_email", ["email"]),
 
+  // One row per user (upserted, never duplicated) - mirrors yahooOAuthTokens'
+  // shape below. Source of truth for Pro plan access; see
+  // convex/billing/entitlements.ts's hasProAccess. Kept separate from
+  // userProfiles (rather than adding fields there) so login-time profile
+  // patches (convex/users.ts's ensureCurrentUser) and webhook-driven billing
+  // writes never touch the same document - they run on independent
+  // schedules and would otherwise risk OCC conflicts against each other.
+  subscriptions: defineTable({
+    userId: v.id("users"),
+    stripeCustomerId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
+    priceId: v.optional(v.string()),
+    status: v.union(
+      v.literal("none"),
+      v.literal("active"),
+      v.literal("past_due"),
+      v.literal("canceled"),
+      v.literal("incomplete"),
+      v.literal("incomplete_expired"),
+      v.literal("unpaid"),
+    ),
+    currentPeriodEnd: v.optional(v.number()),
+    cancelAtPeriodEnd: v.optional(v.boolean()),
+    // Manual super-admin override - independent of and coexists with a real
+    // Stripe subscription (see hasProAccess: either alone is sufficient).
+    comped: v.boolean(),
+    compedBy: v.optional(v.id("userProfiles")),
+    compedAt: v.optional(v.number()),
+    compedNote: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_stripe_customer", ["stripeCustomerId"])
+    .index("by_stripe_subscription", ["stripeSubscriptionId"]),
+
+  // Idempotency guard for the Stripe webhook handler (convex/billing/
+  // webhookHandler.ts) - Stripe delivers webhooks at-least-once, so every
+  // event id is claimed here before it's acted on.
+  stripeWebhookEvents: defineTable({
+    stripeEventId: v.string(),
+    type: v.string(),
+    processedAt: v.number(),
+  }).index("by_event_id", ["stripeEventId"]),
+
   // Player identity, derived as a side effect of the Sleeper projections
   // fetch (see convex/sleeper/projections.ts) - Sleeper's player_id is the
   // fpid used everywhere except DST, which has no numeric id upstream (see
@@ -280,6 +324,22 @@ export default defineSchema({
     name: v.string(),
     createdAt: v.number(),
   }).index("by_owner", ["ownerId"]),
+
+  // Permanent, non-decrementing record of "this user used their free-tier
+  // league slot for this calendar year" - see convex/leagues.ts's
+  // createLeague. Rows are never deleted, not even when the league they
+  // were granted for is later deleted via deleteLeague - that's the whole
+  // point: the free-tier gate checks for an existing grant row here, not
+  // how many leagues currently exist, so deleting a league and immediately
+  // creating a new one doesn't refund the free slot. One row per (userId,
+  // year) at most - a Pro user never gets a row written (see hasProAccess
+  // check in createLeague), so downgrading back to free later still
+  // starts fresh based only on actual free-tier usage history.
+  freeLeagueGrants: defineTable({
+    userId: v.id("users"),
+    year: v.string(),
+    createdAt: v.number(),
+  }).index("by_user_year", ["userId", "year"]),
 
   // One per league per year - this season's actual format (roster shape,
   // scoring, cap, provider links). The unit most of the app's "league
@@ -610,4 +670,46 @@ export default defineSchema({
     // know which week/scoring combos are cached) queries just the draftId
     // prefix to clear all of them at once.
   }).index("by_draft_week_scoring", ["draftId", "week", "scoring"]),
+
+  // AI-written (Gemini) narrative recap for one completed real draft's
+  // Report Card - see convex/gemini/reportSummary.ts's generateReportSummary
+  // action, scheduled once by convex/draft/status.ts's syncDraftStatus the
+  // moment a real draft transitions into status "complete". Generate-once,
+  // best-effort: stores only the generated text (not a snapshot of the
+  // stats that produced it - those are always recomputed live), and is
+  // never regenerated even if picks are corrected after the draft is
+  // marked complete. convex/draft/reportCard.ts's getDraftReportCard reads
+  // this table and falls back to a free templated recap
+  // (src/lib/reportCardSummary.ts) when no row exists yet.
+  draftReportSummaries: defineTable({
+    draftId: v.id("drafts"),
+    week: v.string(),
+    scoring: scoringValidator,
+    summary: v.string(),
+    model: v.string(),
+    generatedAt: v.number(),
+  }).index("by_draft_week_scoring", ["draftId", "week", "scoring"]),
+
+  // Free-tier equivalent of draftValues above - one shared value set per
+  // (week, scoring), computed from a fixed default league config (12 teams,
+  // $200 cap, standard roster - see DEFAULT_GENERIC_LEAGUE_SETTINGS in
+  // convex/draftValues.ts) rather than any real league's actual settings.
+  // Mirrors valueGaps' "shared across every league at this scoring format"
+  // caching shape (no draftId) since this doesn't depend on one league.
+  // Served instead of draftValues to any user without Pro access - see
+  // getDraftValues' handler in convex/draftValues.ts.
+  genericDraftValues: defineTable({
+    week: v.string(),
+    scoring: scoringValidator,
+    fpid: v.number(),
+    name: v.string(),
+    team: v.union(v.string(), v.null()),
+    position: positionValidator,
+    points: v.number(),
+    positionRank: v.number(),
+    replacementPoints: v.number(),
+    usedFallback: v.boolean(),
+    valueOverReplacement: v.number(),
+    dollarValue: v.number(),
+  }).index("by_week_scoring", ["week", "scoring"]),
 });

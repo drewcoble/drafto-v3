@@ -33,7 +33,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     settings
       ? { seasonId, week: WEEK, scoring: settings.scoring }
       : "skip",
-  );
+  )?.values;
   const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const priceHistory = useQuery(api.draft.history.getPlayerPriceHistory, {
     seasonId,

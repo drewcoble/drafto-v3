@@ -72,4 +72,32 @@ http.route({
   }),
 });
 
+// Stripe's server-to-server notification of subscription lifecycle events
+// (see convex/billing/webhookHandler.ts) - necessarily unauthenticated (no
+// Convex session), so the Stripe-Signature header + STRIPE_WEBHOOK_SECRET is
+// what proves this request actually came from Stripe. Reads the raw body via
+// request.text() - the signature is computed over those exact bytes, so it
+// must be read once, before any JSON parsing, exactly like this.
+http.route({
+  path: "/stripe/webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const signature = request.headers.get("stripe-signature");
+    if (!signature) {
+      return new Response("Missing Stripe-Signature header", { status: 400 });
+    }
+    const rawBody = await request.text();
+    try {
+      await ctx.runAction(internal.billing.webhookHandler.processStripeWebhookEvent, {
+        rawBody,
+        signature,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error.";
+      return new Response(`Webhook error: ${message}`, { status: 400 });
+    }
+    return new Response(null, { status: 200 });
+  }),
+});
+
 export default http;

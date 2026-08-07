@@ -7,6 +7,7 @@ import { scoringValidator } from "./scoring";
 import { invalidateDraftValues, refreshDraftValuesForLeague } from "./draftValues";
 import { ensureValueGapsCached } from "./valueGaps";
 import { requireSeasonOwner, requireRealDraft } from "./draft/auth";
+import { hasFreeLeagueGrantForYear, hasProAccess } from "./billing/entitlements";
 
 // Mirrors src/constants/general.ts's WEEK - the single season-long
 // draft-prep dataset every Draft Room query reads (not a real NFL week). See
@@ -97,6 +98,15 @@ export const createLeague = mutation({
       throw new Error("You must be signed in.");
     }
     const now = Date.now();
+    const thisSeason = String(new Date().getFullYear());
+    const isPro = await hasProAccess(ctx, userId);
+    if (!isPro && (await hasFreeLeagueGrantForYear(ctx, userId, thisSeason))) {
+      throw new Error(
+        `Free plan includes 1 league per year, and you've already used ${thisSeason}'s. ` +
+          "Upgrade to Pro for more, or come back next year.",
+      );
+    }
+
     const { name, sleeperLeagueId, yahooLeagueKey, ...seasonFields } = args;
 
     const leagueId = await ctx.db.insert("leagues", {
@@ -105,7 +115,6 @@ export const createLeague = mutation({
       createdAt: now,
     });
 
-    const thisSeason = String(new Date().getFullYear());
     const seasonId = await ctx.db.insert("seasons", {
       leagueId,
       year: thisSeason,
@@ -122,6 +131,17 @@ export const createLeague = mutation({
       status: "setup",
       createdAt: now,
     });
+
+    // Record the free-tier grant only once creation actually succeeds, and
+    // only for free users - a Pro user creating a league never consumes a
+    // year's free slot, so downgrading later still starts fresh.
+    if (!isPro) {
+      await ctx.db.insert("freeLeagueGrants", {
+        userId,
+        year: thisSeason,
+        createdAt: now,
+      });
+    }
 
     // Seed this league's draftValues cache (and valueGaps, if this scoring
     // format hasn't been seeded by another league yet) immediately, rather

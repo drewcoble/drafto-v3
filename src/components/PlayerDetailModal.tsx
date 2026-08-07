@@ -73,12 +73,13 @@ export function PlayerDetailModal({
     scoring,
     lastSeason: String(Number(season) - 1),
   });
-  const draftValues = useQuery(
+  const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     seasonId && detail?.player
       ? { seasonId, week, scoring, position: detail.player.position }
       : "skip",
   );
+  const draftValues = draftValuesResult?.values;
   const cyclePlayerTag = useMutation(api.draft.tags.cyclePlayerTag);
 
   // The 5 most recently *completed* seasons relative to `season` (the
@@ -247,6 +248,12 @@ export function PlayerDetailModal({
                   </Text>
                 ) : (
                   <>${Math.round(draftValue.dollarValue)}</>
+                )}
+                {draftValuesResult?.isGeneric && (
+                  <Text span size="xs" c="dimmed">
+                    {" "}
+                    (est.)
+                  </Text>
                 )}
               </Text>
             )}
