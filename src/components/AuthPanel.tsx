@@ -63,11 +63,6 @@ export function AuthPanel() {
   return (
     <Stack gap="sm" py="sm">
       <Text fw={600}>{title}</Text>
-      <Text c="dimmed">
-        This uses Convex auth for your account. Google auth is not enabled in
-        the current setup, but the auth framework is now in place for future
-        provider expansion.
-      </Text>
       {mode === "signUp" && (
         <TextInput
           label="Name"

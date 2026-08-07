@@ -604,3 +604,46 @@ export const ensureReportSummaryGenerated = mutation({
     );
   },
 });
+
+// Manual "Regenerate" action on the Report Card page - unlike
+// ensureReportSummaryGenerated (which only fills in a *missing* recap),
+// this clears whatever's cached first, so it also covers a bad recap (e.g.
+// one that came back truncated - see convex/gemini/client.ts's
+// finishReason check, added after exactly that happened live) or one gone
+// stale after a commissioner corrected a pick post-completion (see
+// GEMINI.md's "known limitations").
+export const regenerateReportSummary = mutation({
+  args: {
+    seasonId: v.id("seasons"),
+    week: v.string(),
+    scoring: scoringValidator,
+  },
+  handler: async (ctx, args) => {
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    if (draft.status !== "complete" || draft.kind !== "real") {
+      throw new Error("Draft isn't complete yet.");
+    }
+
+    const userId = await getAuthUserId(ctx);
+    if (!userId || !(await hasProAccess(ctx, userId))) {
+      throw new Error("Report Card is a Pro feature.");
+    }
+
+    const existing = await ctx.db
+      .query("draftReportSummaries")
+      .withIndex("by_draft_week_scoring", (q) =>
+        q
+          .eq("draftId", draft._id)
+          .eq("week", args.week)
+          .eq("scoring", args.scoring),
+      )
+      .collect();
+    for (const row of existing) await ctx.db.delete(row._id);
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.gemini.reportSummary.generateReportSummary,
+      { draftId: draft._id, week: args.week, scoring: args.scoring },
+    );
+  },
+});

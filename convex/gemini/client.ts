@@ -28,6 +28,7 @@ export function requireGeminiApiKey(): string {
 interface GenerateContentResponse {
   candidates?: Array<{
     content?: { parts?: Array<{ text?: string }> };
+    finishReason?: string;
   }>;
   promptFeedback?: { blockReason?: string };
 }
@@ -47,7 +48,16 @@ export async function generateGeminiText(prompt: string): Promise<string> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 400 },
+      generationConfig: {
+        maxOutputTokens: 600,
+        // gemini-3.6-flash "thinks" before answering by default, and those
+        // thinking tokens are drawn from the same maxOutputTokens budget as
+        // the visible answer - confirmed live: without this, a 400-token
+        // budget got fully consumed by thinking and the recap came back cut
+        // off after one sentence. This is a pure recap, not a reasoning
+        // task, so there's nothing worth spending that budget on.
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     }),
   });
 
@@ -66,9 +76,18 @@ export async function generateGeminiText(prompt: string): Promise<string> {
     );
   }
 
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+  const candidate = json.candidates?.[0];
+  const text = candidate?.content?.parts?.[0]?.text;
   if (!text) {
     throw new Error("Gemini API returned no text in its response");
+  }
+  // Fail loudly rather than caching/showing a sentence that stops mid-
+  // thought - the caller (generateReportSummary) already treats any thrown
+  // error as best-effort-failed and falls back to the free templated recap.
+  if (candidate?.finishReason === "MAX_TOKENS") {
+    throw new Error(
+      "Gemini API response was truncated (hit maxOutputTokens)",
+    );
   }
   return text;
 }

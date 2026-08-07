@@ -130,6 +130,88 @@ export const initializeSeasonTeams = mutation({
   },
 });
 
+// Removes one non-self team - lets a commissioner bring seasonTeams back in
+// sync after reducing "Teams" in League Settings, which today just patches
+// seasons.teamCount without touching the team rows at all (see updateSeason
+// in convex/leagues.ts, which now refuses to save further edits while the
+// two are out of sync). Refuses if the team already has draft picks, since
+// a drafted player has nowhere to go once its team is gone - remove the
+// picks first (League tab) if this team already drafted anyone.
+export const removeSeasonTeam = mutation({
+  args: { teamId: v.id("seasonTeams") },
+  handler: async (ctx, args) => {
+    const team = await ctx.db.get(args.teamId);
+    if (!team) {
+      throw new Error("Team not found.");
+    }
+    if (team.isSelf) {
+      throw new Error("Can't remove your own team.");
+    }
+    const { season } = await requireSeasonOwner(ctx, team.seasonId);
+    const draft = await requireRealDraft(ctx, team.seasonId);
+
+    const teams = await ctx.db
+      .query("seasonTeams")
+      .withIndex("by_season", (q) => q.eq("seasonId", season._id))
+      .collect();
+    if (teams.length <= 2) {
+      throw new Error("A league needs at least 2 teams.");
+    }
+
+    const picks = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .filter((q) => q.eq(q.field("teamId"), args.teamId))
+      .collect();
+    if (picks.length > 0) {
+      throw new Error(
+        "This team already has draft picks - remove those (League tab) before deleting the team.",
+      );
+    }
+
+    for (const row of await ctx.db
+      .query("rosterPlayers")
+      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
+      .collect()) {
+      await ctx.db.delete(row._id);
+    }
+    await ctx.db.delete(args.teamId);
+
+    // Renumber the remaining teams' `order` to stay contiguous, and keep
+    // seasons.teamCount in lockstep with the actual rows from here on.
+    const remaining = teams
+      .filter((t) => t._id !== args.teamId)
+      .sort((a, b) => a.order - b.order);
+    for (const [index, t] of remaining.entries()) {
+      if (t.order !== index) await ctx.db.patch(t._id, { order: index });
+    }
+    await ctx.db.patch(season._id, { teamCount: remaining.length });
+
+    if (draft.nominationOrder?.includes(args.teamId)) {
+      await ctx.db.patch(draft._id, {
+        nominationOrder: draft.nominationOrder.filter(
+          (id) => id !== args.teamId,
+        ),
+      });
+    }
+    const turn = await ctx.db
+      .query("draftNominationTurns")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .first();
+    if (turn && turn.currentTeamId === args.teamId) {
+      await ctx.db.patch(turn._id, {
+        currentTeamId: remaining[0]?._id ?? null,
+      });
+    }
+
+    // This team's cap contributed to the $ value engine's total auction
+    // pool size (see convex/draftValues.ts), same invalidation a
+    // league-settings edit already triggers.
+    await invalidateDraftValues(ctx, draft._id);
+    return null;
+  },
+});
+
 export const renameSeasonTeam = mutation({
   args: { teamId: v.id("seasonTeams"), name: v.string() },
   handler: async (ctx, args) => {

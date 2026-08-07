@@ -5,7 +5,6 @@ interface LeagueCreateChoiceProps {
   onChooseCustom: () => void;
   onChooseSleeperImport: () => void;
   onChooseYahooImport: () => void;
-  onCancel: () => void;
 }
 
 // First screen of the "+ New League" flow (see LeagueDetails.tsx) - a fork
@@ -15,7 +14,6 @@ export function LeagueCreateChoice({
   onChooseCustom,
   onChooseSleeperImport,
   onChooseYahooImport,
-  onCancel,
 }: LeagueCreateChoiceProps) {
   return (
     <Stack gap="md" py="sm" maw={500}>
@@ -79,11 +77,6 @@ export function LeagueCreateChoice({
           </Button>
         </Group>
       </Card>
-      <Group>
-        <Button variant="subtle" onClick={onCancel}>
-          Cancel
-        </Button>
-      </Group>
     </Stack>
   );
 }

@@ -29,6 +29,13 @@ const rosterSlotsValidator = v.object({
 
 export interface SeasonWithLeagueName extends Doc<"seasons"> {
   name: string;
+  // The season's one real draft's status (see convex/draft/status.ts's
+  // syncDraftStatus, which keeps this in sync with actual pick count).
+  // Defaults to "setup" in the never-expected case a season's real draft is
+  // missing, rather than throwing - this powers the dashboard league grid
+  // (src/routes/index.tsx), which needs every league to render even if one
+  // row is in a bad state.
+  draftStatus: "setup" | "in_progress" | "complete";
 }
 
 // Every season across every league this user owns, each carrying its
@@ -54,7 +61,17 @@ export const listSeasons = query({
         .withIndex("by_league", (q) => q.eq("leagueId", league._id))
         .collect();
       for (const season of seasons) {
-        result.push({ ...season, name: league.name });
+        const draft = await ctx.db
+          .query("drafts")
+          .withIndex("by_season_kind", (q) =>
+            q.eq("seasonId", season._id).eq("kind", "real"),
+          )
+          .first();
+        result.push({
+          ...season,
+          name: league.name,
+          draftStatus: draft?.status ?? "setup",
+        });
       }
     }
     return result;
@@ -177,6 +194,25 @@ export const updateSeason = mutation({
   handler: async (ctx, args) => {
     const { id, name, ...fields } = args;
     const { league } = await requireSeasonOwner(ctx, id);
+
+    // Once teams exist, teamCount can only change via convex/draft/teams.ts's
+    // removeSeasonTeam (or a future add-team mutation), both of which keep
+    // this field in lockstep with the actual seasonTeams rows - editing it
+    // straight from League Settings used to silently desync the two (e.g.
+    // shrinking a 12-team league to 10 here left all 12 real teams in place,
+    // with nothing in the UI able to remove the extra two).
+    const existingTeams = await ctx.db
+      .query("seasonTeams")
+      .withIndex("by_season", (q) => q.eq("seasonId", id))
+      .collect();
+    if (existingTeams.length > 0 && fields.teamCount !== existingTeams.length) {
+      throw new Error(
+        `This league already has ${existingTeams.length} teams set up - ` +
+          "add or remove teams from the Teams panel instead of editing " +
+          "Teams here.",
+      );
+    }
+
     await ctx.db.patch(id, fields);
     if (league.name !== name) {
       await ctx.db.patch(league._id, { name });

@@ -28,6 +28,12 @@ interface SettingsFormProps {
   // multi-part create action, so "Save" alone would undersell what clicking
   // it actually does.
   saveLabel?: string;
+  // True once this season's seasonTeams rows already exist - the Teams
+  // count can only change in lockstep with those rows from that point on
+  // (see convex/draft/teams.ts's removeSeasonTeam and updateSeason's guard
+  // in convex/leagues.ts), so editing it here would just be rejected on
+  // save.
+  teamsLocked?: boolean;
 }
 
 export function SettingsForm({
@@ -38,6 +44,7 @@ export function SettingsForm({
   onSave,
   onCancel,
   saveLabel = "Save",
+  teamsLocked = false,
 }: SettingsFormProps) {
   return (
     <Stack gap="md" py="sm" maw={500}>
@@ -51,11 +58,13 @@ export function SettingsForm({
       <Group grow>
         <NumberInput
           label="Teams"
+          description={teamsLocked ? "Managed from the Teams panel" : undefined}
           min={1}
           value={form.teamCount}
           onChange={(value) =>
             onChange({ ...form, teamCount: Number(value) || 0 })
           }
+          disabled={teamsLocked}
         />
         <NumberInput
           label="Salary Cap"

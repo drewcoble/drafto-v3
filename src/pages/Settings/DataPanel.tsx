@@ -127,10 +127,9 @@ export function DataPanel({ week }: DataPanelProps) {
     <Stack gap="md" py="sm">
       <Text c="dimmed">
         Pull fresh data from Sleeper (players/projections/rankings/injuries/
-        player points) and FantasyPros (news only, requires
-        FANTASYPROS_API_KEY in the Convex environment). Each button only
-        fetches its own data, so you don't need to refresh everything just to
-        pull one update.
+        player points) and FantasyPros (news only). Each button only fetches
+        its own data, so you don't need to refresh everything just to pull
+        one update.
       </Text>
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         {actions.map((action) => {

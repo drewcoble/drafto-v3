@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
+  Anchor,
   Badge,
   Box,
   Card,
@@ -68,6 +69,10 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
   const ensureSummaryGenerated = useMutation(
     api.draft.reportCard.ensureReportSummaryGenerated,
   );
+  const regenerateSummary = useMutation(
+    api.draft.reportCard.regenerateReportSummary,
+  );
+  const [isRegenerating, setIsRegenerating] = useState(false);
   // Backfills the AI recap for a draft that completed while the owner was
   // still free-tier (convex/draft/status.ts only ever schedules generation
   // once, at the moment the draft completes) - fires once per page view
@@ -91,6 +96,16 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
       });
     }
   }, [report, settings, seasonId, ensureSummaryGenerated]);
+
+  const handleRegenerate = async () => {
+    if (!settings) return;
+    setIsRegenerating(true);
+    try {
+      await regenerateSummary({ seasonId, week: WEEK, scoring: settings.scoring });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   const toggleExpanded = (teamId: string) => {
     setExpandedTeamIds((current) => {
@@ -149,9 +164,19 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
           <Title order={4}>Recap</Title>
           <Text size="sm">{data.aiSummary ?? buildLeagueSummary(data)}</Text>
           {data.aiSummary && (
-            <Text size="xs" c="dimmed">
-              AI-written recap
-            </Text>
+            <Group gap={6}>
+              <Text size="xs" c="dimmed">
+                AI-written recap
+              </Text>
+              <Anchor
+                size="xs"
+                c="dimmed"
+                onClick={handleRegenerate}
+                style={{ pointerEvents: isRegenerating ? "none" : undefined }}
+              >
+                {isRegenerating ? "Regenerating…" : "Regenerate"}
+              </Anchor>
+            </Group>
           )}
         </Stack>
       </Card>

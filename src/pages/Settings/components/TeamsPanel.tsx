@@ -6,11 +6,19 @@ import {
   Button,
   Group,
   Menu,
+  Modal,
   SegmentedControl,
   Stack,
   Text,
 } from "@mantine/core";
-import { Check, GripVertical, MoreVertical, Pencil, Shuffle } from "lucide-react";
+import {
+  Check,
+  GripVertical,
+  MoreVertical,
+  Pencil,
+  Shuffle,
+  Trash2,
+} from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -39,6 +47,7 @@ interface TeamsPanelProps {
     teamId: Id<"seasonTeams">,
     salaryCap: number | null,
   ) => void;
+  onRemoveTeam: (teamId: Id<"seasonTeams">) => Promise<void> | void;
   renameError: string | null;
 }
 
@@ -59,6 +68,7 @@ export function TeamsPanel({
   salaryCap,
   onRenameTeam,
   onSetTeamSalaryCap,
+  onRemoveTeam,
   renameError,
 }: TeamsPanelProps) {
   const teamById = useMemo(() => {
@@ -82,6 +92,10 @@ export function TeamsPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [editingCaps, setEditingCaps] = useState(false);
   const [reordering, setReordering] = useState(false);
+  const [removingMode, setRemovingMode] = useState(false);
+  const [pendingRemoveId, setPendingRemoveId] =
+    useState<Id<"seasonTeams"> | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   // Distance constraint so tapping the grip handle to just view/scroll
   // doesn't immediately start a drag - same reasoning as elsewhere in this
@@ -158,6 +172,17 @@ export function TeamsPanel({
     }
   };
 
+  const handleConfirmRemove = async () => {
+    if (!pendingRemoveId) return;
+    setIsRemoving(true);
+    try {
+      await onRemoveTeam(pendingRemoveId);
+      setPendingRemoveId(null);
+    } finally {
+      setIsRemoving(false);
+    }
+  };
+
   // No order active yet is always "dirty" - Save should be clickable even
   // when localOrder (seeded from defaultOrder) happens to already match
   // what team-creation order would produce, since clicking Save is still a
@@ -211,6 +236,14 @@ export function TeamsPanel({
               >
                 Randomize
               </Menu.Item>
+              <Menu.Item
+                color="red"
+                leftSection={<Trash2 size={14} />}
+                rightSection={removingMode ? <Check size={14} /> : undefined}
+                onClick={() => setRemovingMode((current) => !current)}
+              >
+                Remove Teams
+              </Menu.Item>
             </Menu.Dropdown>
           </Menu>
         </Group>
@@ -243,8 +276,10 @@ export function TeamsPanel({
                   salaryCap={salaryCap}
                   editingCaps={editingCaps}
                   reordering={reordering}
+                  removing={removingMode}
                   onRename={(name) => onRenameTeam(team._id, name)}
                   onSetSalaryCap={(cap) => onSetTeamSalaryCap(team._id, cap)}
+                  onRequestRemove={() => setPendingRemoveId(team._id)}
                 />
               );
             })}
@@ -279,6 +314,28 @@ export function TeamsPanel({
           </Badge>
         )}
       </Group>
+
+      <Modal
+        opened={pendingRemoveId !== null}
+        onClose={() => setPendingRemoveId(null)}
+        title="Remove team"
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            Remove {teamById.get(pendingRemoveId ?? "")?.name ?? "this team"}{" "}
+            from this league? This can't be undone, and only works while it
+            has no draft picks yet.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setPendingRemoveId(null)}>
+              Cancel
+            </Button>
+            <Button color="red" loading={isRemoving} onClick={handleConfirmRemove}>
+              Remove Team
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }

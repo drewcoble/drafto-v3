@@ -32,6 +32,7 @@ import { useMemo } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { MOBILE_HEADER_HEIGHT } from "../constants/general";
+import { groupSeasonsByLeague } from "../lib/leagueGroups";
 import { setStoredLeagueId } from "../lib/leagueStorage";
 import { isDraftComplete } from "../lib/rosterSlots";
 
@@ -71,19 +72,10 @@ export function AppHeader() {
   // group the flat seasons list (see leagues.listSeasons) by leagueId and
   // surface only the most recent season of each so "New League" duplicates
   // from prior-season imports/rollovers don't clutter the dropdown.
-  const leagueGroups = useMemo(() => {
-    if (!seasonsList) return [];
-    const byLeague = new Map<string, typeof seasonsList>();
-    for (const season of seasonsList) {
-      const group = byLeague.get(season.leagueId);
-      if (group) group.push(season);
-      else byLeague.set(season.leagueId, [season]);
-    }
-    return Array.from(byLeague.values()).map((seasons) => ({
-      latest: seasons.reduce((a, b) => (b.year > a.year ? b : a)),
-      seasons,
-    }));
-  }, [seasonsList]);
+  const leagueGroups = useMemo(
+    () => groupSeasonsByLeague(seasonsList ?? []),
+    [seasonsList],
+  );
   // "Enter Season" only ever makes sense once every roster slot, league-wide,
   // has been filled - see isDraftComplete's comment. Skipped entirely
   // (rather than shown disabled) while not viewing a real league, so this
@@ -215,16 +207,18 @@ export function AppHeader() {
         style={{ flex: 1, minWidth: 0 }}
       >
         <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-          <Title
-            order={2}
-            style={{ flexShrink: 0 }}
-            fz={{ base: "1.125rem", sm: "1.625rem" }}
-          >
-            <Text component="span" inherit c="saddlebrown.6">
-              infini
-            </Text>
-            draft
-          </Title>
+          <Link to="/" style={{ flexShrink: 0, textDecoration: "none" }}>
+            <Title
+              order={2}
+              c="var(--mantine-color-text)"
+              fz={{ base: "1.125rem", sm: "1.625rem" }}
+            >
+              <Text component="span" inherit c="saddlebrown.6">
+                infini
+              </Text>
+              draft
+            </Title>
+          </Link>
         </Group>
         <Group gap="xs" wrap="nowrap" align="center" style={{ flexShrink: 0 }}>
           <Menu position="bottom-end" withArrow offset={8} width={220}>

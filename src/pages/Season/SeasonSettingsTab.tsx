@@ -359,8 +359,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
             {!yahooStatus?.connected ? (
               <>
                 <Text size="sm" c="dimmed">
-                  Connect your Yahoo account to see your leagues. See
-                  YAHOO.md at the project root if this isn't set up yet.
+                  Connect your Yahoo account to see your leagues.
                 </Text>
                 <Button
                   onClick={() => void handleConnectYahoo()}

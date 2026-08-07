@@ -1,5 +1,5 @@
 import { ActionIcon, Group, Text } from "@mantine/core";
-import { GripVertical } from "lucide-react";
+import { GripVertical, Trash2 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Doc } from "../../../../convex/_generated/dataModel";
@@ -12,8 +12,10 @@ interface TeamOrderRowProps {
   salaryCap: number;
   editingCaps: boolean;
   reordering: boolean;
+  removing: boolean;
   onRename: (name: string) => void;
   onSetSalaryCap: (cap: number | null) => void;
+  onRequestRemove: () => void;
 }
 
 // Always sortable (see TeamsPanel's DndContext/SortableContext), but drag
@@ -29,8 +31,10 @@ export function TeamOrderRow({
   salaryCap,
   editingCaps,
   reordering,
+  removing,
   onRename,
   onSetSalaryCap,
+  onRequestRemove,
 }: TeamOrderRowProps) {
   const { setNodeRef, transform, transition, attributes, listeners, isDragging } =
     useSortable({ id: team._id, disabled: !reordering });
@@ -67,6 +71,17 @@ export function TeamOrderRow({
           {...listeners}
         >
           <GripVertical size={16} />
+        </ActionIcon>
+      )}
+      {removing && !team.isSelf && (
+        <ActionIcon
+          variant="subtle"
+          color="red"
+          size={40}
+          aria-label={`Remove ${team.name}`}
+          onClick={onRequestRemove}
+        >
+          <Trash2 size={16} />
         </ActionIcon>
       )}
     </Group>

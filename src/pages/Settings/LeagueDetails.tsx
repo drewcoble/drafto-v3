@@ -61,6 +61,7 @@ export function LeagueDetails({
   );
   const renameDraftTeam = useMutation(api.draft.teams.renameSeasonTeam);
   const setTeamSalaryCap = useMutation(api.draft.teams.setTeamSalaryCap);
+  const removeDraftTeam = useMutation(api.draft.teams.removeSeasonTeam);
   const setUseKeepers = useMutation(api.leagues.setUseKeepers);
   const deleteDraftSettings = useMutation(api.leagues.deleteLeague);
   const seasonLineage = useQuery(
@@ -227,6 +228,17 @@ export function LeagueDetails({
     }
   };
 
+  const handleRemoveTeam = async (teamId: Id<"seasonTeams">) => {
+    setTeamsError(null);
+    try {
+      await removeDraftTeam({ teamId });
+    } catch (err) {
+      setTeamsError(
+        err instanceof Error ? err.message : "Failed to remove team.",
+      );
+    }
+  };
+
   const handleToggleUseKeepers = async (checked: boolean) => {
     if (!settings) return;
     setUseKeepersError(null);
@@ -283,10 +295,6 @@ export function LeagueDetails({
         }}
         onChooseSleeperImport={() => setCreateMode("sleeperImport")}
         onChooseYahooImport={() => setCreateMode("yahooImport")}
-        onCancel={() => {
-          setCreateMode(null);
-          onDoneCreating();
-        }}
       />
     );
   }
@@ -335,6 +343,7 @@ export function LeagueDetails({
           setIsEditing(false);
           onDoneCreating();
         }}
+        teamsLocked={!!draftTeams && draftTeams.length > 0}
       />
     );
   }
@@ -518,6 +527,7 @@ export function LeagueDetails({
               salaryCap={settings.salaryCap}
               onRenameTeam={handleRenameTeam}
               onSetTeamSalaryCap={handleSetTeamSalaryCap}
+              onRemoveTeam={handleRemoveTeam}
               renameError={teamsError}
             />
           )}
