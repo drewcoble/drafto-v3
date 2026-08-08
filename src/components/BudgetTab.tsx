@@ -12,6 +12,10 @@ import {
 } from "../lib/budgetPresets";
 import { categoryForSlot } from "../lib/budgetCategories";
 import { resolveTeamSalaryCap } from "../lib/teamBudget";
+import {
+  unallocatedBadgeColor,
+  unallocatedBadgeLabel,
+} from "../lib/unallocatedBadge";
 import { CATEGORY_ORDER } from "../constants/budget";
 import { BUDGET_UNALLOCATED_BAR_HEIGHT, WEEK } from "../constants/general";
 import { PlayerDetailModal } from "./PlayerDetailModal";
@@ -372,11 +376,11 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
         </Stack>
         <Badge
           variant="light"
-          color={unallocated === 0 ? "green" : "yellow"}
+          color={unallocatedBadgeColor(unallocated)}
           size="lg"
           {...(mode === "predraft" ? { visibleFrom: "sm" } : {})}
         >
-          ${unallocated} unallocated
+          {unallocatedBadgeLabel(unallocated)}
         </Badge>
       </Group>
 

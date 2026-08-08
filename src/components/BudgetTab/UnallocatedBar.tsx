@@ -3,6 +3,10 @@ import {
   BUDGET_UNALLOCATED_BAR_HEIGHT,
   MOBILE_HEADER_HEIGHT,
 } from "../../constants/general";
+import {
+  unallocatedBadgeColor,
+  unallocatedBadgeLabel,
+} from "../../lib/unallocatedBadge";
 
 interface UnallocatedBarProps {
   unallocated: number;
@@ -38,12 +42,8 @@ export function UnallocatedBar({ unallocated, isDirty }: UnallocatedBarProps) {
         <Badge variant="light" color={isDirty ? "yellow" : "teal"} size="lg">
           {isDirty ? "Unsaved changes" : "All changes saved"}
         </Badge>
-        <Badge
-          variant="light"
-          color={unallocated === 0 ? "green" : "yellow"}
-          size="lg"
-        >
-          ${unallocated} unallocated
+        <Badge variant="light" color={unallocatedBadgeColor(unallocated)} size="lg">
+          {unallocatedBadgeLabel(unallocated)}
         </Badge>
       </Group>
     </Box>
