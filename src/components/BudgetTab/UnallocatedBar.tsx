@@ -35,7 +35,7 @@ export function UnallocatedBar({ unallocated, isDirty }: UnallocatedBarProps) {
       }}
     >
       <Group justify="space-between" wrap="nowrap" style={{ flex: 1 }}>
-        <Badge variant="light" color={isDirty ? "yellow" : "teal"}>
+        <Badge variant="light" color={isDirty ? "yellow" : "teal"} size="lg">
           {isDirty ? "Unsaved changes" : "All changes saved"}
         </Badge>
         <Badge
