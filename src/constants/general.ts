@@ -16,7 +16,13 @@ export const APP_CONTENT_MAX_WIDTH = 1600;
 // (see AppHeader.tsx) instead of scrolling with the page. Every mobile
 // layout that renders it needs to reserve this much top padding so page
 // content doesn't start out hidden underneath it.
-export const MOBILE_HEADER_HEIGHT = 60;
+//
+// Matches AppHeader's actual rendered height on mobile exactly: the 60px
+// logo image plus 12px top/bottom padding ("sm" spacing) plus the 1px
+// border-bottom (60 + 12 + 12 + 1 = 85). AppHeader sets this as a fixed `h`
+// rather than a `mih` specifically so it can't silently drift past this
+// value again and get tucked under by anything docked below it.
+export const MOBILE_HEADER_HEIGHT = 85;
 
 // Height of the condensed budget-stats row the Draft Room layout docks
 // directly under the fixed AppHeader on mobile (see DraftTopBar.tsx /

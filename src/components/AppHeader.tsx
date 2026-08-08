@@ -205,7 +205,7 @@ export function AppHeader() {
       right={0}
       px={{ base: "md", sm: 0 }}
       py={{ base: "sm", sm: "xs" }}
-      mih={{ base: MOBILE_HEADER_HEIGHT, sm: 0 }}
+      h={{ base: MOBILE_HEADER_HEIGHT, sm: "auto" }}
       style={{
         zIndex: 220,
         display: "flex",
