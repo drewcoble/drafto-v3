@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Group,
+  Image,
   Menu,
   Text,
   Title,
@@ -32,6 +33,7 @@ import { useMemo } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { MOBILE_HEADER_HEIGHT } from "../constants/general";
+import logo from "../infinidraft_v1_noBG.png";
 import { groupSeasonsByLeague } from "../lib/leagueGroups";
 import { setStoredLeagueId } from "../lib/leagueStorage";
 import { isDraftComplete } from "../lib/rosterSlots";
@@ -87,7 +89,11 @@ export function AppHeader() {
   const draftComplete =
     !!selectedLeague &&
     !!picks &&
-    isDraftComplete(selectedLeague.rosterSlots, selectedLeague.teamCount, picks.length);
+    isDraftComplete(
+      selectedLeague.rosterSlots,
+      selectedLeague.teamCount,
+      picks.length,
+    );
 
   const handleLeagueChange = (value: string | null) => {
     if (!value) return;
@@ -130,25 +136,41 @@ export function AppHeader() {
     </>
   );
 
-  const modeSwitchButton = inDraftRoom || inSeason ? (
-    <Link
-      to="/setup/$leagueId/league"
-      params={{ leagueId: leagueId ?? NEW_LEAGUE_VALUE }}
-    >
-      <Button component="span" variant="light" size="sm" color="burlywood">
-        <Text hiddenFrom="sm" component="span" inherit>
-          Setup
-        </Text>
-        <Text visibleFrom="sm" component="span" inherit>
-          Back to Setup
-        </Text>
-      </Button>
-    </Link>
-  ) : (
-    <Group gap="xs" wrap="nowrap">
-      {leagueId && leagueId !== NEW_LEAGUE_VALUE ? (
-        <Link to="/draft/$leagueId/draft" params={{ leagueId }}>
-          <Button component="span" variant="filled" size="sm" color="saddlebrown.8">
+  const modeSwitchButton =
+    inDraftRoom || inSeason ? (
+      <Link
+        to="/setup/$leagueId/league"
+        params={{ leagueId: leagueId ?? NEW_LEAGUE_VALUE }}
+      >
+        <Button component="span" variant="light" size="sm" color="burlywood">
+          <Text hiddenFrom="sm" component="span" inherit>
+            Setup
+          </Text>
+          <Text visibleFrom="sm" component="span" inherit>
+            Back to Setup
+          </Text>
+        </Button>
+      </Link>
+    ) : (
+      <Group gap="xs" wrap="nowrap">
+        {leagueId && leagueId !== NEW_LEAGUE_VALUE ? (
+          <Link to="/draft/$leagueId/draft" params={{ leagueId }}>
+            <Button
+              component="span"
+              variant="filled"
+              size="sm"
+              color="saddlebrown.8"
+            >
+              <Text hiddenFrom="sm" component="span" inherit>
+                Draft
+              </Text>
+              <Text visibleFrom="sm" component="span" inherit>
+                Enter Draft Room
+              </Text>
+            </Button>
+          </Link>
+        ) : (
+          <Button variant="filled" size="sm" disabled>
             <Text hiddenFrom="sm" component="span" inherit>
               Draft
             </Text>
@@ -156,31 +178,21 @@ export function AppHeader() {
               Enter Draft Room
             </Text>
           </Button>
-        </Link>
-      ) : (
-        <Button variant="filled" size="sm" disabled>
-          <Text hiddenFrom="sm" component="span" inherit>
-            Draft
-          </Text>
-          <Text visibleFrom="sm" component="span" inherit>
-            Enter Draft Room
-          </Text>
-        </Button>
-      )}
-      {draftComplete && leagueId && (
-        <Link to="/season/$leagueId/freeAgents" params={{ leagueId }}>
-          <Button component="span" variant="filled" size="sm" color="green.8">
-            <Text hiddenFrom="sm" component="span" inherit>
-              Season
-            </Text>
-            <Text visibleFrom="sm" component="span" inherit>
-              Enter Season
-            </Text>
-          </Button>
-        </Link>
-      )}
-    </Group>
-  );
+        )}
+        {draftComplete && leagueId && (
+          <Link to="/season/$leagueId/freeAgents" params={{ leagueId }}>
+            <Button component="span" variant="filled" size="sm" color="green.8">
+              <Text hiddenFrom="sm" component="span" inherit>
+                Season
+              </Text>
+              <Text visibleFrom="sm" component="span" inherit>
+                Enter Season
+              </Text>
+            </Button>
+          </Link>
+        )}
+      </Group>
+    );
 
   return (
     <Box
@@ -206,20 +218,22 @@ export function AppHeader() {
         gap="xs"
         style={{ flex: 1, minWidth: 0 }}
       >
-        <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-          <Link to="/" style={{ flexShrink: 0, textDecoration: "none" }}>
+        <Link to="/" style={{ flexShrink: 0, textDecoration: "none" }}>
+          <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+            <Image src={logo} alt="InfiniDraft" h={60} w="auto" />
             <Title
               order={2}
               c="var(--mantine-color-text)"
               fz={{ base: "1.125rem", sm: "1.625rem" }}
+              visibleFrom="sm"
             >
-              <Text component="span" inherit c="saddlebrown.6">
+              <Text component="span" inherit c="saddlebrown.7">
                 infini
               </Text>
               draft
             </Title>
-          </Link>
-        </Group>
+          </Group>
+        </Link>
         <Group gap="xs" wrap="nowrap" align="center" style={{ flexShrink: 0 }}>
           <Menu position="bottom-end" withArrow offset={8} width={220}>
             <Menu.Target>
@@ -257,13 +271,19 @@ export function AppHeader() {
                 </Link>
               )}
               <Link to="/billing">
-                <Menu.Item component="span" leftSection={<CreditCard size={16} />}>
+                <Menu.Item
+                  component="span"
+                  leftSection={<CreditCard size={16} />}
+                >
                   Billing
                 </Menu.Item>
               </Link>
               {currentUser?.role === "super-admin" && (
                 <Link to="/admin">
-                  <Menu.Item component="span" leftSection={<ShieldCheck size={16} />}>
+                  <Menu.Item
+                    component="span"
+                    leftSection={<ShieldCheck size={16} />}
+                  >
                     Admin
                   </Menu.Item>
                 </Link>

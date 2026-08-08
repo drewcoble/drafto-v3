@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -13,6 +14,8 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import { Link } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 
 // Super-admin-only tool for granting a user Pro access without collecting
@@ -42,9 +45,12 @@ export function AdminBillingPanel() {
 
   if (currentUser?.role !== "super-admin") {
     return (
-      <Center py="xl">
+      <Stack gap="md" py="xl" align="center">
         <Text c="dimmed">You don't have access to this page.</Text>
-      </Center>
+        <Button component={Link} to="/" variant="default">
+          Back to dashboard
+        </Button>
+      </Stack>
     );
   }
 
@@ -68,7 +74,18 @@ export function AdminBillingPanel() {
   return (
     <Container size="sm" py="xl">
       <Stack gap="lg">
-        <Title order={2}>Admin: Comp Access</Title>
+        <Group gap="xs">
+          <ActionIcon
+            component={Link}
+            to="/"
+            variant="subtle"
+            color="gray"
+            aria-label="Back to dashboard"
+          >
+            <ArrowLeft size={18} />
+          </ActionIcon>
+          <Title order={2}>Admin: Comp Access</Title>
+        </Group>
 
         <Card withBorder padding="lg">
           <Stack gap="sm">

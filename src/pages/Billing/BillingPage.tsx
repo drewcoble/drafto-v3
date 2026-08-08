@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAction, useQuery } from "convex/react";
 import {
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -13,6 +14,8 @@ import {
   Text,
   Title,
 } from "@mantine/core";
+import { Link } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 
 function formatDate(epochMs: number): string {
@@ -101,7 +104,18 @@ export function BillingPage() {
   return (
     <Container size="sm" py="xl">
       <Stack gap="lg">
-        <Title order={2}>Billing</Title>
+        <Group gap="xs">
+          <ActionIcon
+            component={Link}
+            to="/"
+            variant="subtle"
+            color="gray"
+            aria-label="Back to dashboard"
+          >
+            <ArrowLeft size={18} />
+          </ActionIcon>
+          <Title order={2}>Billing</Title>
+        </Group>
 
         {isActive ? (
           <Card withBorder padding="lg">
