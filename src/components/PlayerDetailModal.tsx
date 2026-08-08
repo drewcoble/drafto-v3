@@ -125,10 +125,13 @@ export function PlayerDetailModal({
   );
   const consistency = useMemo(() => {
     if (!detail?.player) return null;
-    const thresholds = computeConsistencyThresholds(positionSeasonStats ?? []);
+    const thresholds = computeConsistencyThresholds(
+      detail.player.position,
+      positionSeasonStats ?? [],
+    );
     const playerLastSeason = seasonStatsBySeason.get(lastSeason);
     if (!playerLastSeason) return null;
-    return getConsistencyLabel(playerLastSeason, thresholds);
+    return getConsistencyLabel(detail.player.position, playerLastSeason, thresholds);
   }, [detail?.player, positionSeasonStats, seasonStatsBySeason, lastSeason]);
 
   const valueGap = useMemo(

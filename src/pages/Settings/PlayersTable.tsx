@@ -14,10 +14,10 @@ import {
   type ValueGap,
 } from "../../types";
 import {
+  adpForScoring,
   filterRelevantPlayers,
   pointsForScoring,
 } from "../../lib/relevantPlayers";
-import { formatStatKey } from "../../lib/playerFormatting";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
 import {
@@ -29,11 +29,6 @@ import {
   getConsistencyLabel,
   type ConsistencyLabel,
 } from "../../lib/consistency";
-import {
-  computeKeeperCost,
-  formulaForFpid,
-  prospectiveKeeperStreak,
-} from "../../lib/keeperCost";
 import { PlayerRow, type KeeperInfo } from "./components/PlayerRow";
 
 interface PlayersTableProps {
@@ -85,10 +80,10 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
       list.push(row);
       byPosition.set(row.position, list);
     }
-    for (const [, rows] of byPosition) {
-      const thresholds = computeConsistencyThresholds(rows);
+    for (const [position, rows] of byPosition) {
+      const thresholds = computeConsistencyThresholds(position, rows);
       for (const row of rows) {
-        const label = getConsistencyLabel(row, thresholds);
+        const label = getConsistencyLabel(position, row, thresholds);
         if (label) map.set(row.fpid, label);
       }
     }
@@ -108,65 +103,22 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     return map;
   }, [playerTags]);
 
-  // Keeper column (Phase II) - suggested cost/eligibility from the
-  // configured keeper rules (see src/lib/keeperCost.ts), evaluated against
-  // the self team specifically, same as KeepersTab's team-scoped actions
-  // already default to self.
-  const priceHistory = useQuery(
-    api.draft.history.getPlayerPriceHistory,
-    seasonId ? { seasonId } : "skip",
-  );
-  const draftTeams = useQuery(
-    api.draft.teams.listSeasonTeams,
-    seasonId ? { seasonId } : "skip",
-  );
-  const selfTeamId = useMemo(
-    () => draftTeams?.find((team) => team.isSelf)?._id,
-    [draftTeams],
-  );
+  // Keeper column - the actual cost/year entered for this player on the
+  // Keepers tab (see KeepersTab.tsx's addKeeper), not a projected/suggested
+  // cost from the keeper rules formula.
   const picks = useQuery(
     api.draft.picks.listDraftPicks,
     seasonId ? { seasonId } : "skip",
   );
-  const selfKeptFpids = useMemo(() => {
-    const set = new Set<number>();
-    for (const pick of picks ?? []) {
-      if (pick.isKeeper && pick.teamId === selfTeamId) set.add(pick.fpid);
-    }
-    return set;
-  }, [picks, selfTeamId]);
-  const selfKeeperCount = selfKeptFpids.size;
-
+  const showKeeperYear = selectedSettings?.keeperRules?.trackConsecutiveYears ?? true;
   const keeperInfoByFpid = useMemo(() => {
     const map = new Map<number, KeeperInfo>();
-    const keeperRules = selectedSettings?.keeperRules;
-    if (!keeperRules || !priceHistory) return map;
-    for (const fpid of Object.keys(priceHistory).map(Number)) {
-      const entry = priceHistory[fpid];
-      const timesKept =
-        entry?.fromImmediateParent && entry.isKeeper
-          ? (entry.keeperStreak ?? 1)
-          : 0;
-      const alreadyKept = selfKeptFpids.has(fpid);
-      const prospectiveStreak = prospectiveKeeperStreak(entry);
-      const blockedByTeamCap =
-        keeperRules.maxKeepersPerTeam !== undefined &&
-        selfKeeperCount >= keeperRules.maxKeepersPerTeam &&
-        !alreadyKept;
-      const blockedByStreak =
-        keeperRules.maxConsecutiveYears !== undefined &&
-        prospectiveStreak > keeperRules.maxConsecutiveYears;
-      const value =
-        blockedByTeamCap || blockedByStreak
-          ? null
-          : computeKeeperCost(
-              formulaForFpid(keeperRules, fpid),
-              entry?.price,
-            );
-      map.set(fpid, { timesKept, value });
+    for (const pick of picks ?? []) {
+      if (!pick.isKeeper) continue;
+      map.set(pick.fpid, { price: pick.price, streak: pick.keeperStreak });
     }
     return map;
-  }, [selectedSettings, priceHistory, selfKeptFpids, selfKeeperCount]);
+  }, [picks]);
   // A position only matters to the selected league if it fills a dedicated
   // roster slot or is FLEX/SUPERFLEX-eligible - e.g. a 0-K league shouldn't
   // show a K pill or any kickers. Fall back to every position while the
@@ -308,45 +260,25 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   const sortedRows = useMemo(() => {
     const rows = [...visibleRows];
     if (draftValues) {
-      rows.sort(
-        (a, b) =>
+      rows.sort((a, b) => {
+        const dollarDiff =
           (draftValueByFpid.get(b.fpid)?.dollarValue ?? 0) -
-          (draftValueByFpid.get(a.fpid)?.dollarValue ?? 0),
-      );
+          (draftValueByFpid.get(a.fpid)?.dollarValue ?? 0);
+        if (dollarDiff !== 0) return dollarDiff;
+        const adpA = adpByFpid.get(a.fpid);
+        const adpB = adpByFpid.get(b.fpid);
+        return (
+          (adpA ? adpForScoring(adpA, scoring) : Infinity) -
+          (adpB ? adpForScoring(adpB, scoring) : Infinity)
+        );
+      });
     } else {
       rows.sort(
         (a, b) => pointsForScoring(b, scoring) - pointsForScoring(a, scoring),
       );
     }
     return rows;
-  }, [visibleRows, draftValues, draftValueByFpid, scoring]);
-
-  // Stat columns depend on whichever positions are currently visible - e.g.
-  // toggling to just QB shows passing stats - and only keep a column if at
-  // least one *visible* player has a nonzero value for it. DST and K each
-  // bring in a wide, unrelated set of columns (points-allowed tiers, FG
-  // distance buckets, ...) that swamp the table when mixed in with the
-  // skill positions, so their stats only surface when that's the only
-  // position toggled on.
-  const isOnlyDST = selectedPositions.length === 1 && selectedPositions[0] === "DST";
-  const isOnlyK = selectedPositions.length === 1 && selectedPositions[0] === "K";
-  const statKeys = useMemo(() => {
-    const rowsForStats = visibleRows.filter((row) => {
-      if (row.position === "DST" && !isOnlyDST) return false;
-      if (row.position === "K" && !isOnlyK) return false;
-      return true;
-    });
-    if (rowsForStats.length === 0) return [];
-    const keys = new Set<string>();
-    for (const row of rowsForStats) {
-      for (const key of Object.keys(row.stats)) {
-        keys.add(key);
-      }
-    }
-    return Array.from(keys).filter((key) =>
-      rowsForStats.some((row) => (row.stats[key] ?? 0) > 0),
-    );
-  }, [visibleRows, isOnlyDST, isOnlyK]);
+  }, [visibleRows, draftValues, draftValueByFpid, adpByFpid, scoring]);
 
   return (
     <Stack
@@ -405,9 +337,6 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                   <Table.Th>{draftValuesResult?.isGeneric ? "$ (est.)" : "$"}</Table.Th>
                 )}
                 {selectedSettings && <Table.Th>Keeper</Table.Th>}
-                {statKeys.map((key) => (
-                  <Table.Th key={key}>{formatStatKey(key)}</Table.Th>
-                ))}
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -422,7 +351,6 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                   draftValue={draftValueByFpid.get(row.fpid)}
                   valueGap={valueGapByFpid.get(row.fpid)}
                   showValueColumn={!!draftValues}
-                  statKeys={statKeys}
                   tag={tagByFpid.get(row.fpid)}
                   onCycleTag={
                     seasonId
@@ -443,6 +371,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                       : undefined
                   }
                   showKeeperColumn={!!selectedSettings}
+                  showKeeperYear={showKeeperYear}
                 />
               ))}
             </Table.Tbody>

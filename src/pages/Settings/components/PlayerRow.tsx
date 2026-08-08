@@ -18,16 +18,15 @@ import type { ConsistencyLabel } from "../../../lib/consistency";
 import { ConsistencyIcon } from "./ConsistencyIcon";
 import { ValueGapIcon } from "./ValueGapIcon";
 
-// One player's keeper status for the pre-draft rankings' Keeper column -
-// see src/lib/keeperCost.ts and PlayersTable.tsx's keeperInfoByFpid.
+// One player's keeper status for the pre-draft rankings' Keeper column - the
+// actual price/streak entered on the Keepers tab (see KeepersTab.tsx's
+// addKeeper) for this player's current-season keeper pick, not a projected
+// cost. See PlayersTable.tsx's keeperInfoByFpid.
 export interface KeeperInfo {
-  // Consecutive seasons already kept (0 if never kept, or if last kept
-  // non-consecutively).
-  timesKept: number;
-  // Suggested keeper cost if kept again this season, or null when there's
-  // nothing to suggest (no prior price and no undraftedCost rule) or the
-  // player is ineligible (team keeper cap or consecutive-year cap reached).
-  value: number | null;
+  price: number;
+  // Consecutive seasons kept, including this one - undefined defaults to 1
+  // wherever read, same convention as the draftPicks.keeperStreak field.
+  streak: number | undefined;
 }
 
 interface PlayerRowProps {
@@ -39,7 +38,6 @@ interface PlayerRowProps {
   draftValue: { dollarValue: number; usedFallback: boolean } | undefined;
   valueGap: ValueGap | undefined;
   showValueColumn: boolean;
-  statKeys: string[];
   tag: PlayerTag | undefined;
   onCycleTag: (() => void) | undefined;
   onSelectPlayer: (fpid: number) => void;
@@ -47,6 +45,7 @@ interface PlayerRowProps {
   showConsistencyColumn: boolean;
   keeperInfo: KeeperInfo | undefined;
   showKeeperColumn: boolean;
+  showKeeperYear: boolean;
 }
 
 export function PlayerRow({
@@ -58,7 +57,6 @@ export function PlayerRow({
   draftValue,
   valueGap,
   showValueColumn,
-  statKeys,
   tag,
   onCycleTag,
   onSelectPlayer,
@@ -66,6 +64,7 @@ export function PlayerRow({
   showConsistencyColumn,
   keeperInfo,
   showKeeperColumn,
+  showKeeperYear,
 }: PlayerRowProps) {
   return (
     <Table.Tr>
@@ -158,18 +157,13 @@ export function PlayerRow({
       )}
       {showKeeperColumn && (
         <Table.Td>
-          {keeperInfo && keeperInfo.value !== null ? (
-            `${keeperInfo.timesKept}× · $${keeperInfo.value}`
-          ) : keeperInfo && keeperInfo.timesKept > 0 ? (
-            `${keeperInfo.timesKept}× · -`
-          ) : (
-            "—"
-          )}
+          {keeperInfo
+            ? showKeeperYear
+              ? `$${keeperInfo.price} · Yr ${keeperInfo.streak ?? 1}`
+              : `$${keeperInfo.price}`
+            : "—"}
         </Table.Td>
       )}
-      {statKeys.map((key) => (
-        <Table.Td key={key}>{row.stats[key] ?? "—"}</Table.Td>
-      ))}
     </Table.Tr>
   );
 }

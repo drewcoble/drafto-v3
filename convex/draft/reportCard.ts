@@ -226,10 +226,10 @@ async function computeReportCardData(
     statsByPosition.set(row.position, list);
   }
   const consistencyByFpid = new Map<number, ConsistencyLabel>();
-  for (const rows of statsByPosition.values()) {
-    const thresholds = computeConsistencyThresholds(rows);
+  for (const [position, rows] of statsByPosition) {
+    const thresholds = computeConsistencyThresholds(position, rows);
     for (const row of rows) {
-      const label = getConsistencyLabel(row, thresholds);
+      const label = getConsistencyLabel(position, row, thresholds);
       if (label) consistencyByFpid.set(row.fpid, label);
     }
   }

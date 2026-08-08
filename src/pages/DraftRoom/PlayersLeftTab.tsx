@@ -156,10 +156,10 @@ export function PlayersLeftTab({
       list.push(row);
       byPosition.set(row.position, list);
     }
-    for (const [, rows] of byPosition) {
-      const thresholds = computeConsistencyThresholds(rows);
+    for (const [position, rows] of byPosition) {
+      const thresholds = computeConsistencyThresholds(position, rows);
       for (const row of rows) {
-        const label = getConsistencyLabel(row, thresholds);
+        const label = getConsistencyLabel(position, row, thresholds);
         if (label) map.set(row.fpid, label);
       }
     }
