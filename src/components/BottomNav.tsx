@@ -134,7 +134,7 @@ export function BottomNav({
       left={12}
       right={12}
       style={{
-        bottom: "calc(12px + env(safe-area-inset-bottom))",
+        bottom: "calc(2px + env(safe-area-inset-bottom))",
         zIndex: 200,
         display: "flex",
         maxWidth: 480,
