@@ -351,7 +351,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
     <Stack gap="md" py="sm">
       {mode === "predraft" && (
         <>
-          <UnallocatedBar unallocated={unallocated} />
+          <UnallocatedBar unallocated={unallocated} isDirty={isDirty} />
           {/* Reserves space for the fixed bar above, which is pulled out of
               document flow - mobile only, matching UnallocatedBar's own
               hiddenFrom="sm". */}
@@ -413,9 +413,13 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
             Reset to pre-draft plan
           </Button>
         )}
-        <Badge variant="light" color={isDirty ? "yellow" : "teal"}>
-          {isDirty ? "Unsaved changes" : "All changes saved"}
-        </Badge>
+        {/* Predraft's dirty state lives in the fixed UnallocatedBar on
+            mobile instead - see above. */}
+        {mode !== "predraft" && (
+          <Badge variant="light" color={isDirty ? "yellow" : "teal"}>
+            {isDirty ? "Unsaved changes" : "All changes saved"}
+          </Badge>
+        )}
       </Stack>
       <Group gap="xs" visibleFrom="sm">
         <Button
