@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Badge, Button, Card, Group, Stack, Text } from "@mantine/core";
+import { Badge, Box, Button, Card, Group, Stack, Text } from "@mantine/core";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { POSITIONS, type OverspendBehavior, type Position } from "../types";
@@ -13,12 +13,13 @@ import {
 import { categoryForSlot } from "../lib/budgetCategories";
 import { resolveTeamSalaryCap } from "../lib/teamBudget";
 import { CATEGORY_ORDER } from "../constants/budget";
-import { WEEK } from "../constants/general";
+import { BUDGET_UNALLOCATED_BAR_HEIGHT, WEEK } from "../constants/general";
 import { PlayerDetailModal } from "./PlayerDetailModal";
 import { GenericValuesNotice } from "./GenericValuesNotice";
 import { SlotRow, type SlotPositionPreference } from "./BudgetTab/SlotRow";
 import { CategoryBreakdown } from "./BudgetTab/CategoryBreakdown";
 import { BudgetSidePanel } from "./BudgetTab/BudgetSidePanel";
+import { UnallocatedBar } from "./BudgetTab/UnallocatedBar";
 import { getErrorMessage } from "../lib/errors";
 
 // Bench spots are almost never used to stash a kicker or defense - excluded
@@ -147,13 +148,16 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
           overspendBehavior: predraftPlan.overspendBehavior,
         });
       } else {
-        setAmounts(
-          generatePresetAmounts(
-            "balanced",
-            settings.rosterSlots,
-            effectiveSalaryCap,
-          ),
-        );
+        // No pre-draft plan saved yet - start every slot at $0 rather than
+        // pre-seeding a preset, so the user picks a starting shape
+        // deliberately instead of being nudged away from the presets, and
+        // so the Save button doesn't show "unsaved changes" before they've
+        // touched anything.
+        setAmounts({});
+        setSavedSnapshot({
+          amounts: {},
+          overspendBehavior: DEFAULT_OVERSPEND_BEHAVIOR,
+        });
       }
     } else {
       if (livePlan === undefined) return;
@@ -345,6 +349,15 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
 
   return (
     <Stack gap="md" py="sm">
+      {mode === "predraft" && (
+        <>
+          <UnallocatedBar unallocated={unallocated} />
+          {/* Reserves space for the fixed bar above, which is pulled out of
+              document flow - mobile only, matching UnallocatedBar's own
+              hiddenFrom="sm". */}
+          <Box hiddenFrom="sm" h={BUDGET_UNALLOCATED_BAR_HEIGHT} />
+        </>
+      )}
       <Group justify="space-between" align="center">
         <Stack gap={2}>
           <Text fw={700} size="lg">
@@ -361,6 +374,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
           variant="light"
           color={unallocated === 0 ? "green" : "yellow"}
           size="lg"
+          {...(mode === "predraft" ? { visibleFrom: "sm" } : {})}
         >
           ${unallocated} unallocated
         </Badge>

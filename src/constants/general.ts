@@ -31,3 +31,11 @@ export const MOBILE_STATS_ROW_HEIGHT = 40;
 // top margin/padding to whatever renders right after it, since a `position:
 // fixed` element is pulled out of normal document flow.
 export const POSITION_FILTER_BAR_HEIGHT = 57;
+
+// Height of the "$X unallocated" bar the Setup app's pre-draft Budget tab
+// docks directly under the fixed AppHeader on mobile (see
+// BudgetTab/UnallocatedBar.tsx) - unlike MOBILE_STATS_ROW_HEIGHT this isn't
+// reserved at the layout level, since it's specific to one Setup tab rather
+// than persistent across all of them; BudgetTab reserves it itself with a
+// same-height spacer right before its content.
+export const BUDGET_UNALLOCATED_BAR_HEIGHT = 44;
