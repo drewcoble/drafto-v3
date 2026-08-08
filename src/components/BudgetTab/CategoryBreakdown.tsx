@@ -34,12 +34,14 @@ export function CategoryBreakdown({
           ) : null,
         )}
         {remaining > 0 && (
-          // Cap still unallocated - neutral gray, distinct from the
-          // position-colored spent segments to its left.
+          // Cap still unallocated - same dark-4 the theme already uses for
+          // each SlotRow's Progress bar track when that slot is empty (see
+          // SlotRow.tsx), so "no dollars here" reads the same at both the
+          // per-slot and total-spend level.
           <Box
             style={{
               width: `${(remaining / salaryCap) * 100}%`,
-              backgroundColor: "var(--mantine-color-gray-6)",
+              backgroundColor: "var(--mantine-color-dark-4)",
             }}
           />
         )}
