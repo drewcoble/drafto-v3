@@ -132,55 +132,34 @@ export function BottomNav({
     : [];
 
   return (
-    <>
-      {/* A soft blue glow sitting just behind the bar, visible through its
-          translucent background - see the bar's own comment below. */}
-      <Box
-        hiddenFrom="sm"
-        pos="fixed"
-        left={12}
-        right={12}
-        style={{
-          bottom: `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + env(safe-area-inset-bottom))`,
-          height: BOTTOM_NAV_HEIGHT,
-          maxWidth: 480,
-          margin: "0 auto",
-          zIndex: 199,
-          borderRadius: "var(--mantine-radius-xl)",
-          background: "var(--mantine-color-blue-9)",
-          filter: "blur(28px)",
-          opacity: 0.55,
-        }}
-      />
-      <Box
-        hiddenFrom="sm"
-        pos="fixed"
-        left={12}
-        right={12}
-        style={{
-          bottom: `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + env(safe-area-inset-bottom))`,
-          height: BOTTOM_NAV_HEIGHT,
-          zIndex: 200,
-          display: "flex",
-          alignItems: "center",
-          maxWidth: 480,
-          margin: "0 auto",
-          borderRadius: "var(--mantine-radius-xl)",
-          border: "1px solid var(--mantine-color-default-border)",
-          // Same dark-green body color as before, just translucent now -
-          // backdropFilter blurs whatever's scrolling underneath (page
-          // content, and the blue glow Box above) so it reads as frosted
-          // glass rather than a flat cutout.
-          background: "color-mix(in srgb, var(--mantine-color-body) 85%, transparent)",
-          backdropFilter: "blur(16px)",
-          boxShadow: "var(--mantine-shadow-lg)",
-          overflow: "hidden",
-        }}
-      >
-        {leftButtons}
-        {hasFab && <Box style={{ width: FAB_GAP_WIDTH, flexShrink: 0 }} />}
-        {rightButtons}
-      </Box>
-    </>
+    <Box
+      hiddenFrom="sm"
+      pos="fixed"
+      left={12}
+      right={12}
+      style={{
+        bottom: `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + env(safe-area-inset-bottom))`,
+        height: BOTTOM_NAV_HEIGHT,
+        zIndex: 200,
+        display: "flex",
+        alignItems: "center",
+        maxWidth: 480,
+        margin: "0 auto",
+        borderRadius: "var(--mantine-radius-xl)",
+        border: "1px solid var(--mantine-color-default-border)",
+        // Same dark-green body color as before, just translucent now -
+        // backdropFilter blurs whatever's scrolling underneath so it reads
+        // as frosted glass rather than a flat cutout.
+        background: "color-mix(in srgb, var(--mantine-color-body) 85%, transparent)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        boxShadow: "var(--mantine-shadow-lg)",
+        overflow: "hidden",
+      }}
+    >
+      {leftButtons}
+      {hasFab && <Box style={{ width: FAB_GAP_WIDTH, flexShrink: 0 }} />}
+      {rightButtons}
+    </Box>
   );
 }
