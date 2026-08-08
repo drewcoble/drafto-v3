@@ -33,7 +33,7 @@ import { useMemo } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { MOBILE_HEADER_HEIGHT } from "../constants/general";
-import logo from "../infinidraft_v1_noBG.png";
+import logo from "../infinidraft_v1_noBg.png";
 import { groupSeasonsByLeague } from "../lib/leagueGroups";
 import { setStoredLeagueId } from "../lib/leagueStorage";
 import { isDraftComplete } from "../lib/rosterSlots";
