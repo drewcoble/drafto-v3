@@ -32,6 +32,7 @@ import { LeagueCreateChoice } from "./components/LeagueCreateChoice";
 import { LeagueImportWizard } from "./components/LeagueImportWizard";
 import { YahooLeagueImportWizard } from "./components/YahooLeagueImportWizard";
 import { UpgradePrompt } from "../../components/UpgradePrompt";
+import { getErrorMessage } from "../../lib/errors";
 
 interface LeagueDetailsProps {
   selectedLeagueId: Id<"seasons"> | undefined;
@@ -177,7 +178,7 @@ export function LeagueDetails({
       setIsEditing(false);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to save settings.",
+        getErrorMessage(err, "Failed to save settings."),
       );
     } finally {
       setIsSaving(false);
@@ -196,7 +197,7 @@ export function LeagueDetails({
       });
     } catch (err) {
       setTeamsError(
-        err instanceof Error ? err.message : "Failed to save teams.",
+        getErrorMessage(err, "Failed to save teams."),
       );
     } finally {
       setIsSavingTeams(false);
@@ -209,7 +210,7 @@ export function LeagueDetails({
       await renameDraftTeam({ teamId, name });
     } catch (err) {
       setTeamsError(
-        err instanceof Error ? err.message : "Failed to rename team.",
+        getErrorMessage(err, "Failed to rename team."),
       );
     }
   };
@@ -223,7 +224,7 @@ export function LeagueDetails({
       await setTeamSalaryCap({ teamId, salaryCap });
     } catch (err) {
       setTeamsError(
-        err instanceof Error ? err.message : "Failed to set salary cap.",
+        getErrorMessage(err, "Failed to set salary cap."),
       );
     }
   };
@@ -234,7 +235,7 @@ export function LeagueDetails({
       await removeDraftTeam({ teamId });
     } catch (err) {
       setTeamsError(
-        err instanceof Error ? err.message : "Failed to remove team.",
+        getErrorMessage(err, "Failed to remove team."),
       );
     }
   };
@@ -246,9 +247,7 @@ export function LeagueDetails({
       await setUseKeepers({ id: settings._id, useKeepers: checked });
     } catch (err) {
       setUseKeepersError(
-        err instanceof Error
-          ? err.message
-          : "Failed to update keepers setting.",
+        getErrorMessage(err, "Failed to update keepers setting."),
       );
     }
   };
@@ -263,7 +262,7 @@ export function LeagueDetails({
       onLeagueDeleted();
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete league.",
+        getErrorMessage(err, "Failed to delete league."),
       );
     } finally {
       setIsDeleting(false);

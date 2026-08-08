@@ -5,10 +5,12 @@ import { useConvexAuth } from "@convex-dev/auth/react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { AuthPanel } from "../components/AuthPanel";
+import { RouteErrorFallback } from "../components/RouteErrorFallback";
 import { getConfiguredSuperAdminEmails } from "../lib/superAdmin";
 
 export const Route = createRootRoute({
   component: RootComponent,
+  errorComponent: RouteErrorFallback,
 });
 
 function RootComponent() {

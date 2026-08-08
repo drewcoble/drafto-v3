@@ -17,6 +17,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import { getErrorMessage } from "../../lib/errors";
 
 function formatDate(epochMs: number): string {
   return new Date(epochMs).toLocaleDateString(undefined, {
@@ -71,7 +72,7 @@ export function BillingPage() {
       });
       window.location.href = url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start checkout.");
+      setError(getErrorMessage(err, "Failed to start checkout."));
       setIsRedirecting(false);
     }
   };
@@ -83,7 +84,7 @@ export function BillingPage() {
       const { url } = await openBillingPortal({ returnPath: "/billing" });
       window.location.href = url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to open billing portal.");
+      setError(getErrorMessage(err, "Failed to open billing portal."));
       setIsRedirecting(false);
     }
   };

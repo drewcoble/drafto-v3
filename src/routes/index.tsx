@@ -20,6 +20,7 @@ import {
 } from "@mantine/core";
 import {
   CreditCard,
+  Crown,
   LogOut,
   Moon,
   MoreVertical,
@@ -28,8 +29,9 @@ import {
   Sun,
 } from "lucide-react";
 import { api } from "../../convex/_generated/api";
-import { groupSeasonsByLeague } from "../lib/leagueGroups";
 import { APP_CONTENT_MAX_WIDTH } from "../constants/general";
+import { BILLING_LINK_ENABLED } from "../lib/featureFlags";
+import { groupSeasonsByLeague } from "../lib/leagueGroups";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -98,6 +100,7 @@ function EnterLeagueLink({
 function Dashboard() {
   const currentUser = useQuery(api.users.getCurrentUser);
   const seasonsList = useQuery(api.leagues.listSeasons, {});
+  const entitlement = useQuery(api.billing.queries.getMyEntitlement);
   const { signOut } = useAuthActions();
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
@@ -123,13 +126,21 @@ function Dashboard() {
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item
-                component={Link}
-                to="/billing"
-                leftSection={<CreditCard size={16} />}
-              >
-                Billing
-              </Menu.Item>
+              {BILLING_LINK_ENABLED && (
+                <Menu.Item
+                  component={Link}
+                  to="/billing"
+                  leftSection={
+                    entitlement?.hasProAccess ? (
+                      <CreditCard size={16} />
+                    ) : (
+                      <Crown size={16} />
+                    )
+                  }
+                >
+                  {entitlement?.hasProAccess ? "Billing" : "Go Pro"}
+                </Menu.Item>
+              )}
               {currentUser?.role === "super-admin" && (
                 <Menu.Item
                   component={Link}

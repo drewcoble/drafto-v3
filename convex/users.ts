@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { MutationCtx, QueryCtx } from "./_generated/server";
@@ -97,7 +97,7 @@ async function getCurrentUserDoc(
   if (email) {
     const byEmail = await ctx.db
       .query("userProfiles")
-      .withIndex("by_email", (q) => q.eq("email", email))
+      .withIndex("by_email", (q) => q.eq("email", normalizeEmail(email)))
       .first();
 
     if (byEmail) {
@@ -275,5 +275,52 @@ export const promoteCurrentUserToSuperAdmin = mutation({
     });
 
     return await ctx.db.get(currentUser._id);
+  },
+});
+
+// One-off backfill for accounts created before convex/auth.ts's Password
+// `profile` callback started lowercasing email on sign-up/sign-in - without
+// this, an account that originally signed up with mixed-case letters (e.g.
+// "User@Example.com") would stop matching its own lookups the moment that
+// normalization shipped, since every sign-in attempt now normalizes the
+// input before searching. Fixes all three places email is stored
+// (authAccounts.providerAccountId, users.email, userProfiles.email) so
+// login keeps working under the new case-insensitive behavior. Idempotent -
+// safe to run again, it just no-ops on anything already lowercase. Run via
+// `npx convex run users:normalizeExistingEmailCasing`.
+export const normalizeExistingEmailCasing = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let patched = 0;
+
+    for (const account of await ctx.db.query("authAccounts").collect()) {
+      if (
+        account.provider === "password" &&
+        account.providerAccountId !== account.providerAccountId.toLowerCase()
+      ) {
+        await ctx.db.patch(account._id, {
+          providerAccountId: account.providerAccountId.toLowerCase(),
+        });
+        patched++;
+      }
+    }
+
+    for (const user of await ctx.db.query("users").collect()) {
+      if (user.email && user.email !== user.email.toLowerCase()) {
+        await ctx.db.patch(user._id, { email: user.email.toLowerCase() });
+        patched++;
+      }
+    }
+
+    for (const profile of await ctx.db.query("userProfiles").collect()) {
+      if (profile.email && profile.email !== profile.email.toLowerCase()) {
+        await ctx.db.patch(profile._id, {
+          email: profile.email.toLowerCase(),
+        });
+        patched++;
+      }
+    }
+
+    return { patched };
   },
 });

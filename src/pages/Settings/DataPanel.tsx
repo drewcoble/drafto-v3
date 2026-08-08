@@ -11,6 +11,7 @@ import {
   TextInput,
 } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
+import { getErrorMessage } from "../../lib/errors";
 
 interface DataPanelProps {
   week: string;
@@ -114,8 +115,7 @@ export function DataPanel({ week }: DataPanelProps) {
         },
       }));
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Something went wrong.";
+      const message = getErrorMessage(error, "Something went wrong.");
       setStates((prev) => ({
         ...prev,
         [action.key]: { isRunning: false, status: { kind: "error", message } },

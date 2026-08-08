@@ -19,6 +19,7 @@ import {
   positionColorOrDefault,
 } from "../../lib/positionColors";
 import { expandRosterSlots } from "../../lib/rosterSlots";
+import { getErrorMessage } from "../../lib/errors";
 import { assignPicksToSlots } from "../../lib/slotAssignment";
 import {
   computeTeamBudgetStats,
@@ -56,7 +57,7 @@ export function LeagueTab({
       await removePick({ pickId });
     } catch (err) {
       setRemoveError(
-        err instanceof Error ? err.message : "Failed to remove pick.",
+        getErrorMessage(err, "Failed to remove pick."),
       );
     }
   };
@@ -67,7 +68,7 @@ export function LeagueTab({
       await setPickSlot({ pickId, slotKey });
     } catch (err) {
       setRemoveError(
-        err instanceof Error ? err.message : "Failed to move pick.",
+        getErrorMessage(err, "Failed to move pick."),
       );
     }
   };

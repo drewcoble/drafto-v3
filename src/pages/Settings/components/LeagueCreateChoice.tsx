@@ -1,5 +1,6 @@
 import { Button, Card, Group, Stack, Text, Title } from "@mantine/core";
 import { Import, Wrench } from "lucide-react";
+import { YAHOO_IMPORT_ENABLED } from "../../../lib/featureFlags";
 
 interface LeagueCreateChoiceProps {
   onChooseCustom: () => void;
@@ -57,26 +58,28 @@ export function LeagueCreateChoice({
           </Button>
         </Group>
       </Card>
-      <Card withBorder padding="md">
-        <Group justify="space-between" wrap="nowrap">
-          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
-            <Text fw={500}>Import from Yahoo</Text>
-            <Text size="sm" c="dimmed">
-              Same as above, from a real Yahoo league. Connects your Yahoo
-              account first if you haven't already (Season Settings also
-              offers this).
-            </Text>
-          </Stack>
-          <Button
-            leftSection={<Import size={16} />}
-            onClick={onChooseYahooImport}
-            color="yahoo.8"
-            style={{ flexShrink: 0 }}
-          >
-            Import
-          </Button>
-        </Group>
-      </Card>
+      {YAHOO_IMPORT_ENABLED && (
+        <Card withBorder padding="md">
+          <Group justify="space-between" wrap="nowrap">
+            <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+              <Text fw={500}>Import from Yahoo</Text>
+              <Text size="sm" c="dimmed">
+                Same as above, from a real Yahoo league. Connects your Yahoo
+                account first if you haven't already (Season Settings also
+                offers this).
+              </Text>
+            </Stack>
+            <Button
+              leftSection={<Import size={16} />}
+              onClick={onChooseYahooImport}
+              color="yahoo.8"
+              style={{ flexShrink: 0 }}
+            >
+              Import
+            </Button>
+          </Group>
+        </Card>
+      )}
     </Stack>
   );
 }

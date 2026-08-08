@@ -19,6 +19,7 @@ import { MobileNomination } from "./components/MobileNomination";
 import { MobileStatsRow } from "./components/MobileStatsRow";
 import { NominationPanel } from "./components/NominationPanel";
 import { StatTile } from "./components/StatTile";
+import { getErrorMessage } from "../../lib/errors";
 
 interface DraftTopBarProps {
   seasonId: Id<"seasons">;
@@ -202,7 +203,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
       await action();
     } catch (err) {
       setActionError(
-        err instanceof Error ? err.message : "That action failed.",
+        getErrorMessage(err, "That action failed."),
       );
     }
   };

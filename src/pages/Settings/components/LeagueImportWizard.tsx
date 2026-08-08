@@ -21,6 +21,7 @@ import {
   type LeagueSettingsFormValues,
 } from "../../../constants/leagueSettings";
 import { SettingsForm } from "./SettingsForm";
+import { getErrorMessage } from "../../../lib/errors";
 
 interface LeagueImportWizardProps {
   onImported: (id: Id<"seasons">) => void;
@@ -78,7 +79,7 @@ export function LeagueImportWizard({
       setLeagueOptions(result.leagues);
     } catch (err) {
       setLoadError(
-        err instanceof Error ? err.message : "Failed to find leagues.",
+        getErrorMessage(err, "Failed to find leagues."),
       );
     } finally {
       setLoadingLeagues(false);
@@ -112,7 +113,7 @@ export function LeagueImportWizard({
       });
     } catch (err) {
       setLoadError(
-        err instanceof Error ? err.message : "Failed to load league.",
+        getErrorMessage(err, "Failed to load league."),
       );
     } finally {
       setLoadingPreview(false);
@@ -178,7 +179,7 @@ export function LeagueImportWizard({
       onImported(newId);
     } catch (err) {
       setSaveError(
-        err instanceof Error ? err.message : "Failed to import league.",
+        getErrorMessage(err, "Failed to import league."),
       );
     } finally {
       setSaving(false);

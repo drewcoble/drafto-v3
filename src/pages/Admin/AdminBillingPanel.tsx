@@ -17,6 +17,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import { getErrorMessage } from "../../lib/errors";
 
 // Super-admin-only tool for granting a user Pro access without collecting
 // payment (e.g. friends/family, press, support goodwill) - see
@@ -65,7 +66,7 @@ export function AdminBillingPanel() {
         ...(note ? { note } : {}),
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update comp access.");
+      setError(getErrorMessage(err, "Failed to update comp access."));
     } finally {
       setIsSaving(false);
     }

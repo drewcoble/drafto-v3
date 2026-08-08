@@ -22,6 +22,7 @@ import {
   type LeagueSettingsFormValues,
 } from "../../../constants/leagueSettings";
 import { SettingsForm } from "./SettingsForm";
+import { getErrorMessage } from "../../../lib/errors";
 
 interface YahooLeagueImportWizardProps {
   onImported: (id: Id<"seasons">) => void;
@@ -84,7 +85,7 @@ export function YahooLeagueImportWizard({
       window.location.href = authorizeUrl;
     } catch (err) {
       setConnectError(
-        err instanceof Error ? err.message : "Failed to start Yahoo connect.",
+        getErrorMessage(err, "Failed to start Yahoo connect."),
       );
       setConnecting(false);
     }
@@ -98,7 +99,7 @@ export function YahooLeagueImportWizard({
       setLeagueOptions(result);
     } catch (err) {
       setLoadError(
-        err instanceof Error ? err.message : "Failed to load leagues.",
+        getErrorMessage(err, "Failed to load leagues."),
       );
     } finally {
       setLoadingLeagues(false);
@@ -129,7 +130,7 @@ export function YahooLeagueImportWizard({
       });
     } catch (err) {
       setLoadError(
-        err instanceof Error ? err.message : "Failed to load league.",
+        getErrorMessage(err, "Failed to load league."),
       );
     } finally {
       setLoadingPreview(false);
@@ -182,7 +183,7 @@ export function YahooLeagueImportWizard({
       onImported(newId);
     } catch (err) {
       setSaveError(
-        err instanceof Error ? err.message : "Failed to import league.",
+        getErrorMessage(err, "Failed to import league."),
       );
     } finally {
       setSaving(false);

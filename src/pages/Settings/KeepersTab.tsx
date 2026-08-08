@@ -13,6 +13,7 @@ import { KeeperTable } from "./components/KeeperTable";
 import { KeeperCardList } from "./components/KeeperCardList";
 import { KeeperSearchForm } from "./components/KeeperSearchForm";
 import { KeeperRulesPanel } from "./components/KeeperRulesPanel";
+import { getErrorMessage } from "../../lib/errors";
 
 interface KeepersTabProps {
   seasonId: Id<"seasons">;
@@ -197,7 +198,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
       setKeeperSearch("");
     } catch (err) {
       setKeeperError(
-        err instanceof Error ? err.message : "Failed to add keeper.",
+        getErrorMessage(err, "Failed to add keeper."),
       );
     }
   };
@@ -208,7 +209,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
       await removeKeeper({ pickId });
     } catch (err) {
       setKeeperError(
-        err instanceof Error ? err.message : "Failed to remove keeper.",
+        getErrorMessage(err, "Failed to remove keeper."),
       );
     }
   };
@@ -219,7 +220,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
       await setKeeperStreak({ pickId, streak });
     } catch (err) {
       setKeeperError(
-        err instanceof Error ? err.message : "Failed to update keeper streak.",
+        getErrorMessage(err, "Failed to update keeper streak."),
       );
     }
   };
@@ -230,7 +231,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
       await setPickSlot({ pickId, slotKey });
     } catch (err) {
       setKeeperError(
-        err instanceof Error ? err.message : "Failed to move keeper.",
+        getErrorMessage(err, "Failed to move keeper."),
       );
     }
   };

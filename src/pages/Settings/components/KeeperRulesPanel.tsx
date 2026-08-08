@@ -21,6 +21,7 @@ import { WEEK } from "../../../constants/general";
 import { DEFAULT_KEEPER_RULES } from "../../../constants/leagueSettings";
 import type { KeeperRules } from "../../../lib/keeperCost";
 import { KeeperTierPlayerPicker } from "./KeeperTierPlayerPicker";
+import { getErrorMessage } from "../../../lib/errors";
 
 interface KeeperRulesPanelProps {
   settings: Doc<"seasons">;
@@ -273,7 +274,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
       });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to update tier players.",
+        getErrorMessage(err, "Failed to update tier players."),
       );
     }
   };
@@ -328,7 +329,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
       });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to save keeper rules.",
+        getErrorMessage(err, "Failed to save keeper rules."),
       );
     } finally {
       setIsSaving(false);

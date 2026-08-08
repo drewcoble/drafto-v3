@@ -18,6 +18,7 @@ import { positionColorOrDefault } from "../../lib/positionColors";
 import { WEEK } from "../../constants/general";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { SlotTable } from "./components/SlotTable";
+import { getErrorMessage } from "../../lib/errors";
 
 interface MyTeamTabProps {
   seasonId: Id<"seasons">;
@@ -44,7 +45,7 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
       await removePick({ pickId });
     } catch (err) {
       setRemoveError(
-        err instanceof Error ? err.message : "Failed to remove pick.",
+        getErrorMessage(err, "Failed to remove pick."),
       );
     }
   };
@@ -55,7 +56,7 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
       await setPickSlot({ pickId, slotKey });
     } catch (err) {
       setRemoveError(
-        err instanceof Error ? err.message : "Failed to move pick.",
+        getErrorMessage(err, "Failed to move pick."),
       );
     }
   };

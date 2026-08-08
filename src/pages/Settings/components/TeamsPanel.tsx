@@ -35,6 +35,7 @@ import {
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { TeamOrderRow } from "./TeamOrderRow";
+import { getErrorMessage } from "../../../lib/errors";
 
 interface TeamsPanelProps {
   seasonId: Id<"seasons">;
@@ -154,7 +155,7 @@ export function TeamsPanel({
       });
     } catch (err) {
       setOrderError(
-        err instanceof Error ? err.message : "Failed to save order.",
+        getErrorMessage(err, "Failed to save order."),
       );
     } finally {
       setIsSaving(false);
@@ -167,7 +168,7 @@ export function TeamsPanel({
       await clearNominationOrder({ seasonId });
     } catch (err) {
       setOrderError(
-        err instanceof Error ? err.message : "Failed to clear order.",
+        getErrorMessage(err, "Failed to clear order."),
       );
     }
   };

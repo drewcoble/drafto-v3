@@ -8,6 +8,7 @@ import { WEEK } from "../../constants/general";
 import type { DraftTierRow } from "../../types";
 import { RecentPicksTable } from "./components/RecentPicksTable";
 import { TargetsTable } from "./components/ShortlistTable";
+import { getErrorMessage } from "../../lib/errors";
 
 interface DraftTabProps {
   seasonId: Id<"seasons">;
@@ -119,7 +120,7 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
       await action();
     } catch (err) {
       setActionError(
-        err instanceof Error ? err.message : "That action failed.",
+        getErrorMessage(err, "That action failed."),
       );
     }
   };

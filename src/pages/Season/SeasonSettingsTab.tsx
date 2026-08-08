@@ -17,6 +17,7 @@ import {
 import { RefreshCw } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { getErrorMessage } from "../../lib/errors";
 
 interface SeasonSettingsTabProps {
   seasonId: Id<"seasons">;
@@ -118,7 +119,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
       setSleeperUserId(result.sleeperUserId);
       setSleeperLeagues(result.leagues);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to find leagues.");
+      setError(getErrorMessage(err, "Failed to find leagues."));
     } finally {
       setLoadingSleeperLeagues(false);
     }
@@ -130,7 +131,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
       await setSleeperLeagueId({ id: seasonId, sleeperLeagueId: leagueId });
       setTeamOptions(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save.");
+      setError(getErrorMessage(err, "Failed to save."));
     }
   };
 
@@ -142,7 +143,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
         faabBudget: faabBudgetInput === "" ? null : faabBudgetInput,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save.");
+      setError(getErrorMessage(err, "Failed to save."));
     }
   };
 
@@ -175,7 +176,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load teams.");
+      setError(getErrorMessage(err, "Failed to load teams."));
     } finally {
       setLoadingTeams(false);
     }
@@ -189,7 +190,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
       window.location.href = authorizeUrl;
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to start Yahoo connect.",
+        getErrorMessage(err, "Failed to start Yahoo connect."),
       );
       setConnectingYahoo(false);
     }
@@ -204,7 +205,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
       setYahooLeagues(result);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load Yahoo leagues.",
+        getErrorMessage(err, "Failed to load Yahoo leagues."),
       );
     } finally {
       setLoadingYahooLeagues(false);
@@ -217,7 +218,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
       await setYahooLeagueKey({ id: seasonId, yahooLeagueKey: leagueKey });
       setTeamOptions(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save.");
+      setError(getErrorMessage(err, "Failed to save."));
     }
   };
 
@@ -237,7 +238,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
         })),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load teams.");
+      setError(getErrorMessage(err, "Failed to load teams."));
     } finally {
       setLoadingTeams(false);
     }
@@ -256,7 +257,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
         await setTeamYahooLink({ teamId, yahooTeamKey: key });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to map team.");
+      setError(getErrorMessage(err, "Failed to map team."));
     }
   };
 
@@ -273,7 +274,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
         `Synced ${result.syncedTeams} team${result.syncedTeams === 1 ? "" : "s"}.`,
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sync failed.");
+      setError(getErrorMessage(err, "Sync failed."));
     } finally {
       setSyncing(false);
     }

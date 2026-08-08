@@ -21,6 +21,7 @@ import {
   Check,
   ChevronDown,
   CreditCard,
+  Crown,
   LogOut,
   Moon,
   MoreVertical,
@@ -33,6 +34,7 @@ import { useMemo } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { MOBILE_HEADER_HEIGHT } from "../constants/general";
+import { BILLING_LINK_ENABLED } from "../lib/featureFlags";
 import logo from "../infinidraft_v1_noBg.png";
 import { groupSeasonsByLeague } from "../lib/leagueGroups";
 import { setStoredLeagueId } from "../lib/leagueStorage";
@@ -63,6 +65,7 @@ export function AppHeader() {
   const { signOut } = useAuthActions();
   const currentUser = useQuery(api.users.getCurrentUser);
   const seasonsList = useQuery(api.leagues.listSeasons, {});
+  const entitlement = useQuery(api.billing.queries.getMyEntitlement);
   const { colorScheme, setColorScheme } = useMantineColorScheme();
 
   const inDraftRoom = location.pathname.startsWith("/draft");
@@ -270,14 +273,22 @@ export function AppHeader() {
                   </Menu.Item>
                 </Link>
               )}
-              <Link to="/billing">
-                <Menu.Item
-                  component="span"
-                  leftSection={<CreditCard size={16} />}
-                >
-                  Billing
-                </Menu.Item>
-              </Link>
+              {BILLING_LINK_ENABLED && (
+                <Link to="/billing">
+                  <Menu.Item
+                    component="span"
+                    leftSection={
+                      entitlement?.hasProAccess ? (
+                        <CreditCard size={16} />
+                      ) : (
+                        <Crown size={16} />
+                      )
+                    }
+                  >
+                    {entitlement?.hasProAccess ? "Billing" : "Go Pro"}
+                  </Menu.Item>
+                </Link>
+              )}
               {currentUser?.role === "super-admin" && (
                 <Link to="/admin">
                   <Menu.Item
@@ -296,7 +307,15 @@ export function AppHeader() {
               </Menu.Item>
               <Menu.Item
                 leftSection={<LogOut size={16} />}
-                onClick={() => signOut()}
+                onClick={() => {
+                  void signOut();
+                  // Otherwise the next sign-in (possibly a different
+                  // account on this browser) re-renders whatever league
+                  // route was still in the address bar, which fails that
+                  // owner check as "not authorized" if it belonged to
+                  // whoever was signed in before.
+                  void navigate({ to: "/", replace: true });
+                }}
               >
                 Sign out
               </Menu.Item>

@@ -18,6 +18,7 @@ import { PlayerDetailModal } from "./PlayerDetailModal";
 import { SlotRow, type SlotPositionPreference } from "./BudgetTab/SlotRow";
 import { CategoryBreakdown } from "./BudgetTab/CategoryBreakdown";
 import { BudgetSidePanel } from "./BudgetTab/BudgetSidePanel";
+import { getErrorMessage } from "../lib/errors";
 
 // Bench spots are almost never used to stash a kicker or defense - excluded
 // here so BENCH's "closest priced players" popover only ever suggests
@@ -307,7 +308,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
       }
       setSavedSnapshot({ amounts: { ...amounts }, overspendBehavior });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save plan.");
+      setError(getErrorMessage(err, "Failed to save plan."));
     } finally {
       setIsSaving(false);
     }
@@ -333,7 +334,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
       setTouchedKeys(new Set());
       setSavedSnapshot(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reset plan.");
+      setError(getErrorMessage(err, "Failed to reset plan."));
     } finally {
       setIsResetting(false);
     }

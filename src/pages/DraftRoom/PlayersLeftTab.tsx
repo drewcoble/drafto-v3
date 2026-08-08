@@ -49,6 +49,7 @@ import {
 } from "../../lib/consistency";
 import { PlayerBar } from "./components/PlayerBar";
 import { PlayerTableRow } from "./components/PlayerTableRow";
+import { getErrorMessage } from "../../lib/errors";
 
 type BoardView = "bar" | "table";
 
@@ -418,7 +419,7 @@ export function PlayersLeftTab({
             setPlayerTag({ seasonId, fpid, tag: nextTag }).catch(
               (err) => {
                 setActionError(
-                  err instanceof Error ? err.message : "Failed to update tag.",
+                  getErrorMessage(err, "Failed to update tag."),
                 );
               },
             );
@@ -433,7 +434,7 @@ export function PlayersLeftTab({
               openingBid: 1,
             }).catch((err) => {
               setActionError(
-                err instanceof Error ? err.message : "Failed to nominate.",
+                getErrorMessage(err, "Failed to nominate."),
               );
             });
           };

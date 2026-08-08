@@ -55,9 +55,14 @@ export const findUserForComp = query({
       throw new Error("Only super-admins can look up users.");
     }
 
+    // userProfiles.email is stored lowercased (see convex/auth.ts's Password
+    // profile callback), so the lookup needs the same normalization or a
+    // differently-cased search misses a real match.
     const profile = await ctx.db
       .query("userProfiles")
-      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .withIndex("by_email", (q) =>
+        q.eq("email", args.email.trim().toLowerCase()),
+      )
       .unique();
     if (!profile?.userId) return null;
 

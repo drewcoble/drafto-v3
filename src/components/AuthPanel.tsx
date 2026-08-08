@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Alert,
   Button,
@@ -9,10 +10,48 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { getErrorMessage } from "../lib/errors";
+
+// @convex-dev/auth's Password provider throws distinctly different errors
+// for "no such account" vs "wrong password" on sign-in - see node_modules/
+// @convex-dev/auth/src/server/implementation/index.js's retrieveAccount,
+// which throws new Error(result) for result "InvalidAccountId" |
+// "InvalidSecret" | "TooManyFailedAttempts" (Password.js's own "Invalid
+// credentials" fallback for a null result is dead code - retrieveAccount
+// never actually returns null, it always throws first). Showing any of
+// these - or even just their presence/absence - lets an attacker tell "no
+// account with this email" apart from "right email, wrong password" (or
+// "this email has an account and it's rate limited") just from which
+// failure comes back. Every sign-in failure, known error or not, collapses
+// to this exact same message so nothing about whether an email has an
+// account is ever observable from here.
+const GENERIC_SIGN_IN_FAILURE =
+  "Login failed. Check your email/password and try again.";
+
+// Sign-up has the same email-enumeration shape ("Account <email> already
+// exists" literally names the email as already registered) but also has a
+// failure mode sign-in doesn't: the password being typed right now is
+// genuinely too weak. That one's fine to call out specifically - it's
+// about this attempt, not about any existing account - so sign-up gets its
+// own mapping rather than reusing sign-in's single blanket message.
+const ACCOUNT_ALREADY_EXISTS_PATTERN = /^Account .+ already exists$/;
+const GENERIC_SIGN_UP_FAILURE =
+  "Something went wrong creating your account. Please try again.";
+
+function toFriendlySignUpMessage(rawMessage: string): string {
+  if (rawMessage === "Invalid password") {
+    return "Password must be at least 8 characters.";
+  }
+  if (ACCOUNT_ALREADY_EXISTS_PATTERN.test(rawMessage)) {
+    return "Couldn't create an account with those details. Double-check the email, or try signing in instead.";
+  }
+  return GENERIC_SIGN_UP_FAILURE;
+}
 
 export function AuthPanel() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { signIn, signOut } = useAuthActions();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,17 +69,31 @@ export function AuthPanel() {
   const handleSubmit = async () => {
     setStatus(null);
 
+    // Also normalized server-side (convex/auth.ts's Password profile
+    // callback) - doing it here too keeps what's displayed/retried
+    // consistent with what actually gets looked up.
+    const normalizedEmail = email.trim().toLowerCase();
+
     try {
       await signIn("password", {
         flow: mode === "signIn" ? "signIn" : "signUp",
-        email,
+        email: normalizedEmail,
         password,
-        name: name || email,
+        name: name || normalizedEmail,
       });
       setStatus({ kind: "success", message: `${title} succeeded.` });
+      // Always land on the dashboard after signing in, rather than
+      // whatever route happened to still be in the address bar (e.g. from
+      // signing out of a league that belonged to a different account on
+      // this browser) - otherwise a fresh sign-in can render a route whose
+      // leagueId belongs to whoever was signed in before, which then fails
+      // that owner check as "not authorized" for the new account.
+      void navigate({ to: "/", replace: true });
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Authentication failed.";
+        mode === "signIn"
+          ? GENERIC_SIGN_IN_FAILURE
+          : toFriendlySignUpMessage(getErrorMessage(error, GENERIC_SIGN_UP_FAILURE));
       setStatus({ kind: "error", message });
     }
   };
@@ -53,7 +106,13 @@ export function AuthPanel() {
     return (
       <Stack gap="sm">
         <Text c="dimmed">You are signed in.</Text>
-        <Button variant="default" onClick={() => signOut()}>
+        <Button
+          variant="default"
+          onClick={() => {
+            void signOut();
+            void navigate({ to: "/", replace: true });
+          }}
+        >
           Sign out
         </Button>
       </Stack>
