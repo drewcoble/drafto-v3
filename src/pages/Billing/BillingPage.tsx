@@ -17,6 +17,9 @@ import {
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import { PRO_FEATURES } from "../../constants/proFeatures";
+import { useProPricing } from "../../hooks/useProPricing";
+import { formatProPrice } from "../../lib/formatPrice";
 import { getErrorMessage } from "../../lib/errors";
 
 function formatDate(epochMs: number): string {
@@ -28,11 +31,10 @@ function formatDate(epochMs: number): string {
 }
 
 // The app's one paid plan - see convex/schema.ts's subscriptions table and
-// the monetization plan for what this unlocks (unlimited leagues, Report
-// Card/Lineup Optimizer, real per-league player values instead of generic
-// estimates).
+// src/constants/proFeatures.ts for what this unlocks.
 export function BillingPage() {
   const subscription = useQuery(api.billing.queries.getMySubscription);
+  const pricing = useProPricing();
   const startCheckout = useAction(api.billing.actions.startCheckout);
   const openBillingPortal = useAction(api.billing.actions.openBillingPortal);
   const reconcileCheckoutSession = useAction(
@@ -160,19 +162,24 @@ export function BillingPage() {
         ) : (
           <Card withBorder padding="lg">
             <Stack gap="sm">
-              <Title order={4}>Pro</Title>
+              <Group justify="space-between" align="flex-end">
+                <Title order={4}>Pro</Title>
+                {pricing && (
+                  <Text size="lg" fw={700}>
+                    {formatProPrice(pricing)}
+                  </Text>
+                )}
+              </Group>
               <Text size="sm" c="dimmed">
                 Unlock everything the free plan limits.
               </Text>
               <List size="sm" spacing={4}>
-                <List.Item>Unlimited leagues</List.Item>
-                <List.Item>Draft Report Card &amp; Lineup Optimizer</List.Item>
-                <List.Item>
-                  Real player $ values for your league's actual settings
-                </List.Item>
+                {PRO_FEATURES.map((feature) => (
+                  <List.Item key={feature}>{feature}</List.Item>
+                ))}
               </List>
               <Button onClick={() => void handleSubscribe()} loading={isRedirecting}>
-                Subscribe
+                {pricing ? `Subscribe - ${formatProPrice(pricing)}` : "Subscribe"}
               </Button>
             </Stack>
           </Card>

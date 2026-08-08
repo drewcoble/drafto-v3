@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link } from "@tanstack/react-router";
 import {
-  Anchor,
   Badge,
   Box,
   Group,
@@ -42,6 +40,7 @@ import {
 import { BUDGET_MATCH_WINDOW } from "../../constants/playersLeft";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
+import { GenericValuesNotice } from "../../components/GenericValuesNotice";
 import {
   computeConsistencyThresholds,
   getConsistencyLabel,
@@ -371,14 +370,9 @@ export function PlayersLeftTab({
         />
       </Group>
       {usingGenericValues && (
-        <Text size="xs" c="dimmed" px={4} mt={-8}>
-          Showing estimated values based on a standard 12-team/$200 league,
-          not your league's actual settings.{" "}
-          <Anchor component={Link} to="/billing" size="xs">
-            Upgrade to Pro
-          </Anchor>{" "}
-          for accurate values.
-        </Text>
+        <Box px={4} mt={-8}>
+          <GenericValuesNotice />
+        </Box>
       )}
       {view === "table" && (
         <Box px={4}>

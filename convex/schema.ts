@@ -112,6 +112,22 @@ export default defineSchema({
     processedAt: v.number(),
   }).index("by_event_id", ["stripeEventId"]),
 
+  // Cached Stripe Price lookup for the Pro plan's price (unit amount,
+  // currency, billing interval) - see convex/billing/pricing.ts. Fetched
+  // from Stripe's API on demand and cached here rather than live-fetched on
+  // every "Go Pro" callout/Billing page view, same reasoning as
+  // draftValues/valueGaps caching elsewhere. Keyed by priceId (rather than
+  // being a hardcoded single row) so a STRIPE_PRO_PRICE_ID rotation is
+  // self-healing - a changed price id just misses the cache once and
+  // refetches, instead of showing a stale amount forever.
+  proPricingCache: defineTable({
+    priceId: v.string(),
+    unitAmount: v.number(),
+    currency: v.string(),
+    interval: v.string(),
+    fetchedAt: v.number(),
+  }).index("by_price_id", ["priceId"]),
+
   // Player identity, derived as a side effect of the Sleeper projections
   // fetch (see convex/sleeper/projections.ts) - Sleeper's player_id is the
   // fpid used everywhere except DST, which has no numeric id upstream (see

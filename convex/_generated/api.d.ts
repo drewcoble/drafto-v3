@@ -13,6 +13,7 @@ import type * as authPasswordReset from "../authPasswordReset.js";
 import type * as billing_actions from "../billing/actions.js";
 import type * as billing_entitlements from "../billing/entitlements.js";
 import type * as billing_mutations from "../billing/mutations.js";
+import type * as billing_pricing from "../billing/pricing.js";
 import type * as billing_queries from "../billing/queries.js";
 import type * as billing_stripeClient from "../billing/stripeClient.js";
 import type * as billing_webhookHandler from "../billing/webhookHandler.js";
@@ -80,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   "billing/actions": typeof billing_actions;
   "billing/entitlements": typeof billing_entitlements;
   "billing/mutations": typeof billing_mutations;
+  "billing/pricing": typeof billing_pricing;
   "billing/queries": typeof billing_queries;
   "billing/stripeClient": typeof billing_stripeClient;
   "billing/webhookHandler": typeof billing_webhookHandler;

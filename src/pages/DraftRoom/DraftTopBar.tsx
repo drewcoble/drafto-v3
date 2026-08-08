@@ -58,12 +58,14 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
     week: WEEK,
   });
   const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
-  const draftValues = useQuery(
+  const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
       ? { seasonId, week: WEEK, scoring: settings.scoring }
       : "skip",
-  )?.values;
+  );
+  const draftValues = draftValuesResult?.values;
+  const usingGenericValues = draftValuesResult?.isGeneric ?? false;
 
   const nominate = useMutation(api.draft.picks.nominate);
   const bumpNominationBid = useMutation(api.draft.picks.bumpNominationBid);
@@ -306,6 +308,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
             );
             setSearch("");
           }}
+          usingGenericValues={usingGenericValues}
           actionError={actionError}
           onSelectPlayer={setSelectedFpid}
         />
@@ -346,6 +349,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
           );
           setSearch("");
         }}
+        usingGenericValues={usingGenericValues}
         onSelectPlayer={setSelectedFpid}
       />
 

@@ -19,6 +19,7 @@ import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { Position } from "../../../types";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
 import { POSITION_COLORS } from "../../../lib/positionColors";
+import { GenericValueBadge } from "../../../components/GenericValueBadge";
 
 export interface SearchResult {
   fpid: number;
@@ -57,6 +58,13 @@ interface NominationPanelProps {
   draftValueByFpid: Map<number, { dollarValue: number }>;
   onNominate: (fpid: number) => void;
 
+  // True when draftValueByFpid/nominatedValue are convex/draftValues.ts's
+  // generic 12-team/$200 fallback rather than this league's real settings -
+  // surfaced once here (rather than annotating every individual $ figure
+  // below) since this panel is a persistent, space-constrained header
+  // shown on every Draft Room tab.
+  usingGenericValues: boolean;
+
   actionError: string | null;
   onSelectPlayer: (fpid: number) => void;
 }
@@ -90,6 +98,7 @@ export function NominationPanel({
   searchResults,
   draftValueByFpid,
   onNominate,
+  usingGenericValues,
   actionError,
   onSelectPlayer,
 }: NominationPanelProps) {
@@ -101,9 +110,12 @@ export function NominationPanel({
     <Card withBorder padding="sm" style={{ flex: "1 1 380px" }}>
       <Stack gap={6}>
         <Group justify="space-between" gap="xs" wrap="wrap">
-          <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-            Pick {nextPickNumber} of {totalPicks}
-          </Text>
+          <Group gap={4} wrap="nowrap">
+            <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+              Pick {nextPickNumber} of {totalPicks}
+            </Text>
+            {usingGenericValues && <GenericValueBadge />}
+          </Group>
           {activeNomination ? (
             nominatingTeam && (
               <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>

@@ -15,6 +15,7 @@ import { resolveTeamSalaryCap } from "../lib/teamBudget";
 import { CATEGORY_ORDER } from "../constants/budget";
 import { WEEK } from "../constants/general";
 import { PlayerDetailModal } from "./PlayerDetailModal";
+import { GenericValuesNotice } from "./GenericValuesNotice";
 import { SlotRow, type SlotPositionPreference } from "./BudgetTab/SlotRow";
 import { CategoryBreakdown } from "./BudgetTab/CategoryBreakdown";
 import { BudgetSidePanel } from "./BudgetTab/BudgetSidePanel";
@@ -94,12 +95,14 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
   // Feeds each SlotRow's "closest priced players" popover - same $ value
   // engine the rest of the app uses, which already excludes keepers (see
   // convex/draftValues.ts) from its output entirely.
-  const draftValues = useQuery(
+  const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
       ? { seasonId, week: WEEK, scoring: settings.scoring }
       : "skip",
-  )?.values;
+  );
+  const draftValues = draftValuesResult?.values;
+  const usingGenericValues = draftValuesResult?.isGeneric ?? false;
 
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
@@ -424,6 +427,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
           {isDirty ? "Unsaved changes" : "All changes saved"}
         </Badge>
       </Group>
+      {usingGenericValues && <GenericValuesNotice />}
 
       <Card withBorder padding="md">
         <Stack gap="md">

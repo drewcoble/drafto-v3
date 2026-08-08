@@ -22,6 +22,7 @@ import { POSITION_COLORS } from "../lib/positionColors";
 import { formatStatKey, injuryColor } from "../lib/playerFormatting";
 import { adpForScoring, pointsForScoring } from "../lib/relevantPlayers";
 import { ValueGapIcon } from "../pages/Settings/components/ValueGapIcon";
+import { GenericValueBadge } from "./GenericValueBadge";
 import { PlayerSeasonGameLog } from "./PlayerSeasonGameLog";
 import {
   computeConsistencyThresholds,
@@ -253,10 +254,10 @@ export function PlayerDetailModal({
                   <>${Math.round(draftValue.dollarValue)}</>
                 )}
                 {draftValuesResult?.isGeneric && (
-                  <Text span size="xs" c="dimmed">
+                  <>
                     {" "}
-                    (est.)
-                  </Text>
+                    <GenericValueBadge />
+                  </>
                 )}
               </Text>
             )}

@@ -110,6 +110,37 @@ export async function createPortalSession(params: {
   });
 }
 
+interface StripePriceResponse {
+  id: string;
+  currency: string;
+  unit_amount: number | null;
+  recurring: { interval: string } | null;
+}
+
+export interface RetrievedPrice {
+  priceId: string;
+  unitAmount: number;
+  currency: string;
+  interval: string;
+}
+
+// Used only to display the Pro plan's price (see convex/billing/pricing.ts)
+// - never to determine what Checkout actually charges, which is entirely up
+// to Stripe/the price object itself once createCheckoutSession references
+// STRIPE_PRO_PRICE_ID.
+export async function retrievePrice(priceId: string): Promise<RetrievedPrice> {
+  const price = await stripeRequest<StripePriceResponse>(
+    "GET",
+    `/prices/${encodeURIComponent(priceId)}`,
+  );
+  return {
+    priceId: price.id,
+    unitAmount: price.unit_amount ?? 0,
+    currency: price.currency,
+    interval: price.recurring?.interval ?? "month",
+  };
+}
+
 interface StripeSubscriptionResponse {
   id: string;
   customer: string;

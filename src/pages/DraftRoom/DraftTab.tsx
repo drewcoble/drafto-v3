@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { GenericValuesNotice } from "../../components/GenericValuesNotice";
 import { WEEK } from "../../constants/general";
 import type { DraftTierRow } from "../../types";
 import { RecentPicksTable } from "./components/RecentPicksTable";
@@ -38,14 +39,14 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
   // Same query/args PlayersLeftTab uses - stable for the draft's duration
   // (season settings + projections only), so this is a shared subscription
   // whenever that tab is also mounted, not a second server-side compute.
-  const tieredValues = (
-    useQuery(
-      api.draft.board.getDraftBoard,
-      settings
-        ? { seasonId, week: WEEK, scoring: settings.scoring }
-        : "skip",
-    ) as { isGeneric: boolean; rows: DraftTierRow[] } | undefined
-  )?.rows;
+  const draftBoardResult = useQuery(
+    api.draft.board.getDraftBoard,
+    settings
+      ? { seasonId, week: WEEK, scoring: settings.scoring }
+      : "skip",
+  ) as { isGeneric: boolean; rows: DraftTierRow[] } | undefined;
+  const tieredValues = draftBoardResult?.rows;
+  const usingGenericValues = draftBoardResult?.isGeneric ?? false;
 
   const removePick = useMutation(api.draft.picks.removePick);
   const reorderShortlist = useMutation(api.draft.tags.reorderShortlist);
@@ -140,6 +141,7 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
           {actionError}
         </Text>
       )}
+      {usingGenericValues && <GenericValuesNotice />}
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <RecentPicksTable
           picks={recentPicks}

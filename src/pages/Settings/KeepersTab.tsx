@@ -9,6 +9,7 @@ import { assignSlotForPick } from "../../lib/slotAssignment";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { WEEK } from "../../constants/general";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { GenericValuesNotice } from "../../components/GenericValuesNotice";
 import { KeeperTable } from "./components/KeeperTable";
 import { KeeperCardList } from "./components/KeeperCardList";
 import { KeeperSearchForm } from "./components/KeeperSearchForm";
@@ -29,12 +30,14 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     week: WEEK,
   });
   const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
-  const draftValues = useQuery(
+  const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
       ? { seasonId, week: WEEK, scoring: settings.scoring }
       : "skip",
-  )?.values;
+  );
+  const draftValues = draftValuesResult?.values;
+  const usingGenericValues = draftValuesResult?.isGeneric ?? false;
   const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const priceHistory = useQuery(api.draft.history.getPlayerPriceHistory, {
     seasonId,
@@ -315,6 +318,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
           <Text size="md" fw={500}>
             Add a Keeper
           </Text>
+          {usingGenericValues && <GenericValuesNotice />}
           {/* No outer Card here - KeeperSearchForm already boxes the
               selected-candidate summary in its own Card once a player is
               picked, so wrapping this whole section would nest one Card

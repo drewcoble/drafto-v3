@@ -15,6 +15,7 @@ import {
 import { SmilePlus, X } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
+import { GenericValueBadge } from "../../../components/GenericValueBadge";
 import { SearchBody, type SearchResult } from "./NominationPanel";
 
 interface MobileNominationProps {
@@ -39,6 +40,9 @@ interface MobileNominationProps {
   searchResults: SearchResult[];
   draftValueByFpid: Map<number, { dollarValue: number }>;
   onNominate: (fpid: number) => void;
+
+  // See NominationPanelProps.usingGenericValues.
+  usingGenericValues: boolean;
 
   onSelectPlayer: (fpid: number) => void;
 }
@@ -69,6 +73,7 @@ export function MobileNomination({
   searchResults,
   draftValueByFpid,
   onNominate,
+  usingGenericValues,
   onSelectPlayer,
 }: MobileNominationProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -118,6 +123,14 @@ export function MobileNomination({
         hiddenFrom="sm"
       >
         <Stack gap="sm">
+          {usingGenericValues && (
+            <Group gap={4} wrap="nowrap">
+              <Text size="xs" c="dimmed">
+                Values shown are estimates
+              </Text>
+              <GenericValueBadge />
+            </Group>
+          )}
           {nominationOrderEnabled && (
             <Group gap={6} wrap="nowrap">
               <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
@@ -172,6 +185,7 @@ export function MobileNomination({
           onAssignWinner={onAssignWinner}
           onPass={onPass}
           onSelectPlayer={onSelectPlayer}
+          usingGenericValues={usingGenericValues}
         />
       )}
     </>
@@ -189,6 +203,7 @@ interface MobileNominationBarProps {
   onAssignWinner: (teamId: Id<"seasonTeams">) => void;
   onPass: () => void;
   onSelectPlayer: (fpid: number) => void;
+  usingGenericValues: boolean;
 }
 
 function MobileNominationBar({
@@ -202,6 +217,7 @@ function MobileNominationBar({
   onAssignWinner,
   onPass,
   onSelectPlayer,
+  usingGenericValues,
 }: MobileNominationBarProps) {
   // Self team always listed first - it's the common case, and with the
   // dedicated "I won" button gone on mobile, picking it from this list is
@@ -285,9 +301,12 @@ function MobileNominationBar({
               </Badge>
             )}
             {nominatedValue && (
-              <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                ~${Math.round(nominatedValue.dollarValue)}
-              </Text>
+              <Group gap={4} wrap="nowrap">
+                <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                  ~${Math.round(nominatedValue.dollarValue)}
+                </Text>
+                {usingGenericValues && <GenericValueBadge />}
+              </Group>
             )}
           </Group>
 

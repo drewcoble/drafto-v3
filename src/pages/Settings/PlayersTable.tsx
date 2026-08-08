@@ -20,6 +20,7 @@ import {
 } from "../../lib/relevantPlayers";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
+import { GenericValuesNotice } from "../../components/GenericValuesNotice";
 import {
   MOBILE_HEADER_HEIGHT,
   POSITION_FILTER_BAR_HEIGHT,
@@ -308,6 +309,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
           </Text>
         </Group>
       </Group>
+      {draftValuesResult?.isGeneric && <GenericValuesNotice />}
 
       <Card withBorder padding={0}>
       {allProjections === undefined || isInitialValuesLoad ? (

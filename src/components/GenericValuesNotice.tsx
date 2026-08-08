@@ -1,0 +1,21 @@
+import { Anchor, Text } from "@mantine/core";
+import { Link } from "@tanstack/react-router";
+
+// Shown wherever $ values come from convex/draftValues.ts's generic
+// 12-team/$200 fallback (isGeneric: true) rather than this league's real
+// settings - every free (or signed-out) view of $ values is generic, since
+// getDraftValues only computes the real per-league engine for Pro access.
+// Use where there's room for a full sentence; for tight spaces (table
+// cells, popovers) use GenericValueBadge instead.
+export function GenericValuesNotice() {
+  return (
+    <Text size="xs" c="dimmed">
+      Showing estimated values based on a standard 12-team/$200 league, not
+      your league's actual settings.{" "}
+      <Anchor component={Link} to="/billing" size="xs">
+        Upgrade to Pro
+      </Anchor>{" "}
+      for accurate values.
+    </Text>
+  );
+}
