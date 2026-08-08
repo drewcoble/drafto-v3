@@ -2,13 +2,13 @@ import {
   Button,
   Chip,
   Group,
-  NumberInput,
   SegmentedControl,
   SimpleGrid,
   Stack,
   Text,
   TextInput,
 } from "@mantine/core";
+import { CountStepper, EditableNumberStepper } from "../../../components/NumberStepper";
 import { POSITIONS, type Position, type ScoringFormat } from "../../../types";
 import {
   ROSTER_SLOT_KEYS,
@@ -55,26 +55,40 @@ export function SettingsForm({
           onChange({ ...form, name: event.currentTarget.value })
         }
       />
-      <Group grow>
-        <NumberInput
-          label="Teams"
-          description={teamsLocked ? "Managed from the Teams panel" : undefined}
-          min={1}
-          value={form.teamCount}
-          onChange={(value) =>
-            onChange({ ...form, teamCount: Number(value) || 0 })
-          }
-          disabled={teamsLocked}
-        />
-        <NumberInput
-          label="Salary Cap"
-          min={1}
-          prefix="$"
-          value={form.salaryCap}
-          onChange={(value) =>
-            onChange({ ...form, salaryCap: Number(value) || 0 })
-          }
-        />
+      <Group grow align="flex-start">
+        <Stack gap={4}>
+          <Text size="sm" fw={500}>
+            Teams
+          </Text>
+          {teamsLocked ? (
+            <Text size="xs" c="dimmed">
+              Managed from the Teams panel
+            </Text>
+          ) : null}
+          <CountStepper
+            label="Teams"
+            min={1}
+            value={form.teamCount}
+            onChange={(value) =>
+              onChange({ ...form, teamCount: value ?? form.teamCount })
+            }
+            disabled={teamsLocked}
+          />
+        </Stack>
+        <Stack gap={4}>
+          <Text size="sm" fw={500}>
+            Salary Cap
+          </Text>
+          <EditableNumberStepper
+            label="Salary Cap"
+            min={1}
+            prefix="$"
+            value={form.salaryCap}
+            onChange={(value) =>
+              onChange({ ...form, salaryCap: value ?? form.salaryCap })
+            }
+          />
+        </Stack>
       </Group>
       <Stack gap={6}>
         <Text size="sm" fw={500}>
@@ -97,64 +111,69 @@ export function SettingsForm({
         </Text>
         <SimpleGrid cols={4} spacing="sm">
           {ROSTER_SLOT_KEYS.map((key) => (
-            <NumberInput
-              key={key}
-              label={key}
-              min={0}
-              value={form.rosterSlots[key]}
-              onChange={(value) =>
-                onChange({
-                  ...form,
-                  rosterSlots: {
-                    ...form.rosterSlots,
-                    [key]: Number(value) || 0,
-                  },
-                })
-              }
-            />
+            <Stack key={key} gap={4}>
+              <Text size="sm">{key}</Text>
+              <CountStepper
+                label={key}
+                value={form.rosterSlots[key]}
+                onChange={(value) =>
+                  onChange({
+                    ...form,
+                    rosterSlots: {
+                      ...form.rosterSlots,
+                      [key]: value ?? 0,
+                    },
+                  })
+                }
+              />
+            </Stack>
           ))}
         </SimpleGrid>
       </Stack>
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          FLEX eligible positions
-        </Text>
-        <Chip.Group
-          multiple
-          value={form.flexPositions}
-          onChange={(value) =>
-            onChange({ ...form, flexPositions: value as Position[] })
-          }
-        >
-          <Group gap="xs">
-            {POSITIONS.map((pos) => (
-              <Chip key={pos} value={pos}>
-                {pos}
-              </Chip>
-            ))}
-          </Group>
-        </Chip.Group>
-      </Stack>
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          SUPERFLEX eligible positions
-        </Text>
-        <Chip.Group
-          multiple
-          value={form.superflexPositions}
-          onChange={(value) =>
-            onChange({ ...form, superflexPositions: value as Position[] })
-          }
-        >
-          <Group gap="xs">
-            {POSITIONS.map((pos) => (
-              <Chip key={pos} value={pos}>
-                {pos}
-              </Chip>
-            ))}
-          </Group>
-        </Chip.Group>
-      </Stack>
+      {form.rosterSlots.FLEX > 0 && (
+        <Stack gap={6}>
+          <Text size="sm" fw={500}>
+            FLEX eligible positions
+          </Text>
+          <Chip.Group
+            multiple
+            value={form.flexPositions}
+            onChange={(value) =>
+              onChange({ ...form, flexPositions: value as Position[] })
+            }
+          >
+            <Group gap="xs">
+              {POSITIONS.map((pos) => (
+                <Chip key={pos} value={pos}>
+                  {pos}
+                </Chip>
+              ))}
+            </Group>
+          </Chip.Group>
+        </Stack>
+      )}
+      {form.rosterSlots.SUPERFLEX > 0 && (
+        <Stack gap={6}>
+          <Text size="sm" fw={500}>
+            SUPERFLEX eligible positions
+          </Text>
+          <Chip.Group
+            multiple
+            value={form.superflexPositions}
+            onChange={(value) =>
+              onChange({ ...form, superflexPositions: value as Position[] })
+            }
+          >
+            <Group gap="xs">
+              {POSITIONS.map((pos) => (
+                <Chip key={pos} value={pos}>
+                  {pos}
+                </Chip>
+              ))}
+            </Group>
+          </Chip.Group>
+        </Stack>
+      )}
       {error && (
         <Text c="red" size="sm">
           {error}

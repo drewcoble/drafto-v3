@@ -7,7 +7,6 @@ import {
   CloseButton,
   Combobox,
   Group,
-  NumberInput,
   Select,
   Stack,
   Text,
@@ -16,6 +15,7 @@ import {
   useCombobox,
 } from "@mantine/core";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { EditableNumberStepper } from "../../../components/NumberStepper";
 import type { Position } from "../../../types";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import {
@@ -238,13 +238,18 @@ export function KeeperSearchForm({
                   onKeeperTeamIdChange(value as Id<"seasonTeams"> | null)
                 }
               />
-              <NumberInput
-                label="Cost"
-                min={1}
-                prefix="$"
-                value={keeperPrice}
-                onChange={(value) => onKeeperPriceChange(Number(value) || 1)}
-              />
+              <Stack gap={4}>
+                <Text size="sm" fw={500}>
+                  Cost
+                </Text>
+                <EditableNumberStepper
+                  label="Cost"
+                  min={1}
+                  prefix="$"
+                  value={keeperPrice}
+                  onChange={(value) => onKeeperPriceChange(value ?? 1)}
+                />
+              </Stack>
             </Group>
             <Tooltip
               label="This team already has the max number of keepers allowed."

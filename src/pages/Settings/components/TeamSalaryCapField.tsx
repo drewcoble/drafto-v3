@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ActionIcon, Group, NumberInput, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Group, Text, Tooltip } from "@mantine/core";
 import { Check } from "lucide-react";
 import type { Doc } from "../../../../convex/_generated/dataModel";
+import { EditableNumberStepper } from "../../../components/NumberStepper";
 
 interface TeamSalaryCapFieldProps {
   team: Doc<"seasonTeams">;
@@ -26,8 +27,8 @@ export function TeamSalaryCapField({
   editing,
   onSetSalaryCap,
 }: TeamSalaryCapFieldProps) {
-  const committed: number | "" = team.salaryCapOverride ?? "";
-  const [value, setValue] = useState<number | "">(committed);
+  const committed: number | undefined = team.salaryCapOverride;
+  const [value, setValue] = useState<number | undefined>(committed);
 
   useEffect(() => {
     setValue(committed);
@@ -36,7 +37,7 @@ export function TeamSalaryCapField({
   const isDirty = value !== committed;
 
   const handleSave = () => {
-    onSetSalaryCap(value === "" ? null : value);
+    onSetSalaryCap(value === undefined ? null : value);
   };
 
   if (!editing) {
@@ -55,17 +56,18 @@ export function TeamSalaryCapField({
 
   return (
     <Group gap={4} wrap="nowrap">
-      <NumberInput
-        size="sm"
+      <EditableNumberStepper
+        label="Salary cap override"
         value={value}
-        onChange={(next) => setValue(next === "" ? "" : Number(next))}
+        onChange={setValue}
         onKeyDown={(event) => {
           if (event.key === "Enter" && isDirty) handleSave();
         }}
         placeholder={String(leagueSalaryCap)}
         min={1}
         prefix="$"
-        w={100}
+        width={100}
+        nullable
       />
       <Tooltip label={isDirty ? "Save cap override" : "Saved"}>
         <ActionIcon

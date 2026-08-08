@@ -67,7 +67,12 @@ function EnterLeagueLink({
   leagueId: string;
   children: ReactNode;
 }) {
-  const linkStyle = { display: "block", height: "100%" };
+  const linkStyle = {
+    display: "block",
+    height: "100%",
+    color: "inherit",
+    textDecoration: "none",
+  } as const;
   if (status === "in_progress") {
     return (
       <Link to="/draft/$leagueId/draft" params={{ leagueId }} style={linkStyle}>

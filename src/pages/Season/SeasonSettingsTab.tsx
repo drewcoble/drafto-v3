@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   Group,
-  NumberInput,
   SegmentedControl,
   Select,
   Stack,
@@ -17,6 +16,7 @@ import {
 import { RefreshCw } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { EditableNumberStepper } from "../../components/NumberStepper";
 import { getErrorMessage } from "../../lib/errors";
 
 interface SeasonSettingsTabProps {
@@ -67,7 +67,9 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
     Array<{ leagueId: string; name: string; season: string }> | null
   >(null);
   const [loadingSleeperLeagues, setLoadingSleeperLeagues] = useState(false);
-  const [faabBudgetInput, setFaabBudgetInput] = useState<number | "">("");
+  const [faabBudgetInput, setFaabBudgetInput] = useState<number | undefined>(
+    undefined,
+  );
   const [teamOptions, setTeamOptions] = useState<TeamOption[] | null>(null);
   const [teamKeyToOwner, setTeamKeyToOwner] = useState<Record<string, string>>({});
   const [yahooLeagues, setYahooLeagues] = useState<
@@ -85,7 +87,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
   }, [settings?.yahooLeagueKey, settings?.sleeperLeagueId]);
 
   useEffect(() => {
-    setFaabBudgetInput(settings?.faabBudget ?? "");
+    setFaabBudgetInput(settings?.faabBudget);
   }, [settings?.faabBudget]);
 
   // Yahoo's OAuth callback (convex/http.ts's /yahoo/callback) redirects back
@@ -140,7 +142,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
     try {
       await setFaabBudget({
         id: seasonId,
-        faabBudget: faabBudgetInput === "" ? null : faabBudgetInput,
+        faabBudget: faabBudgetInput === undefined ? null : faabBudgetInput,
       });
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save."));
@@ -469,16 +471,18 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
             Teams panel.
           </Text>
           <Group gap="xs" wrap="nowrap">
-            <NumberInput
+            <EditableNumberStepper
+              label="FAAB budget"
               value={faabBudgetInput}
-              onChange={(v) => setFaabBudgetInput(v === "" ? "" : Number(v))}
+              onChange={setFaabBudgetInput}
               prefix="$"
               min={0}
-              w={140}
+              width={140}
+              nullable
             />
             <Button
               onClick={() => void handleSaveFaabBudget()}
-              disabled={faabBudgetInput === (settings.faabBudget ?? "")}
+              disabled={faabBudgetInput === settings.faabBudget}
             >
               Save
             </Button>

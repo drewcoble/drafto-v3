@@ -15,6 +15,7 @@ import {
 import { Plus, Trash2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
+import { CountStepper, EditableNumberStepper } from "../../../components/NumberStepper";
 import { POSITIONS, type Position } from "../../../types";
 import { filterRelevantPlayers, pointsForScoring } from "../../../lib/relevantPlayers";
 import { WEEK } from "../../../constants/general";
@@ -367,44 +368,55 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
                 setDefaultFormula((f) => ({ ...f, multiplier: Number(v) || 0 }))
               }
             />
-            <NumberInput
-              label="Flat add ($)"
-              size="sm"
-              w={110}
-              prefix="$"
-              value={defaultFormula.flatAdd}
-              onChange={(v) =>
-                setDefaultFormula((f) => ({ ...f, flatAdd: Number(v) || 0 }))
-              }
-            />
-            <NumberInput
-              label="Minimum ($)"
-              size="sm"
-              w={110}
-              prefix="$"
-              placeholder="None"
-              value={defaultFormula.minimumCost ?? ""}
-              onChange={(v) =>
-                setDefaultFormula((f) => ({
-                  ...f,
-                  minimumCost: v === "" ? undefined : Number(v),
-                }))
-              }
-            />
-            <NumberInput
-              label="Undrafted player cost ($)"
-              size="sm"
-              w={170}
-              prefix="$"
-              placeholder="Manual entry"
-              value={defaultFormula.undraftedCost ?? ""}
-              onChange={(v) =>
-                setDefaultFormula((f) => ({
-                  ...f,
-                  undraftedCost: v === "" ? undefined : Number(v),
-                }))
-              }
-            />
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>
+                Flat add ($)
+              </Text>
+              <EditableNumberStepper
+                label="Flat add"
+                size="sm"
+                width={110}
+                prefix="$"
+                value={defaultFormula.flatAdd}
+                onChange={(v) =>
+                  setDefaultFormula((f) => ({ ...f, flatAdd: v ?? 0 }))
+                }
+              />
+            </Stack>
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>
+                Minimum ($)
+              </Text>
+              <EditableNumberStepper
+                label="Minimum"
+                size="sm"
+                width={110}
+                prefix="$"
+                placeholder="None"
+                nullable
+                value={defaultFormula.minimumCost}
+                onChange={(v) =>
+                  setDefaultFormula((f) => ({ ...f, minimumCost: v }))
+                }
+              />
+            </Stack>
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>
+                Undrafted player cost ($)
+              </Text>
+              <EditableNumberStepper
+                label="Undrafted player cost"
+                size="sm"
+                width={140}
+                prefix="$"
+                placeholder="Manual entry"
+                nullable
+                value={defaultFormula.undraftedCost}
+                onChange={(v) =>
+                  setDefaultFormula((f) => ({ ...f, undraftedCost: v }))
+                }
+              />
+            </Stack>
           </Group>
         </Stack>
       </Card>
@@ -420,28 +432,32 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
 
       <Card withBorder padding="sm">
         <Group gap="sm" wrap="wrap">
-          <NumberInput
-            label="Max keepers per team"
-            size="sm"
-            w={170}
-            min={0}
-            placeholder="Unlimited"
-            value={maxKeepersPerTeam ?? ""}
-            onChange={(v) =>
-              setMaxKeepersPerTeam(v === "" ? undefined : Number(v))
-            }
-          />
-          <NumberInput
-            label="Max consecutive years kept"
-            size="sm"
-            w={200}
-            min={1}
-            placeholder="Unlimited"
-            value={maxConsecutiveYears ?? ""}
-            onChange={(v) =>
-              setMaxConsecutiveYears(v === "" ? undefined : Number(v))
-            }
-          />
+          <Stack gap={4}>
+            <Text size="sm" fw={500}>
+              Max keepers per team
+            </Text>
+            <CountStepper
+              label="Max keepers per team"
+              min={0}
+              placeholder="Unlimited"
+              nullable
+              value={maxKeepersPerTeam}
+              onChange={setMaxKeepersPerTeam}
+            />
+          </Stack>
+          <Stack gap={4}>
+            <Text size="sm" fw={500}>
+              Max consecutive years kept
+            </Text>
+            <CountStepper
+              label="Max consecutive years kept"
+              min={1}
+              placeholder="Unlimited"
+              nullable
+              value={maxConsecutiveYears}
+              onChange={setMaxConsecutiveYears}
+            />
+          </Stack>
         </Group>
       </Card>
 
@@ -482,19 +498,19 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
                         })
                       }
                     />
-                    <NumberInput
-                      label="Max size"
-                      size="sm"
-                      w={110}
-                      min={1}
-                      placeholder="Unlimited"
-                      value={tier.maxSize ?? ""}
-                      onChange={(v) =>
-                        updateTier(tier.id, {
-                          maxSize: v === "" ? undefined : Number(v),
-                        })
-                      }
-                    />
+                    <Stack gap={4}>
+                      <Text size="sm" fw={500}>
+                        Max size
+                      </Text>
+                      <CountStepper
+                        label="Max size"
+                        min={1}
+                        placeholder="Unlimited"
+                        nullable
+                        value={tier.maxSize}
+                        onChange={(v) => updateTier(tier.id, { maxSize: v })}
+                      />
+                    </Stack>
                     <NumberInput
                       label="Multiplier"
                       size="sm"
@@ -510,34 +526,42 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
                         })
                       }
                     />
-                    <NumberInput
-                      label="Flat add ($)"
-                      size="sm"
-                      w={100}
-                      prefix="$"
-                      value={tier.formula.flatAdd}
-                      onChange={(v) =>
-                        updateTier(tier.id, {
-                          formula: { ...tier.formula, flatAdd: Number(v) || 0 },
-                        })
-                      }
-                    />
-                    <NumberInput
-                      label="Minimum ($)"
-                      size="sm"
-                      w={100}
-                      prefix="$"
-                      placeholder="None"
-                      value={tier.formula.minimumCost ?? ""}
-                      onChange={(v) =>
-                        updateTier(tier.id, {
-                          formula: {
-                            ...tier.formula,
-                            minimumCost: v === "" ? undefined : Number(v),
-                          },
-                        })
-                      }
-                    />
+                    <Stack gap={4}>
+                      <Text size="sm" fw={500}>
+                        Flat add ($)
+                      </Text>
+                      <EditableNumberStepper
+                        label="Flat add"
+                        size="sm"
+                        width={100}
+                        prefix="$"
+                        value={tier.formula.flatAdd}
+                        onChange={(v) =>
+                          updateTier(tier.id, {
+                            formula: { ...tier.formula, flatAdd: v ?? 0 },
+                          })
+                        }
+                      />
+                    </Stack>
+                    <Stack gap={4}>
+                      <Text size="sm" fw={500}>
+                        Minimum ($)
+                      </Text>
+                      <EditableNumberStepper
+                        label="Minimum"
+                        size="sm"
+                        width={100}
+                        prefix="$"
+                        placeholder="None"
+                        nullable
+                        value={tier.formula.minimumCost}
+                        onChange={(v) =>
+                          updateTier(tier.id, {
+                            formula: { ...tier.formula, minimumCost: v },
+                          })
+                        }
+                      />
+                    </Stack>
                     <ActionIcon
                       variant="default"
                       color="red"
