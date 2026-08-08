@@ -12,7 +12,7 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
-import { SmilePlus, X } from "lucide-react";
+import { UserPlus, X } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
@@ -92,7 +92,7 @@ export function MobileNomination({
         pos="fixed"
         left="50%"
         style={{
-          bottom: "calc(12px + env(safe-area-inset-bottom))",
+          bottom: "calc(2px + env(safe-area-inset-bottom))",
           transform: "translateX(-50%)",
           zIndex: 210,
         }}
@@ -110,7 +110,7 @@ export function MobileNomination({
             border: "3px solid var(--mantine-color-body)",
           }}
         >
-          {drawerOpen ? <X size={24} /> : <SmilePlus size={24} />}
+          {drawerOpen ? <X size={24} /> : <UserPlus size={24} />}
         </ActionIcon>
       </Box>
 
