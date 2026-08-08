@@ -12,10 +12,6 @@ export function CategoryBreakdown({
 }: CategoryBreakdownProps) {
   const allocated = categoryTotals.reduce((sum, { total }) => sum + total, 0);
   const remaining = Math.max(salaryCap - allocated, 0);
-  // Nothing allocated yet - a full-width saddlebrown bar reads as "spent",
-  // not "nothing chosen", so fall back to a neutral gray until at least
-  // something's been budgeted.
-  const remainingColor = allocated === 0 ? "gray-6" : "saddlebrown-6";
   return (
     <Stack gap={6}>
       <Box
@@ -38,14 +34,12 @@ export function CategoryBreakdown({
           ) : null,
         )}
         {remaining > 0 && (
-          // Cap still available to spend - the accent color (matching the
-          // palette's "money/scarcity" accent), distinct from the
-          // position-colored spent segments to its left. Gray instead once
-          // nothing's allocated at all - see remainingColor above.
+          // Cap still unallocated - neutral gray, distinct from the
+          // position-colored spent segments to its left.
           <Box
             style={{
               width: `${(remaining / salaryCap) * 100}%`,
-              backgroundColor: `var(--mantine-color-${remainingColor})`,
+              backgroundColor: "var(--mantine-color-gray-6)",
             }}
           />
         )}
