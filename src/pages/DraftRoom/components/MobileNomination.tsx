@@ -16,6 +16,10 @@ import { UserPlus, X } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
+import {
+  BOTTOM_NAV_BOTTOM_OFFSET,
+  BOTTOM_NAV_HEIGHT,
+} from "../../../constants/general";
 import { SearchBody, type SearchResult } from "./NominationPanel";
 
 interface MobileNominationProps {
@@ -87,12 +91,20 @@ export function MobileNomination({
 
   return (
     <>
+      {/* Height-matched to BottomNav's own pill (BOTTOM_NAV_HEIGHT) and
+          flex-centered, rather than just sharing its bottom offset, so the
+          56px circle's vertical center always lines up with the bar's
+          regardless of small differences between the two elements' natural
+          heights - see BOTTOM_NAV_HEIGHT's comment. */}
       <Box
         hiddenFrom="sm"
         pos="fixed"
         left="50%"
         style={{
-          bottom: "calc(2px + env(safe-area-inset-bottom))",
+          bottom: `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + env(safe-area-inset-bottom))`,
+          height: BOTTOM_NAV_HEIGHT,
+          display: "flex",
+          alignItems: "center",
           transform: "translateX(-50%)",
           zIndex: 210,
         }}
