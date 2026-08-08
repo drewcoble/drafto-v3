@@ -150,7 +150,7 @@ export function BottomNav({
         // Same dark-green body color as before, just translucent now -
         // backdropFilter blurs whatever's scrolling underneath so it reads
         // as frosted glass rather than a flat cutout.
-        background: "color-mix(in srgb, var(--mantine-color-body) 85%, transparent)",
+        background: "color-mix(in srgb, var(--mantine-color-body) 65%, transparent)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         boxShadow: "var(--mantine-shadow-lg)",

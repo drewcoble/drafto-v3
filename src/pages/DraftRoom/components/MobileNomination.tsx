@@ -120,6 +120,13 @@ export function MobileNomination({
           style={{
             boxShadow: "var(--mantine-shadow-lg)",
             border: "3px solid var(--mantine-color-body)",
+            // Same saddlebrown as "filled" would use, just translucent -
+            // matches the frosted look of the bar underneath it (see
+            // BottomNav.tsx).
+            background:
+              "color-mix(in srgb, var(--mantine-color-saddlebrown-filled) 65%, transparent)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
           }}
         >
           {drawerOpen ? <X size={24} /> : <UserPlus size={24} />}
