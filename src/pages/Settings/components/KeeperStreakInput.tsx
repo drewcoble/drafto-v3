@@ -21,7 +21,6 @@ export function KeeperStreakCell({ pick, onSetStreak }: KeeperStreakCellProps) {
   return (
     <Group gap={4} wrap="nowrap" align="center">
       <CountStepper
-        size="xs"
         label="Yrs kept"
         min={1}
         value={streak}

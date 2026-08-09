@@ -60,3 +60,14 @@ export const BOTTOM_NAV_BOTTOM_OFFSET = 7;
 // vertical center lines up with the bar's by construction instead of by
 // two independently-guessed numbers happening to match.
 export const BOTTOM_NAV_HEIGHT = 58;
+
+// The +/- tap target size used by the Budget tab's per-slot $ stepper
+// (SlotRow.tsx) and the Draft Room's live bid stepper
+// (MobileNomination.tsx's MobileNominationBar) - both hand-picked this
+// exact ActionIcon size already. components/NumberStepper.tsx's shared
+// CountStepper/EditableNumberStepper now use this too instead of their own
+// much smaller default, so every +/- control in the app (roster slot
+// counts, keeper years, etc.) gets the same comfortable tap target on
+// mobile, not just the Budget/nomination ones that happened to be tuned by
+// hand already.
+export const STEPPER_BUTTON_SIZE = 40;

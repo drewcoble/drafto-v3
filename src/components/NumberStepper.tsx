@@ -1,21 +1,24 @@
 import type { KeyboardEvent } from "react";
 import { ActionIcon, Group, NumberInput, Text } from "@mantine/core";
+import { STEPPER_BUTTON_SIZE } from "../constants/general";
 
 interface StepperButtonProps {
-  size: "xs" | "sm" | "md";
   label?: string | undefined;
   onClick: () => void;
 }
 
+// Fixed at STEPPER_BUTTON_SIZE regardless of the stepper's own `size` prop
+// (which still governs the input/text next to these) - a stepper used in a
+// dense table row still needs a full-size tap target on mobile, same as
+// the Budget tab's own +/- buttons.
 function DecrementButton({
-  size,
   label,
   disabled,
   onClick,
 }: StepperButtonProps & { disabled: boolean }) {
   return (
     <ActionIcon
-      size={size}
+      size={STEPPER_BUTTON_SIZE}
       variant="default"
       onClick={onClick}
       disabled={disabled}
@@ -27,14 +30,13 @@ function DecrementButton({
 }
 
 function IncrementButton({
-  size,
   label,
   disabled,
   onClick,
 }: StepperButtonProps & { disabled: boolean }) {
   return (
     <ActionIcon
-      size={size}
+      size={STEPPER_BUTTON_SIZE}
       variant="default"
       onClick={onClick}
       disabled={disabled}
@@ -51,7 +53,6 @@ interface CountStepperProps {
   min?: number;
   max?: number;
   step?: number;
-  size?: "xs" | "sm" | "md";
   // Used for the +/- buttons' aria-labels, e.g. "QB" -> "Increase QB".
   label?: string | undefined;
   // Text shown in place of a number when value is undefined, e.g. "Unlimited".
@@ -71,7 +72,6 @@ export function CountStepper({
   min = 0,
   max,
   step = 1,
-  size = "sm",
   label,
   placeholder,
   nullable = false,
@@ -99,7 +99,6 @@ export function CountStepper({
   return (
     <Group gap={4} align="center" wrap="nowrap">
       <DecrementButton
-        size={size}
         label={label}
         disabled={disabled || value === undefined}
         onClick={handleDecrement}
@@ -113,7 +112,6 @@ export function CountStepper({
         {value === undefined ? (placeholder ?? "—") : value}
       </Text>
       <IncrementButton
-        size={size}
         label={label}
         disabled={disabled || (value !== undefined && max !== undefined && value >= max)}
         onClick={handleIncrement}
@@ -182,7 +180,6 @@ export function EditableNumberStepper({
   return (
     <Group gap={4} align="center" wrap="nowrap">
       <DecrementButton
-        size={size}
         label={label}
         disabled={disabled || value === undefined}
         onClick={handleDecrement}
@@ -209,7 +206,6 @@ export function EditableNumberStepper({
         styles={{ input: { textAlign: "center", fontWeight: 600 } }}
       />
       <IncrementButton
-        size={size}
         label={label}
         disabled={disabled || (value !== undefined && max !== undefined && value >= max)}
         onClick={handleIncrement}
