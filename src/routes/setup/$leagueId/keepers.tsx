@@ -72,6 +72,14 @@ function KeepersRoute() {
         closeOnClickOutside={false}
         closeOnEscape={false}
         centered
+        // Mantine's Modal overlay defaults to z-index 400 - well above the
+        // app's own fixed chrome (AppHeader at 220, BottomNav/
+        // UnallocatedBar/the nominate FAB around 200-210), which would
+        // otherwise sit visually and interactively underneath this
+        // "can't close it" block, trapping a visitor on the page instead
+        // of just blocking the Keepers content itself. 190 keeps it above
+        // ordinary page content but below all of that global chrome.
+        zIndex={190}
       >
         <UpgradePrompt
           title="Keepers is a Pro feature"
