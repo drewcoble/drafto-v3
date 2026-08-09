@@ -134,9 +134,9 @@ export function MobileNomination({
           onChange={setPopoverOpen}
           position="top"
           withinPortal
-          // Mantine's own dropdown background (var(--mantine-color-dark-6),
-          // the "soft surface" shade) is a touch lighter than
-          // MobileNominationBar's var(--mantine-color-body) below it - radius
+          // Matches MobileNominationBar's own background below (see that
+          // component - it's dark-6, the shade Mantine's Card component
+          // uses by default, not var(--mantine-color-body)/dark-7). Radius
           // and shadow are already wired to real Mantine props (they map to
           // --popover-radius/--popover-shadow), so setting them here instead
           // of only via styles.dropdown avoids fighting the component's own
@@ -153,7 +153,7 @@ export function MobileNomination({
               maxWidth: 480,
               padding: "var(--mantine-spacing-md)",
               border: "1px solid var(--mantine-color-default-border)",
-              backgroundColor: "var(--mantine-color-body)",
+              backgroundColor: "var(--mantine-color-dark-6)",
             },
           }}
         >
@@ -353,7 +353,12 @@ function MobileNominationBar({
         padding: "var(--mantine-spacing-md)",
         borderRadius: "var(--mantine-radius-xl)",
         border: "1px solid var(--mantine-color-default-border)",
-        background: "var(--mantine-color-body)",
+        // dark-6, the shade Mantine's Card component defaults to (see
+        // Card.css) - this used to come from an inner <Card> nested inside
+        // this Box (see the earlier commit that collapsed them into one
+        // element), which is where the "slightly lighter" look came from.
+        // var(--mantine-color-body) (dark-7) reads noticeably darker.
+        background: "var(--mantine-color-dark-6)",
         boxShadow: "var(--mantine-shadow-lg)",
       }}
     >
