@@ -245,7 +245,10 @@ export function AppHeader({
             <Title
               order={2}
               c="var(--mantine-color-text)"
-              fz={{ base: "1.125rem", sm: "1.625rem" }}
+              // Same size on mobile as desktop, to match the 60px logo's
+              // visual weight - a smaller mobile size only made sense back
+              // when this was always hidden below "sm" anyway.
+              fz="1.625rem"
               // Hidden below "sm" everywhere else - the league picker and
               // mode-switch button need the room on mobile. Pages that hide
               // those (hideLeagueControls, e.g. the dashboard; minimal, e.g.
