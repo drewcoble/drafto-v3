@@ -15,13 +15,39 @@ export type BudgetPreset =
 // Consumers that show these as buttons (BudgetSidePanel.tsx) drop
 // "superflexHeavy" entirely for leagues with no SUPERFLEX slot - it's the
 // one preset that's meaningless without one, unlike the others which
-// apply to every league shape.
-export const BUDGET_PRESETS: Array<{ value: BudgetPreset; label: string }> = [
-  { value: "starsAndScrubs", label: "Stars & scrubs" },
-  { value: "balanced", label: "Balanced" },
-  { value: "zeroRb", label: "Zero RB" },
-  { value: "heroRb", label: "Hero RB" },
-  { value: "superflexHeavy", label: "Superflex heavy" },
+// apply to every league shape. `caption` is shown for whichever preset is
+// currently active (see BudgetTab.tsx's activePreset), same pattern as
+// OVERSPEND_OPTIONS' caption in constants/budget.ts.
+export const BUDGET_PRESETS: Array<{
+  value: BudgetPreset;
+  label: string;
+  caption: string;
+}> = [
+  {
+    value: "starsAndScrubs",
+    label: "Stars & scrubs",
+    caption: "Pays up for a few elite starters, then punts cheap depth everywhere else.",
+  },
+  {
+    value: "balanced",
+    label: "Balanced",
+    caption: "Spreads the cap evenly across starters, tilted slightly toward earlier slots.",
+  },
+  {
+    value: "zeroRb",
+    label: "Zero RB",
+    caption: "Avoids paying up for RB at all, shifting that budget into WR depth instead.",
+  },
+  {
+    value: "heroRb",
+    label: "Hero RB",
+    caption: "One premium RB, then punts the rest of the position - the savings go to WR.",
+  },
+  {
+    value: "superflexHeavy",
+    label: "Superflex heavy",
+    caption: "Prioritizes QB scarcity for the superflex slot over every other position.",
+  },
 ];
 
 export const DEFAULT_OVERSPEND_BEHAVIOR: OverspendBehavior = "bench";

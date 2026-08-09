@@ -88,6 +88,12 @@ export function BudgetSidePanel({
   const presets = BUDGET_PRESETS.filter(
     (preset) => hasSuperflex || preset.value !== "superflexHeavy",
   );
+  // Looked up from the full list, not `presets` - activePreset can still
+  // be "superflexHeavy" from before a SUPERFLEX slot was removed, even
+  // though that button itself is no longer shown.
+  const selectedPreset = BUDGET_PRESETS.find(
+    (preset) => preset.value === activePreset,
+  );
 
   return (
     <SimpleGrid
@@ -108,7 +114,9 @@ export function BudgetSidePanel({
             </Button>
           ))}
           <Text size="xs" c="dimmed">
-            A preset lands as numbers you then tune.
+            {selectedPreset
+              ? selectedPreset.caption
+              : "A preset lands as numbers you then tune."}
           </Text>
         </CollapsibleCard>
       )}
