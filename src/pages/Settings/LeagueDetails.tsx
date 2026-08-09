@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { Link } from "@tanstack/react-router";
 import { Trophy } from "lucide-react";
 import {
+  Anchor,
   Badge,
   Button,
   Card,
@@ -81,9 +83,7 @@ export function LeagueDetails({
   // been made or there's no creation in progress.
   const [createMode, setCreateMode] = useState<
     "choice" | "sleeperImport" | "yahooImport" | null
-  >(
-    null,
-  );
+  >(null);
   const [form, setForm] = useState<LeagueSettingsFormValues>(DEFAULT_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,8 +93,9 @@ export function LeagueDetails({
   const [isSavingTeams, setIsSavingTeams] = useState(false);
   const [teamsError, setTeamsError] = useState<string | null>(null);
 
-  const [historySeasonId, setHistorySeasonId] =
-    useState<Id<"seasons"> | null>(null);
+  const [historySeasonId, setHistorySeasonId] = useState<Id<"seasons"> | null>(
+    null,
+  );
   const [useKeepersError, setUseKeepersError] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -177,9 +178,7 @@ export function LeagueDetails({
       onDoneCreating();
       setIsEditing(false);
     } catch (err) {
-      setError(
-        getErrorMessage(err, "Failed to save settings."),
-      );
+      setError(getErrorMessage(err, "Failed to save settings."));
     } finally {
       setIsSaving(false);
     }
@@ -196,9 +195,7 @@ export function LeagueDetails({
         opponentNames,
       });
     } catch (err) {
-      setTeamsError(
-        getErrorMessage(err, "Failed to save teams."),
-      );
+      setTeamsError(getErrorMessage(err, "Failed to save teams."));
     } finally {
       setIsSavingTeams(false);
     }
@@ -209,9 +206,7 @@ export function LeagueDetails({
     try {
       await renameDraftTeam({ teamId, name });
     } catch (err) {
-      setTeamsError(
-        getErrorMessage(err, "Failed to rename team."),
-      );
+      setTeamsError(getErrorMessage(err, "Failed to rename team."));
     }
   };
 
@@ -223,9 +218,7 @@ export function LeagueDetails({
     try {
       await setTeamSalaryCap({ teamId, salaryCap });
     } catch (err) {
-      setTeamsError(
-        getErrorMessage(err, "Failed to set salary cap."),
-      );
+      setTeamsError(getErrorMessage(err, "Failed to set salary cap."));
     }
   };
 
@@ -234,9 +227,7 @@ export function LeagueDetails({
     try {
       await removeDraftTeam({ teamId });
     } catch (err) {
-      setTeamsError(
-        getErrorMessage(err, "Failed to remove team."),
-      );
+      setTeamsError(getErrorMessage(err, "Failed to remove team."));
     }
   };
 
@@ -261,9 +252,7 @@ export function LeagueDetails({
       setDeleteModalOpen(false);
       onLeagueDeleted();
     } catch (err) {
-      setDeleteError(
-        getErrorMessage(err, "Failed to delete league."),
-      );
+      setDeleteError(getErrorMessage(err, "Failed to delete league."));
     } finally {
       setIsDeleting(false);
     }
@@ -395,11 +384,7 @@ export function LeagueDetails({
               <Text size="md" fw={500}>
                 League Settings
               </Text>
-              <Button
-                variant="default"
-                size="md"
-                onClick={startEditing}
-              >
+              <Button variant="default" size="md" onClick={startEditing}>
                 Edit
               </Button>
             </Group>
@@ -491,9 +476,9 @@ export function LeagueDetails({
                 Teams
               </Text>
               <Text size="sm" c="dimmed">
-                Enter your team name and the other {opponentNames.length}{" "}
-                teams in this draft before entering the Draft Room. You can
-                rename teams later.
+                Enter your team name and the other {opponentNames.length} teams
+                in this draft before entering the Draft Room. You can rename
+                teams later.
               </Text>
               <TextInput
                 label="Your team name"
@@ -521,8 +506,7 @@ export function LeagueDetails({
                 onClick={handleSaveTeams}
                 loading={isSavingTeams}
                 disabled={
-                  !selfName.trim() ||
-                  opponentNames.some((name) => !name.trim())
+                  !selfName.trim() || opponentNames.some((name) => !name.trim())
                 }
                 w="fit-content"
               >
@@ -562,8 +546,7 @@ export function LeagueDetails({
       >
         <Stack gap="md">
           <Text size="sm">
-            This will delete all seasons for this league. This cannot be
-            undone.
+            This will delete all seasons for this league. This cannot be undone.
           </Text>
           <List size="sm">
             {(seasonLineage ?? [settings]).map((season) => (
@@ -572,16 +555,23 @@ export function LeagueDetails({
               </List.Item>
             ))}
           </List>
+          {entitlement && !entitlement.hasProAccess && (
+            <Text size="sm" c="orange.6">
+              You're on the free plan (1 new league per year) - deleting this
+              league won't free up this year's slot for a new one.{" "}
+              <Anchor component={Link} to="/billing" size="sm">
+                Upgrade to Pro
+              </Anchor>{" "}
+              for unlimited leagues.
+            </Text>
+          )}
           {deleteError && (
             <Text c="red" size="sm">
               {deleteError}
             </Text>
           )}
           <Group justify="flex-end">
-            <Button
-              variant="default"
-              onClick={() => setDeleteModalOpen(false)}
-            >
+            <Button variant="default" onClick={() => setDeleteModalOpen(false)}>
               Cancel
             </Button>
             <Button color="red" loading={isDeleting} onClick={handleDelete}>
