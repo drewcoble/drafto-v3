@@ -37,7 +37,7 @@ interface BudgetSidePanelProps {
   onOverspendChange: (behavior: OverspendBehavior) => void;
 }
 
-// "Starter Budgets" and "When I overspend" collapse (default closed) so
+// "Starter Budgets" and "When I'm off plan" collapse (default closed) so
 // they don't eat vertical space once a preset/overspend choice is already
 // made - "Sanity checks" stays always-expanded (it's read-only feedback,
 // not a one-time setup choice you'd want to tuck away). Grid row alignment
@@ -121,7 +121,7 @@ export function BudgetSidePanel({
         </CollapsibleCard>
       )}
 
-      <CollapsibleCard title="When I overspend">
+      <CollapsibleCard title="When I'm off plan">
         {OVERSPEND_OPTIONS.map((option) => (
           <Button
             key={option.value}

@@ -1,6 +1,13 @@
 import type { OverspendBehavior } from "../types";
 import { POSITION_COLORS } from "../lib/positionColors";
 
+// Auto-adjustment runs both directions, not just overspends - going under
+// plan on a pick frees up money the same way going over eats into it (see
+// convex/draft/budgetAutoAdjust.ts). "ask" keeps its historical value (no
+// schema/data migration needed for leagues that already had it saved) but
+// is relabeled "Handle manually" - it was never wired up to an actual
+// prompt, so calling it that overpromised; it's really just the explicit
+// opt-out.
 export const OVERSPEND_OPTIONS: Array<{
   value: OverspendBehavior;
   label: string;
@@ -8,19 +15,20 @@ export const OVERSPEND_OPTIONS: Array<{
 }> = [
   {
     value: "bench",
-    label: "Take from the bench pool",
+    label: "Auto-adjust: bench pool first",
     caption:
-      "Overages come out of the bench pool first, so starters keep their money.",
+      "Going over or under plan on a pick adjusts the bench pool first, so starters keep their money either way.",
   },
   {
     value: "spread",
-    label: "Spread across open slots",
-    caption: "Overages are spread evenly across every slot still open.",
+    label: "Auto-adjust: spread across open slots",
+    caption:
+      "Going over or under plan on a pick is spread evenly across every slot still open.",
   },
   {
     value: "ask",
-    label: "Ask me each time",
-    caption: "You'll be prompted to decide each time you go over plan.",
+    label: "Handle manually",
+    caption: "Nothing adjusts automatically - review and rebalance the numbers yourself.",
   },
 ];
 

@@ -8,6 +8,7 @@ import { expandRosterSlots, isEligibleForSlot } from "./slots";
 import { getPreviousSeason } from "./history";
 import { invalidateDraftValues } from "../draftValues";
 import { syncDraftStatus } from "./status";
+import { autoAdjustLiveBudgetForPick } from "./budgetAutoAdjust";
 
 export const listDraftPicks = query({
   args: { seasonId: v.id("seasons") },
@@ -221,6 +222,22 @@ export const resolvePick = mutation({
     });
     await ctx.db.delete(nomination._id);
     await syncDraftStatus(ctx, draft._id);
+
+    // Auto-adjust the live budget for whatever this pick's actual price
+    // did to its plan slot's budgeted amount - see budgetAutoAdjust.ts.
+    // No-ops entirely for a manual/no-slot pick, or for anyone but the
+    // self team.
+    if (args.planSlotKey !== undefined) {
+      await autoAdjustLiveBudgetForPick(
+        ctx,
+        draft._id,
+        args.seasonId,
+        args.teamId,
+        args.planSlotKey,
+        args.price,
+      );
+    }
+
     return pickId;
   },
 });
