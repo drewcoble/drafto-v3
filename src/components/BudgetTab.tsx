@@ -17,7 +17,12 @@ import {
   unallocatedBadgeLabel,
 } from "../lib/unallocatedBadge";
 import { CATEGORY_ORDER } from "../constants/budget";
-import { BUDGET_UNALLOCATED_BAR_HEIGHT, WEEK } from "../constants/general";
+import {
+  BUDGET_UNALLOCATED_BAR_HEIGHT,
+  MOBILE_HEADER_HEIGHT,
+  MOBILE_STATS_ROW_HEIGHT,
+  WEEK,
+} from "../constants/general";
 import { PlayerDetailModal } from "./PlayerDetailModal";
 import { GenericValuesNotice } from "./GenericValuesNotice";
 import { SlotRow, type SlotPositionPreference } from "./BudgetTab/SlotRow";
@@ -351,17 +356,25 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
     }
   };
 
+  // Docks under just AppHeader on the Setup app's pre-draft tab, or under
+  // AppHeader + the Draft Room's MobileStatsRow (already fixed there for
+  // every Draft Room tab - see DraftTopBar.tsx) on the live tab.
+  const unallocatedBarTop =
+    mode === "live"
+      ? MOBILE_HEADER_HEIGHT + MOBILE_STATS_ROW_HEIGHT
+      : MOBILE_HEADER_HEIGHT;
+
   return (
     <Stack gap="md" py="sm">
-      {mode === "predraft" && (
-        <>
-          <UnallocatedBar unallocated={unallocated} isDirty={isDirty} />
-          {/* Reserves space for the fixed bar above, which is pulled out of
-              document flow - mobile only, matching UnallocatedBar's own
-              hiddenFrom="sm". */}
-          <Box hiddenFrom="sm" h={BUDGET_UNALLOCATED_BAR_HEIGHT} />
-        </>
-      )}
+      <UnallocatedBar
+        unallocated={unallocated}
+        isDirty={isDirty}
+        top={unallocatedBarTop}
+      />
+      {/* Reserves space for the fixed bar above, which is pulled out of
+          document flow - mobile only, matching UnallocatedBar's own
+          hiddenFrom="sm". */}
+      <Box hiddenFrom="sm" h={BUDGET_UNALLOCATED_BAR_HEIGHT} />
       <Group justify="space-between" align="center">
         <Stack gap={2}>
           <Text fw={700} size="lg">
@@ -374,11 +387,13 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
             </Text>
           )}
         </Stack>
+        {/* Mobile's copy lives in the fixed UnallocatedBar instead - see
+            above. */}
         <Badge
           variant="light"
           color={unallocatedBadgeColor(unallocated)}
           size="lg"
-          {...(mode === "predraft" ? { visibleFrom: "sm" } : {})}
+          visibleFrom="sm"
         >
           {unallocatedBadgeLabel(unallocated)}
         </Badge>
@@ -417,13 +432,8 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
             Reset to pre-draft plan
           </Button>
         )}
-        {/* Predraft's dirty state lives in the fixed UnallocatedBar on
-            mobile instead - see above. */}
-        {mode !== "predraft" && (
-          <Badge variant="light" color={isDirty ? "yellow" : "teal"}>
-            {isDirty ? "Unsaved changes" : "All changes saved"}
-          </Badge>
-        )}
+        {/* Mobile's dirty-state badge lives in the fixed UnallocatedBar
+            instead, both modes - see above. */}
       </Stack>
       <Group gap="xs" visibleFrom="sm">
         <Button

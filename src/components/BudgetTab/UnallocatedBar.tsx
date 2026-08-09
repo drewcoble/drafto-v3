@@ -1,8 +1,5 @@
 import { Badge, Box, Group } from "@mantine/core";
-import {
-  BUDGET_UNALLOCATED_BAR_HEIGHT,
-  MOBILE_HEADER_HEIGHT,
-} from "../../constants/general";
+import { BUDGET_UNALLOCATED_BAR_HEIGHT } from "../../constants/general";
 import {
   unallocatedBadgeColor,
   unallocatedBadgeLabel,
@@ -11,21 +8,25 @@ import {
 interface UnallocatedBarProps {
   unallocated: number;
   isDirty: boolean;
+  // Docks directly under whatever's already fixed above it - just
+  // AppHeader (MOBILE_HEADER_HEIGHT) on the Setup app's pre-draft Budget
+  // tab, or AppHeader + the Draft Room's MobileStatsRow
+  // (MOBILE_HEADER_HEIGHT + MOBILE_STATS_ROW_HEIGHT) on the live Budget
+  // tab - see BudgetTab.tsx.
+  top: number;
 }
 
-// Docked directly under the fixed AppHeader on mobile, Setup app's pre-draft
-// Budget tab only (see BudgetTab.tsx) - the unallocated total and dirty
-// state used to live only in the in-flow Group/Stack above and below the
-// slot list, which scrolled out of view as soon as you started editing,
-// right when they matter most. Callers must reserve
-// BUDGET_UNALLOCATED_BAR_HEIGHT with a spacer, since a `position: fixed`
-// element is pulled out of normal document flow.
-export function UnallocatedBar({ unallocated, isDirty }: UnallocatedBarProps) {
+// The unallocated total and dirty state used to live only in the in-flow
+// Group/Stack above and below the slot list, which scrolled out of view as
+// soon as you started editing, right when they matter most. Callers must
+// reserve BUDGET_UNALLOCATED_BAR_HEIGHT with a spacer, since a `position:
+// fixed` element is pulled out of normal document flow.
+export function UnallocatedBar({ unallocated, isDirty, top }: UnallocatedBarProps) {
   return (
     <Box
       hiddenFrom="sm"
       pos="fixed"
-      top={MOBILE_HEADER_HEIGHT}
+      top={top}
       left={0}
       right={0}
       px="md"
