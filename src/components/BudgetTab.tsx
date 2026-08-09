@@ -180,8 +180,13 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
         });
       } else {
         // No pre-draft plan and no live overrides exist yet - nothing to
-        // mirror, so every slot the balanced preset lands on has to be
-        // saved explicitly rather than treated as "following pre-draft".
+        // mirror, so every slot the balanced preset lands on still has to
+        // be saved explicitly (as a live override) rather than treated as
+        // "following pre-draft" once the user does save. But landing on
+        // this tab and having it auto-seed a preset isn't itself a change
+        // the user made, so it counts as the saved baseline too - avoids
+        // the dirty-state badge reading "unsaved changes" before anyone's
+        // touched anything.
         const preset = generatePresetAmounts(
           "balanced",
           settings.rosterSlots,
@@ -189,6 +194,10 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
         );
         setAmounts(preset);
         setTouchedKeys(new Set(Object.keys(preset)));
+        setSavedSnapshot({
+          amounts: { ...preset },
+          overspendBehavior: DEFAULT_OVERSPEND_BEHAVIOR,
+        });
       }
     }
     setIsInitialized(true);
@@ -348,7 +357,14 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
       setAmounts(resetAmounts);
       setOverspendBehavior(resetOverspendBehavior);
       setTouchedKeys(new Set());
-      setSavedSnapshot(null);
+      // The reset mutation already cleared every live override server-side,
+      // so this new state - mirroring pre-draft again - is already saved,
+      // not pending. Same reasoning as the fresh-preset case above: don't
+      // flag dirty for a state the server already has.
+      setSavedSnapshot({
+        amounts: resetAmounts,
+        overspendBehavior: resetOverspendBehavior,
+      });
     } catch (err) {
       setError(getErrorMessage(err, "Failed to reset plan."));
     } finally {
