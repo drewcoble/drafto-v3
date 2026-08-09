@@ -248,9 +248,10 @@ export function AppHeader({
               fz={{ base: "1.125rem", sm: "1.625rem" }}
               // Hidden below "sm" everywhere else - the league picker and
               // mode-switch button need the room on mobile. Pages that hide
-              // those (hideLeagueControls, e.g. the dashboard) have room to
-              // spare, so the wordmark stays visible there instead.
-              {...(hideLeagueControls ? {} : { visibleFrom: "sm" })}
+              // those (hideLeagueControls, e.g. the dashboard; minimal, e.g.
+              // the signed-out screen) have room to spare, so the wordmark
+              // stays visible there instead.
+              {...(minimal || hideLeagueControls ? {} : { visibleFrom: "sm" })}
             >
               <Text component="span" inherit c="saddlebrown.7">
                 infini
