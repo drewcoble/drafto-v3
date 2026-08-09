@@ -4,7 +4,6 @@ import {
   Badge,
   Box,
   Button,
-  Card,
   Group,
   NumberInput,
   Popover,
@@ -351,110 +350,109 @@ function MobileNominationBar({
         zIndex: 200,
         maxWidth: 480,
         margin: "0 auto",
+        padding: "var(--mantine-spacing-md)",
         borderRadius: "var(--mantine-radius-xl)",
         border: "1px solid var(--mantine-color-default-border)",
         background: "var(--mantine-color-body)",
         boxShadow: "var(--mantine-shadow-lg)",
       }}
     >
-      <Card padding="md" radius="xl">
-        <Stack gap={10}>
-          <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-            {nominatedPlayer ? (
-              <Text
-                fw={700}
-                truncate
-                style={{ flex: 1, minWidth: 0 }}
-                onClick={() => onSelectPlayer(activeNomination.fpid)}
-              >
-                {nominatedPlayer.name}
-              </Text>
-            ) : (
-              <Text fw={700} truncate style={{ flex: 1, minWidth: 0 }}>
-                Player #{activeNomination.fpid}
-              </Text>
-            )}
-            <Badge
-              size="sm"
-              variant="light"
-              color={POSITION_COLORS[activeNomination.position]}
-            >
-              {activeNomination.position}
-            </Badge>
-            {nominatedPlayer?.team && (
-              <Badge size="sm" variant="outline" color="gray">
-                {nominatedPlayer.team}
-              </Badge>
-            )}
-            {nominatedValue && (
-              <Group gap={4} wrap="nowrap">
-                <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                  ~${Math.round(nominatedValue.dollarValue)}
-                </Text>
-                {usingGenericValues && <GenericValueBadge />}
-              </Group>
-            )}
-          </Group>
-
-          <Group gap={8} wrap="nowrap">
-            <Select
-              size="md"
-              data={orderedTeams.map((team) => ({
-                value: team._id,
-                label: team.isSelf ? `${team.name} (me)` : team.name,
-              }))}
-              value={winnerTeamId}
-              onChange={(value) =>
-                value && setWinnerTeamId(value as Id<"seasonTeams">)
-              }
-              allowDeselect={false}
+      <Stack gap={10}>
+        <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+          {nominatedPlayer ? (
+            <Text
+              fw={700}
+              truncate
               style={{ flex: 1, minWidth: 0 }}
-            />
-            <ActionIcon size={40} variant="default" onClick={() => onBumpBid(-1)}>
-              −
-            </ActionIcon>
-            <NumberInput
-              hideControls
-              min={1}
-              value={bidDraft}
-              onChange={setBidDraft}
-              onFocus={() => setEditingBid(true)}
-              onBlur={commitBidDraft}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-              }}
-              prefix="$"
-              w={70}
-              size="md"
-              styles={{
-                input: {
-                  fontFamily: "var(--mantine-font-family-monospace)",
-                  fontWeight: 700,
-                  textAlign: "center",
-                  color: "var(--mantine-color-saddlebrown-5)",
-                },
-              }}
-            />
-            <ActionIcon size={40} variant="default" onClick={() => onBumpBid(1)}>
-              +
-            </ActionIcon>
-          </Group>
-
-          <Group gap={8} wrap="nowrap">
-            <Button
-              size="md"
-              color="saddlebrown"
-              style={{ flex: 1 }}
-              onClick={() => onAssignWinner(winnerTeamId)}
+              onClick={() => onSelectPlayer(activeNomination.fpid)}
             >
-              Assign
-            </Button>
-            <Button size="md" variant="subtle" color="gray" onClick={onPass}>
-              Pass
-            </Button>
-          </Group>
-        </Stack>
-      </Card>
+              {nominatedPlayer.name}
+            </Text>
+          ) : (
+            <Text fw={700} truncate style={{ flex: 1, minWidth: 0 }}>
+              Player #{activeNomination.fpid}
+            </Text>
+          )}
+          <Badge
+            size="sm"
+            variant="light"
+            color={POSITION_COLORS[activeNomination.position]}
+          >
+            {activeNomination.position}
+          </Badge>
+          {nominatedPlayer?.team && (
+            <Badge size="sm" variant="outline" color="gray">
+              {nominatedPlayer.team}
+            </Badge>
+          )}
+          {nominatedValue && (
+            <Group gap={4} wrap="nowrap">
+              <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                ~${Math.round(nominatedValue.dollarValue)}
+              </Text>
+              {usingGenericValues && <GenericValueBadge />}
+            </Group>
+          )}
+        </Group>
+
+        <Group gap={8} wrap="nowrap">
+          <Select
+            size="md"
+            data={orderedTeams.map((team) => ({
+              value: team._id,
+              label: team.isSelf ? `${team.name} (me)` : team.name,
+            }))}
+            value={winnerTeamId}
+            onChange={(value) =>
+              value && setWinnerTeamId(value as Id<"seasonTeams">)
+            }
+            allowDeselect={false}
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <ActionIcon size={40} variant="default" onClick={() => onBumpBid(-1)}>
+            −
+          </ActionIcon>
+          <NumberInput
+            hideControls
+            min={1}
+            value={bidDraft}
+            onChange={setBidDraft}
+            onFocus={() => setEditingBid(true)}
+            onBlur={commitBidDraft}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+            }}
+            prefix="$"
+            w={70}
+            size="md"
+            styles={{
+              input: {
+                fontFamily: "var(--mantine-font-family-monospace)",
+                fontWeight: 700,
+                textAlign: "center",
+                color: "var(--mantine-color-saddlebrown-5)",
+              },
+            }}
+          />
+          <ActionIcon size={40} variant="default" onClick={() => onBumpBid(1)}>
+            +
+          </ActionIcon>
+        </Group>
+
+        <Group gap={8} wrap="nowrap">
+          <Button
+            size="md"
+            color="saddlebrown"
+            style={{ flex: 1 }}
+            onClick={() => onAssignWinner(winnerTeamId)}
+          >
+            Assign
+          </Button>
+          <Button size="md" variant="subtle" color="gray" onClick={onPass}>
+            Pass
+          </Button>
+        </Group>
+      </Stack>
     </Box>
   );
 }
