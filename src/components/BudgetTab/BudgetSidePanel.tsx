@@ -117,7 +117,7 @@ export function BudgetSidePanel({
         {OVERSPEND_OPTIONS.map((option) => (
           <Button
             key={option.value}
-            variant={option.value === overspendBehavior ? "light" : "default"}
+            variant={option.value === overspendBehavior ? "filled" : "default"}
             fullWidth
             onClick={() => onOverspendChange(option.value)}
           >
