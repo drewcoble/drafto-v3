@@ -16,7 +16,7 @@ import { BUDGET_PRESETS, type BudgetPreset } from "../../lib/budgetPresets";
 import { OVERSPEND_OPTIONS } from "../../constants/budget";
 
 interface BudgetSidePanelProps {
-  // "Start from a shape" only makes sense pre-draft (mode: "predraft") -
+  // "Starter Budgets" only makes sense pre-draft (mode: "predraft") -
   // applying a preset mid-draft (mode: "live") would blow away whatever
   // in-draft reallocations the live plan already reflects, so BudgetTab.tsx
   // only sets this true in predraft mode.
@@ -33,7 +33,7 @@ interface BudgetSidePanelProps {
   onOverspendChange: (behavior: OverspendBehavior) => void;
 }
 
-// "Start from a shape" and "When I overspend" collapse (default closed) so
+// "Starter Budgets" and "When I overspend" collapse (default closed) so
 // they don't eat vertical space once a preset/overspend choice is already
 // made - "Sanity checks" stays always-expanded (it's read-only feedback,
 // not a one-time setup choice you'd want to tuck away). Grid row alignment
@@ -91,7 +91,7 @@ export function BudgetSidePanel({
       style={{ alignItems: "start" }}
     >
       {showPresets && (
-        <CollapsibleCard title="Start from a shape">
+        <CollapsibleCard title="Starter Budgets">
           {presets.map((preset) => (
             <Button
               key={preset.value}
