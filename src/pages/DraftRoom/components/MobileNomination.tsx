@@ -145,7 +145,16 @@ export function MobileNomination({
         // the title/search up behind the fixed AppHeader/MobileStatsRow
         // bars. Forcing height: auto (capped so it can't ever exceed most
         // of the viewport) instead.
-        styles={{ content: { height: "auto", maxHeight: "80vh" } }}
+        styles={{
+          content: { height: "auto", maxHeight: "80vh" },
+          // The drawer sits flush with the viewport bottom, same spot the
+          // nominate FAB floats over (BOTTOM_NAV_BOTTOM_OFFSET +
+          // BOTTOM_NAV_HEIGHT) - without this, the FAB/X button visually
+          // covers the drawer's last bit of content.
+          body: {
+            paddingBottom: `calc(${BOTTOM_NAV_BOTTOM_OFFSET + BOTTOM_NAV_HEIGHT + 12}px + env(safe-area-inset-bottom))`,
+          },
+        }}
         overlayProps={{ blur: 3 }}
         hiddenFrom="sm"
       >
