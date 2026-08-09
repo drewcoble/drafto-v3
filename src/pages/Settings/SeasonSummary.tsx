@@ -12,6 +12,7 @@ import { assignPicksToSlots } from "../../lib/slotAssignment";
 import { WEEK } from "../../constants/general";
 import { TeamSlotDetail } from "../../components/TeamSlotDetail";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
 
 interface SeasonSummaryProps {
   seasonId: Id<"seasons">;
@@ -127,7 +128,7 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
-        scoring={settings.scoring}
+        scoringConfig={scoringConfigFromSeason(settings)}
         season={settings.year}
         seasonId={undefined}
       />

@@ -5,6 +5,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
+import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
 import { WEEK } from "../../constants/general";
 import type { DraftTierRow } from "../../types";
 import { RecentPicksTable } from "./components/RecentPicksTable";
@@ -42,7 +43,7 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
   const draftBoardResult = useQuery(
     api.draft.board.getDraftBoard,
     settings
-      ? { seasonId, week: WEEK, scoring: settings.scoring }
+      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
       : "skip",
   ) as { isGeneric: boolean; rows: DraftTierRow[] } | undefined;
   const tieredValues = draftBoardResult?.rows;
@@ -165,7 +166,11 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
-        scoring={settings?.scoring ?? "PPR"}
+        scoringConfig={
+          settings
+            ? scoringConfigFromSeason(settings)
+            : { scoring: "PPR", teScoring: "NONE", sixPointPassTds: false }
+        }
         season={thisSeason}
         seasonId={seasonId}
       />

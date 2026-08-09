@@ -28,7 +28,7 @@ import {
   matchPlanSlot,
   type PlanSlotMatch,
 } from "../../lib/planRecommendation";
-import { filterRelevantPlayers } from "../../lib/relevantPlayers";
+import { filterRelevantPlayers, scoringConfigFromSeason } from "../../lib/relevantPlayers";
 import { recommendationFor, groupByTier } from "../../lib/draftRecommendation";
 import { POSITION_COLORS } from "../../lib/positionColors";
 import {
@@ -77,7 +77,9 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   // joined in client-side from `picks` instead (see `board` below).
   const draftBoardResult = useQuery(
     api.draft.board.getDraftBoard,
-    settings ? { seasonId, week: WEEK, scoring: settings.scoring } : "skip",
+    settings
+      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
+      : "skip",
   ) as { isGeneric: boolean; rows: DraftTierRow[] } | undefined;
   const tieredValues = draftBoardResult?.rows;
   const usingGenericValues = draftBoardResult?.isGeneric ?? false;
@@ -114,7 +116,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
     settings
       ? {
           week: WEEK,
-          scoring: settings.scoring,
+          scoringConfig: scoringConfigFromSeason(settings),
           lastSeason: String(Number(thisSeason) - 1),
         }
       : "skip",
@@ -561,7 +563,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
-        scoring={settings.scoring}
+        scoringConfig={scoringConfigFromSeason(settings)}
         season={thisSeason}
         seasonId={seasonId}
       />

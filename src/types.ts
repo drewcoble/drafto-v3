@@ -11,6 +11,14 @@ export const POSITIONS: readonly Position[] = [
 
 export type ScoringFormat = "STD" | "HALF" | "PPR";
 
+export type TeScoringFormat = "NONE" | "HALF" | "FULL";
+
+export interface ScoringConfig {
+  scoring: ScoringFormat;
+  teScoring: TeScoringFormat;
+  sixPointPassTds: boolean;
+}
+
 // The canonical shape of one row from draftValues.getDraftValues - shared by
 // PlayersTable and the Draft Room instead of each declaring it inline.
 export interface DraftValueRow {

@@ -25,6 +25,7 @@ import {
   DEFAULT_FORM,
   ROSTER_SLOT_KEYS,
   SCORING_OPTIONS,
+  TE_SCORING_OPTIONS,
   type LeagueSettingsFormValues,
 } from "../../constants/leagueSettings";
 import { SettingsForm } from "./components/SettingsForm";
@@ -145,6 +146,8 @@ export function LeagueDetails({
             teamCount: settings.teamCount,
             salaryCap: settings.salaryCap,
             scoring: settings.scoring,
+            teScoring: settings.teScoring ?? "NONE",
+            sixPointPassTds: settings.sixPointPassTds ?? false,
             rosterSlots: { ...settings.rosterSlots },
             flexPositions: [...settings.flexPositions],
             superflexPositions: [...settings.superflexPositions],
@@ -164,6 +167,8 @@ export function LeagueDetails({
         teamCount: form.teamCount,
         salaryCap: form.salaryCap,
         scoring: form.scoring,
+        teScoring: form.teScoring,
+        sixPointPassTds: form.sixPointPassTds,
         rosterSlots: form.rosterSlots,
         flexPositions: form.flexPositions,
         superflexPositions: form.superflexPositions,
@@ -419,6 +424,17 @@ export function LeagueDetails({
                 </Text>
               </Stack>
             </SimpleGrid>
+            <Group gap="lg">
+              <Text size="sm" c="dimmed">
+                TE Premium:{" "}
+                {TE_SCORING_OPTIONS.find(
+                  (option) => option.value === (settings.teScoring ?? "NONE"),
+                )?.label ?? "No Bonus"}
+              </Text>
+              <Text size="sm" c="dimmed">
+                Passing TDs: {settings.sixPointPassTds ? "6 pts" : "4 pts"}
+              </Text>
+            </Group>
             <Stack gap={6}>
               <Text size="sm" c="dimmed">
                 Roster Slots

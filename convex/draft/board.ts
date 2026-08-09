@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { query } from "../_generated/server";
 import { api } from "../_generated/api";
 import { positionValidator, POSITIONS } from "../positions";
-import { scoringValidator } from "../scoring";
+import { scoringConfigValidator } from "../scoring";
 import { requireDraftOwner } from "./auth";
 import { computeTiers } from "./tiers";
 
@@ -46,7 +46,7 @@ export const getDraftBoard = query({
   args: {
     seasonId: v.id("seasons"),
     week: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
     position: v.optional(positionValidator),
   },
   handler: async (ctx, args) => {
@@ -56,7 +56,7 @@ export const getDraftBoard = query({
       await ctx.runQuery(api.draftValues.getDraftValues, {
         seasonId: args.seasonId,
         week: args.week,
-        scoring: args.scoring,
+        scoringConfig: args.scoringConfig,
         ...(args.position ? { position: args.position } : {}),
       });
     const { isGeneric, values } = valuesResult;
@@ -84,7 +84,7 @@ export const getDraftBoard = query({
       }
     }
 
-    const tiersByFpid = computeTiers(values, adpByFpid, args.scoring);
+    const tiersByFpid = computeTiers(values, adpByFpid, args.scoringConfig.scoring);
     const withTiers = values.map((row) => ({
       ...row,
       ...tiersByFpid.get(row.fpid)!,

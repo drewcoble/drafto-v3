@@ -13,12 +13,13 @@ import {
 } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
-import { POSITIONS, type Position, type ScoringFormat } from "../../types";
+import { POSITIONS, type Position, type ScoringConfig } from "../../types";
 import { POSITION_COLORS } from "../../lib/positionColors";
 import { injuryColor } from "../../lib/playerFormatting";
 import {
   filterRelevantPlayers,
-  pointsForScoring,
+  pointsForScoringConfig,
+  scoringConfigFromSeason,
 } from "../../lib/relevantPlayers";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
@@ -53,7 +54,14 @@ export function InjuryReport({
   const settings = seasonId
     ? draftSettingsList?.find((league) => league._id === seasonId)
     : undefined;
-  const scoring: ScoringFormat = settings?.scoring ?? "PPR";
+  const scoring = settings?.scoring ?? "PPR";
+  const scoringConfig: ScoringConfig = useMemo(
+    () =>
+      settings
+        ? scoringConfigFromSeason(settings)
+        : { scoring, teScoring: "NONE", sixPointPassTds: false },
+    [settings, scoring],
+  );
   const thisSeason = settings?.year ?? String(new Date().getFullYear());
 
   // A position only matters to the selected league if it fills a dedicated
@@ -92,9 +100,9 @@ export function InjuryReport({
       activePositions,
       scoring,
       adpByFpid,
-      (row) => pointsForScoring(row, scoring),
+      (row) => pointsForScoringConfig(row, scoringConfig),
     );
-  }, [allProjections, activePositions, scoring, adpByFpid]);
+  }, [allProjections, activePositions, scoring, scoringConfig, adpByFpid]);
 
   const projByFpid = useMemo(() => {
     const map = new Map<number, Doc<"projections">>();
@@ -113,8 +121,12 @@ export function InjuryReport({
         (row): row is { injury: Doc<"injuries">; player: Doc<"projections"> } =>
           row.player !== undefined && selectedPositions.includes(row.player.position),
       )
-      .sort((a, b) => pointsForScoring(b.player, scoring) - pointsForScoring(a.player, scoring));
-  }, [injuries, projByFpid, selectedPositions, scoring]);
+      .sort(
+        (a, b) =>
+          pointsForScoringConfig(b.player, scoringConfig) -
+          pointsForScoringConfig(a.player, scoringConfig),
+      );
+  }, [injuries, projByFpid, selectedPositions, scoringConfig]);
 
   const isLoading =
     injuries === undefined ||
@@ -210,7 +222,7 @@ export function InjuryReport({
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={week}
-        scoring={scoring}
+        scoringConfig={scoringConfig}
         season={thisSeason}
         seasonId={seasonId}
       />

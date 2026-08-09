@@ -2,6 +2,7 @@ import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { isDraftComplete } from "./slots";
+import { scoringConfigFromSeason } from "../scoring";
 
 // Mirrors src/constants/general.ts's WEEK - no shared module across the
 // convex/ bundler boundary (same duplication convention as
@@ -57,7 +58,7 @@ export async function syncDraftStatus(
         {
           draftId,
           week: REPORT_CARD_WEEK,
-          scoring: season.scoring,
+          scoringConfig: scoringConfigFromSeason(season),
         },
       );
     }

@@ -1,4 +1,4 @@
-import type { Position, ScoringFormat } from "../types";
+import type { Position, ScoringFormat, ScoringConfig, TeScoringFormat } from "../types";
 
 export function pointsForScoring(
   row: { pointsStd: number; pointsHalf: number; pointsPpr: number },
@@ -16,6 +16,61 @@ export function adpForScoring(
   if (scoring === "STD") return row.adpStd;
   if (scoring === "HALF") return row.adpHalf;
   return row.adpPpr;
+}
+
+const TE_BONUS_PER_REC: Record<TeScoringFormat, number> = {
+  NONE: 0,
+  HALF: 0.5,
+  FULL: 1,
+};
+
+// Client-side twin of convex/scoring.ts's bonusPoints/pointsForScoringConfig
+// (same duplication convention already used above for pointsForScoring/
+// adpForScoring) - TE-only reception bonus and/or the +2/passing-TD bump
+// that turns the baked-in 4pt TD into 6, computed from each row's raw
+// per-category stats blob since Sleeper has no precomputed column for
+// either.
+export function bonusPoints(
+  row: { position: Position; stats: Record<string, number> },
+  config: ScoringConfig,
+): number {
+  let bonus = 0;
+  if (row.position === "TE") {
+    bonus += (row.stats.rec ?? 0) * TE_BONUS_PER_REC[config.teScoring];
+  }
+  if (config.sixPointPassTds) {
+    bonus += (row.stats.pass_td ?? 0) * 2;
+  }
+  return bonus;
+}
+
+export function pointsForScoringConfig(
+  row: {
+    position: Position;
+    pointsStd: number;
+    pointsHalf: number;
+    pointsPpr: number;
+    stats: Record<string, number>;
+  },
+  config: ScoringConfig,
+): number {
+  return pointsForScoring(row, config.scoring) + bonusPoints(row, config);
+}
+
+// Derives a ScoringConfig from a seasons doc - mirrors convex/scoring.ts's
+// scoringConfigFromSeason. teScoring/sixPointPassTds are absent on seasons
+// created before this feature shipped; absent means NONE/off (the
+// pre-feature behavior).
+export function scoringConfigFromSeason(season: {
+  scoring: ScoringFormat;
+  teScoring?: TeScoringFormat;
+  sixPointPassTds?: boolean;
+}): ScoringConfig {
+  return {
+    scoring: season.scoring,
+    teScoring: season.teScoring ?? "NONE",
+    sixPointPassTds: season.sixPointPassTds ?? false,
+  };
 }
 
 // Sleeper's player pool includes thousands of practice-squad/deep-bench

@@ -17,7 +17,10 @@ import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { CountStepper, EditableNumberStepper } from "../../../components/NumberStepper";
 import { POSITIONS, type Position } from "../../../types";
-import { filterRelevantPlayers, pointsForScoring } from "../../../lib/relevantPlayers";
+import {
+  filterRelevantPlayers,
+  pointsForScoringConfig,
+} from "../../../lib/relevantPlayers";
 import { WEEK } from "../../../constants/general";
 import { DEFAULT_KEEPER_RULES } from "../../../constants/leagueSettings";
 import type { KeeperRules } from "../../../lib/keeperCost";
@@ -226,6 +229,15 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     return map;
   }, [allProjections]);
 
+  const scoringConfig = useMemo(
+    () => ({
+      scoring: settings.scoring,
+      teScoring: settings.teScoring ?? ("NONE" as const),
+      sixPointPassTds: settings.sixPointPassTds ?? false,
+    }),
+    [settings.scoring, settings.teScoring, settings.sixPointPassTds],
+  );
+
   const relevantPlayers = useMemo(() => {
     if (!allProjections) return [];
     return filterRelevantPlayers(
@@ -233,9 +245,9 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
       activePositions,
       settings.scoring,
       adpByFpid,
-      (row) => pointsForScoring(row, settings.scoring),
+      (row) => pointsForScoringConfig(row, scoringConfig),
     );
-  }, [allProjections, activePositions, settings.scoring, adpByFpid]);
+  }, [allProjections, activePositions, settings.scoring, scoringConfig, adpByFpid]);
 
   const searchResultsForTier = (tierId: string) => {
     const query = (tierSearch[tierId] ?? "").trim().toLowerCase();

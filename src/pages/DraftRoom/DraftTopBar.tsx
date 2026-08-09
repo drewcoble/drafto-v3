@@ -10,7 +10,8 @@ import { useTeamBudget } from "../../hooks/useTeamBudget";
 import { matchPlanSlot } from "../../lib/planRecommendation";
 import {
   filterRelevantPlayers,
-  pointsForScoring,
+  pointsForScoringConfig,
+  scoringConfigFromSeason,
 } from "../../lib/relevantPlayers";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { assignSlotForPick } from "../../lib/slotAssignment";
@@ -61,7 +62,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
   const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
-      ? { seasonId, week: WEEK, scoring: settings.scoring }
+      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
       : "skip",
   );
   const draftValues = draftValuesResult?.values;
@@ -134,7 +135,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
       activePositions,
       settings.scoring,
       adpByFpid,
-      (row) => pointsForScoring(row, settings.scoring),
+      (row) => pointsForScoringConfig(row, scoringConfigFromSeason(settings)),
     );
     const query = search.trim().toLowerCase();
     return relevant
@@ -392,7 +393,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
-        scoring={settings.scoring}
+        scoringConfig={scoringConfigFromSeason(settings)}
         season={thisSeason}
         seasonId={seasonId}
       />

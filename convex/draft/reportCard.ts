@@ -3,7 +3,11 @@ import { query, mutation, internalQuery, type QueryCtx } from "../_generated/ser
 import { api, internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { POSITIONS } from "../positions";
-import { scoringValidator, pointsForScoring, type Scoring } from "../scoring";
+import {
+  scoringConfigValidator,
+  pointsForScoringConfig,
+  type ScoringConfig,
+} from "../scoring";
 import type { DraftValueRow } from "../draftValues";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireDraftOwner } from "./auth";
@@ -193,13 +197,13 @@ async function computeReportCardData(
   ctx: QueryCtx,
   draft: Doc<"drafts">,
   season: Doc<"seasons">,
-  args: { week: string; scoring: Scoring },
+  args: { week: string; scoringConfig: ScoringConfig },
 ) {
   const { values }: { isGeneric: boolean; values: DraftValueRow[] } =
     await ctx.runQuery(api.draftValues.getDraftValues, {
       seasonId: draft.seasonId,
       week: args.week,
-      scoring: args.scoring,
+      scoringConfig: args.scoringConfig,
     });
   const valueByFpid = new Map(values.map((row) => [row.fpid, row]));
 
@@ -215,9 +219,12 @@ async function computeReportCardData(
   // weekly results - the season this draft just started has no games
   // played yet, so labeling off it would be empty for everyone.
   const priorSeason = String(Number(season.year) - 1);
+  // playerSeasonStats is base-scoring-only (not bonus-aware, see its schema
+  // comment) - consistency labels below are derived from raw historical
+  // output, so this deliberately stays on scoringConfig.scoring alone.
   const seasonStats = await ctx.runQuery(api.playerPoints.getAllSeasonStats, {
     season: priorSeason,
-    scoring: args.scoring,
+    scoring: args.scoringConfig.scoring,
   });
   const statsByPosition = new Map<Position, typeof seasonStats>();
   for (const row of seasonStats) {
@@ -281,7 +288,9 @@ async function computeReportCardData(
           .eq("fpid", pick.fpid),
       )
       .unique();
-    const points = projection ? pointsForScoring(projection, args.scoring) : 0;
+    const points = projection
+      ? pointsForScoringConfig(projection, args.scoringConfig)
+      : 0;
     const replacementPoints = replacementByPosition.get(pick.position) ?? 0;
     const vor = Math.max(points - replacementPoints, 0);
     const isKeeper = pick.isKeeper ?? false;
@@ -475,7 +484,7 @@ async function computeReportCardData(
   return {
     draftId: draft._id,
     week: args.week,
-    scoring: args.scoring,
+    scoring: args.scoringConfig.scoring,
     teams: teamReportCards,
     leagueSteals,
     leagueReaches,
@@ -490,7 +499,7 @@ export const getDraftReportCard = query({
   args: {
     seasonId: v.id("seasons"),
     week: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
   },
   handler: async (ctx, args) => {
     const { season, draft } = await requireDraftOwner(ctx, args.seasonId);
@@ -523,7 +532,7 @@ export const getDraftReportCard = query({
         q
           .eq("draftId", draft._id)
           .eq("week", args.week)
-          .eq("scoring", args.scoring),
+          .eq("scoring", args.scoringConfig.scoring),
       )
       .unique();
 
@@ -546,7 +555,7 @@ export const getReportCardDataForSummary = internalQuery({
   args: {
     draftId: v.id("drafts"),
     week: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
   },
   handler: async (ctx, args) => {
     const draft = await ctx.db.get(args.draftId);
@@ -577,7 +586,7 @@ export const ensureReportSummaryGenerated = mutation({
   args: {
     seasonId: v.id("seasons"),
     week: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
   },
   handler: async (ctx, args) => {
     const { draft } = await requireDraftOwner(ctx, args.seasonId);
@@ -592,7 +601,7 @@ export const ensureReportSummaryGenerated = mutation({
         q
           .eq("draftId", draft._id)
           .eq("week", args.week)
-          .eq("scoring", args.scoring),
+          .eq("scoring", args.scoringConfig.scoring),
       )
       .unique();
     if (existing) return;
@@ -600,7 +609,7 @@ export const ensureReportSummaryGenerated = mutation({
     await ctx.scheduler.runAfter(
       0,
       internal.gemini.reportSummary.generateReportSummary,
-      { draftId: draft._id, week: args.week, scoring: args.scoring },
+      { draftId: draft._id, week: args.week, scoringConfig: args.scoringConfig },
     );
   },
 });
@@ -616,7 +625,7 @@ export const regenerateReportSummary = mutation({
   args: {
     seasonId: v.id("seasons"),
     week: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
   },
   handler: async (ctx, args) => {
     const { draft } = await requireDraftOwner(ctx, args.seasonId);
@@ -635,7 +644,7 @@ export const regenerateReportSummary = mutation({
         q
           .eq("draftId", draft._id)
           .eq("week", args.week)
-          .eq("scoring", args.scoring),
+          .eq("scoring", args.scoringConfig.scoring),
       )
       .collect();
     for (const row of existing) await ctx.db.delete(row._id);
@@ -643,7 +652,7 @@ export const regenerateReportSummary = mutation({
     await ctx.scheduler.runAfter(
       0,
       internal.gemini.reportSummary.generateReportSummary,
-      { draftId: draft._id, week: args.week, scoring: args.scoring },
+      { draftId: draft._id, week: args.week, scoringConfig: args.scoringConfig },
     );
   },
 });

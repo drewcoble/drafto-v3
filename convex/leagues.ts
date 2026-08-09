@@ -3,7 +3,7 @@ import { mutation, query, internalQuery, type MutationCtx } from "./_generated/s
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id, Doc } from "./_generated/dataModel";
 import { positionValidator } from "./positions";
-import { scoringValidator } from "./scoring";
+import { scoringValidator, teScoringValidator, scoringConfigFromSeason } from "./scoring";
 import { invalidateDraftValues, refreshDraftValuesForLeague } from "./draftValues";
 import { ensureValueGapsCached } from "./valueGaps";
 import { requireSeasonOwner, requireRealDraft } from "./draft/auth";
@@ -97,6 +97,8 @@ export const createLeague = mutation({
     teamCount: v.number(),
     salaryCap: v.number(),
     scoring: scoringValidator,
+    teScoring: teScoringValidator,
+    sixPointPassTds: v.boolean(),
     rosterSlots: rosterSlotsValidator,
     flexPositions: v.array(positionValidator),
     superflexPositions: v.array(positionValidator),
@@ -173,11 +175,11 @@ export const createLeague = mutation({
     await refreshDraftValuesForLeague(ctx, {
       draftId,
       week: DRAFT_PREP_WEEK,
-      scoring: args.scoring,
+      scoringConfig: scoringConfigFromSeason(args),
     });
     await ensureValueGapsCached(ctx, {
       week: DRAFT_PREP_WEEK,
-      scoring: args.scoring,
+      scoringConfig: scoringConfigFromSeason(args),
       lastSeason: String(Number(thisSeason) - 1),
     });
 
@@ -192,6 +194,8 @@ export const updateSeason = mutation({
     teamCount: v.number(),
     salaryCap: v.number(),
     scoring: scoringValidator,
+    teScoring: teScoringValidator,
+    sixPointPassTds: v.boolean(),
     rosterSlots: rosterSlotsValidator,
     flexPositions: v.array(positionValidator),
     superflexPositions: v.array(positionValidator),
@@ -291,6 +295,12 @@ export const importPreviousSeasonHistory = mutation({
       teamCount: args.teams.length,
       salaryCap: newSeason.salaryCap,
       scoring: newSeason.scoring,
+      ...(newSeason.teScoring !== undefined
+        ? { teScoring: newSeason.teScoring }
+        : {}),
+      ...(newSeason.sixPointPassTds !== undefined
+        ? { sixPointPassTds: newSeason.sixPointPassTds }
+        : {}),
       rosterSlots: newSeason.rosterSlots,
       flexPositions: newSeason.flexPositions,
       superflexPositions: newSeason.superflexPositions,
@@ -479,7 +489,9 @@ async function deleteOneSeason(ctx: MutationCtx, seasonId: Id<"seasons">) {
     }
     for (const row of await ctx.db
       .query("draftValues")
-      .withIndex("by_draft_week_scoring", (q) => q.eq("draftId", draft._id))
+      .withIndex("by_draft_week_scoring_teScoring_sixPointPassTds", (q) =>
+        q.eq("draftId", draft._id),
+      )
       .collect()) {
       await ctx.db.delete(row._id);
     }

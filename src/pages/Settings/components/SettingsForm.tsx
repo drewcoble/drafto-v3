@@ -13,7 +13,12 @@ import {
 } from "@mantine/core";
 import { Link } from "@tanstack/react-router";
 import { CountStepper, EditableNumberStepper } from "../../../components/NumberStepper";
-import { POSITIONS, type Position, type ScoringFormat } from "../../../types";
+import {
+  POSITIONS,
+  type Position,
+  type ScoringFormat,
+  type TeScoringFormat,
+} from "../../../types";
 import {
   POSITION_COLORS,
   positionColorOrDefault,
@@ -21,6 +26,7 @@ import {
 import {
   ROSTER_SLOT_KEYS,
   SCORING_OPTIONS,
+  TE_SCORING_OPTIONS,
   type LeagueSettingsFormValues,
 } from "../../../constants/leagueSettings";
 
@@ -129,6 +135,29 @@ export function SettingsForm({
           }))}
         />
       </Stack>
+      <Stack gap={6}>
+        <Text size="sm" fw={500}>
+          TE Premium
+        </Text>
+        <SegmentedControl
+          value={form.teScoring}
+          onChange={(value) =>
+            onChange({ ...form, teScoring: value as TeScoringFormat })
+          }
+          data={TE_SCORING_OPTIONS.map(({ label, value }) => ({
+            label,
+            value,
+          }))}
+        />
+      </Stack>
+      <Switch
+        label="6pt Passing TDs"
+        description="Off keeps the standard 4pt passing touchdown."
+        checked={form.sixPointPassTds}
+        onChange={(event) =>
+          onChange({ ...form, sixPointPassTds: event.currentTarget.checked })
+        }
+      />
       <Stack gap={6}>
         <Text size="sm" fw={500}>
           Roster Slots

@@ -10,13 +10,14 @@ import {
   type DraftValueRow,
   type PlayerTag,
   type Position,
-  type ScoringFormat,
+  type ScoringConfig,
   type ValueGap,
 } from "../../types";
 import {
   adpForScoring,
   filterRelevantPlayers,
-  pointsForScoring,
+  pointsForScoringConfig,
+  scoringConfigFromSeason,
 } from "../../lib/relevantPlayers";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
@@ -56,13 +57,20 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   // Scoring format now lives on the league settings (edited on the League
   // Details tab) instead of local component state, so it's shared/persisted
   // rather than resetting per-tab-visit.
-  const scoring: ScoringFormat = selectedSettings?.scoring ?? "PPR";
+  const scoring = selectedSettings?.scoring ?? "PPR";
+  const scoringConfig: ScoringConfig = useMemo(
+    () =>
+      selectedSettings
+        ? scoringConfigFromSeason(selectedSettings)
+        : { scoring, teScoring: "NONE", sixPointPassTds: false },
+    [selectedSettings, scoring],
+  );
   const thisSeason =
     selectedSettings?.year ?? String(new Date().getFullYear());
   const lastSeason = String(Number(thisSeason) - 1);
   const valueGaps = useQuery(api.valueGaps.getAllValueGaps, {
     week,
-    scoring,
+    scoringConfig,
     lastSeason,
   });
   // Consistency rating (see src/lib/consistency.ts) - PPG/variance relative
@@ -146,7 +154,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   // is handled correctly.
   const draftValuesQueryOptions = convexQuery(
     api.draftValues.getDraftValues,
-    seasonId ? { seasonId, week, scoring } : "skip",
+    seasonId ? { seasonId, week, scoringConfig } : "skip",
   );
   interface DraftValuesResult {
     isGeneric: boolean;
@@ -244,9 +252,9 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
       activePositions,
       scoring,
       adpByFpid,
-      (row) => pointsForScoring(row, scoring),
+      (row) => pointsForScoringConfig(row, scoringConfig),
     );
-  }, [allProjections, adpByFpid, scoring, activePositions]);
+  }, [allProjections, adpByFpid, scoring, scoringConfig, activePositions]);
 
   // Only the positions currently toggled on via the pills.
   const visibleRows = useMemo(() => {
@@ -275,11 +283,13 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
       });
     } else {
       rows.sort(
-        (a, b) => pointsForScoring(b, scoring) - pointsForScoring(a, scoring),
+        (a, b) =>
+          pointsForScoringConfig(b, scoringConfig) -
+          pointsForScoringConfig(a, scoringConfig),
       );
     }
     return rows;
-  }, [visibleRows, draftValues, draftValueByFpid, adpByFpid, scoring]);
+  }, [visibleRows, draftValues, draftValueByFpid, adpByFpid, scoring, scoringConfig]);
 
   return (
     <Stack
@@ -347,7 +357,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                   key={row._id}
                   row={row}
                   index={index}
-                  scoring={scoring}
+                  scoringConfig={scoringConfig}
                   injury={injuriesByFpid.get(row.fpid)}
                   latestNews={latestNewsByFpid.get(row.fpid)}
                   draftValue={draftValueByFpid.get(row.fpid)}
@@ -386,7 +396,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={week}
-        scoring={scoring}
+        scoringConfig={scoringConfig}
         season={thisSeason}
         seasonId={seasonId}
       />

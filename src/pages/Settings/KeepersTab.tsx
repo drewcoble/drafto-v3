@@ -4,7 +4,11 @@ import { Card, Center, Loader, SimpleGrid, Stack, Text } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { POSITIONS, type Position } from "../../types";
-import { filterRelevantPlayers, pointsForScoring } from "../../lib/relevantPlayers";
+import {
+  filterRelevantPlayers,
+  pointsForScoringConfig,
+  scoringConfigFromSeason,
+} from "../../lib/relevantPlayers";
 import { assignSlotForPick } from "../../lib/slotAssignment";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { WEEK } from "../../constants/general";
@@ -33,7 +37,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
-      ? { seasonId, week: WEEK, scoring: settings.scoring }
+      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
       : "skip",
   );
   const draftValues = draftValuesResult?.values;
@@ -122,7 +126,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
       activePositions,
       settings.scoring,
       adpByFpid,
-      (row) => pointsForScoring(row, settings.scoring),
+      (row) => pointsForScoringConfig(row, scoringConfigFromSeason(settings)),
     );
     const query = keeperSearch.trim().toLowerCase();
     return relevant
@@ -352,7 +356,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
-        scoring={settings.scoring}
+        scoringConfig={scoringConfigFromSeason(settings)}
         season={settings.year}
         seasonId={seasonId}
       />

@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { query, QueryCtx } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
 import { POSITIONS, positionValidator } from "../positions";
-import { pointsForScoring, Scoring } from "../scoring";
+import { pointsForScoringConfig, ScoringConfig, scoringConfigFromSeason } from "../scoring";
 import { expandRosterSlots, isEligibleForSlot } from "../draft/slots";
 
 type Position = (typeof POSITIONS)[number];
@@ -52,7 +52,7 @@ async function computePlayerValues(
     activePositions: Position[];
     week: string;
     season: string;
-    scoring: Scoring;
+    scoringConfig: ScoringConfig;
     remainingWeeks: number;
   },
 ): Promise<Map<number, PlayerValue>> {
@@ -65,13 +65,19 @@ async function computePlayerValues(
           q.eq("position", pos).eq("week", args.week),
         )
         .collect(),
+      // playerSeasonStats is base-scoring-only (not bonus-aware, see its
+      // schema comment), so actualPPG below stays bonus-exclusive even in a
+      // TE-premium/6pt-passing league while projectedPPG is bonus-inclusive -
+      // an internally inconsistent blend that gets more pronounced as the
+      // season goes on and projectionWeight shifts toward actualPPG. Known
+      // limitation, same shape as valueGaps.ts's lastYearPpg.
       ctx.db
         .query("playerSeasonStats")
         .withIndex("by_position_season_scoring", (q) =>
           q
             .eq("position", pos)
             .eq("season", args.season)
-            .eq("scoring", args.scoring),
+            .eq("scoring", args.scoringConfig.scoring),
         )
         .collect(),
     ]);
@@ -80,7 +86,7 @@ async function computePlayerValues(
     );
 
     for (const row of projectionRows) {
-      const projectedPPG = pointsForScoring(row, args.scoring);
+      const projectedPPG = pointsForScoringConfig(row, args.scoringConfig);
       const seasonStats = seasonStatsByFpid.get(row.fpid);
       const gamesPlayed = seasonStats?.gamesPlayed ?? 0;
       const actualPPG =
@@ -272,7 +278,7 @@ export const getFaabSuggestions = query({
       activePositions,
       week: nflState.week,
       season: nflState.season,
-      scoring: settings.scoring,
+      scoringConfig: scoringConfigFromSeason(settings),
       remainingWeeks,
     });
 

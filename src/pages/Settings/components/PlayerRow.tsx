@@ -10,10 +10,10 @@ import {
 } from "@mantine/core";
 import { Ban, StickyNote, Target } from "lucide-react";
 import type { Doc } from "../../../../convex/_generated/dataModel";
-import type { PlayerTag, ScoringFormat, ValueGap } from "../../../types";
+import type { PlayerTag, ScoringConfig, ValueGap } from "../../../types";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { injuryColor } from "../../../lib/playerFormatting";
-import { pointsForScoring } from "../../../lib/relevantPlayers";
+import { pointsForScoringConfig } from "../../../lib/relevantPlayers";
 import type { ConsistencyLabel } from "../../../lib/consistency";
 import { ConsistencyIcon } from "./ConsistencyIcon";
 import { ValueGapIcon } from "./ValueGapIcon";
@@ -32,7 +32,7 @@ export interface KeeperInfo {
 interface PlayerRowProps {
   row: Doc<"projections">;
   index: number;
-  scoring: ScoringFormat;
+  scoringConfig: ScoringConfig;
   injury: { status: string; statusShort: string } | undefined;
   latestNews: { title: string; publishedAt: number } | undefined;
   draftValue: { dollarValue: number; usedFallback: boolean } | undefined;
@@ -51,7 +51,7 @@ interface PlayerRowProps {
 export function PlayerRow({
   row,
   index,
-  scoring,
+  scoringConfig,
   injury,
   latestNews,
   draftValue,
@@ -132,7 +132,7 @@ export function PlayerRow({
         </Badge>
       </Table.Td>
       <Table.Td>{row.team ?? "—"}</Table.Td>
-      <Table.Td>{pointsForScoring(row, scoring).toFixed(1)}</Table.Td>
+      <Table.Td>{pointsForScoringConfig(row, scoringConfig).toFixed(1)}</Table.Td>
       {showValueColumn && (
         <Table.Td>
           {draftValue ? (

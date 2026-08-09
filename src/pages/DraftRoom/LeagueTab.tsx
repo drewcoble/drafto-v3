@@ -13,6 +13,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { TeamSlotDetail } from "../../components/TeamSlotDetail";
+import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
 import { WEEK } from "../../constants/general";
 import {
   POSITION_ORDER,
@@ -251,7 +252,7 @@ export function LeagueTab({
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
-        scoring={settings.scoring}
+        scoringConfig={scoringConfigFromSeason(settings)}
         season={thisSeason}
         seasonId={seasonId}
       />

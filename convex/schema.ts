@@ -2,7 +2,7 @@ import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { positionValidator } from "./positions";
-import { scoringValidator } from "./scoring";
+import { scoringValidator, teScoringValidator } from "./scoring";
 
 // Shared by seasons/drafts below.
 const rosterSlotsValidator = v.object({
@@ -366,6 +366,13 @@ export default defineSchema({
     teamCount: v.number(),
     salaryCap: v.number(),
     scoring: scoringValidator,
+    // TE-only reception bonus / 6pt-passing-TD toggle - both v.optional since
+    // existing seasons rows predate this feature. Absent means "NONE"/false,
+    // i.e. exactly the pre-feature behavior - see scoring.ts's
+    // scoringConfigFromSeason, which every reader should go through rather
+    // than assuming presence.
+    teScoring: v.optional(teScoringValidator),
+    sixPointPassTds: v.optional(v.boolean()),
     rosterSlots: rosterSlotsValidator,
     flexPositions: v.array(positionValidator),
     superflexPositions: v.array(positionValidator),
@@ -636,6 +643,14 @@ export default defineSchema({
   valueGaps: defineTable({
     week: v.string(),
     scoring: scoringValidator,
+    // Part of this table's cache key (see convex/scoring.ts's ScoringConfig)
+    // even though lastYearPpg itself stays base-scoring-only (playerSeasonStats
+    // isn't bonus-aware, see that table's comment) - only this year's
+    // projection-derived fields (points-based ranks/gaps) actually vary with
+    // these two, but the whole row is still keyed by the full config since a
+    // league only ever reads one combo at a time.
+    teScoring: teScoringValidator,
+    sixPointPassTds: v.boolean(),
     lastSeason: v.string(),
     fpid: v.number(),
     position: positionValidator,
@@ -652,7 +667,13 @@ export default defineSchema({
     projRank: v.number(),
     adpRank: v.number(),
     poolSize: v.number(),
-  }).index("by_week_scoring_lastSeason", ["week", "scoring", "lastSeason"]),
+  }).index("by_week_scoring_teScoring_sixPointPassTds_lastSeason", [
+    "week",
+    "scoring",
+    "teScoring",
+    "sixPointPassTds",
+    "lastSeason",
+  ]),
 
   // Precomputed cache of convex/draftValues.ts's getDraftValues result, keyed
   // by (draftId, week, scoring) - same reasoning as valueGaps above: that
@@ -671,6 +692,8 @@ export default defineSchema({
     draftId: v.id("drafts"),
     week: v.string(),
     scoring: scoringValidator,
+    teScoring: teScoringValidator,
+    sixPointPassTds: v.boolean(),
     fpid: v.number(),
     name: v.string(),
     team: v.union(v.string(), v.null()),
@@ -684,8 +707,16 @@ export default defineSchema({
     // Read/write path (getDraftValues/refreshDraftValues) queries the full
     // key; the invalidation path (a keeper change or settings edit doesn't
     // know which week/scoring combos are cached) queries just the draftId
-    // prefix to clear all of them at once.
-  }).index("by_draft_week_scoring", ["draftId", "week", "scoring"]),
+    // prefix to clear all of them at once - unaffected by teScoring/
+    // sixPointPassTds joining the index, since that prefix-delete never adds
+    // further .eq()s beyond draftId.
+  }).index("by_draft_week_scoring_teScoring_sixPointPassTds", [
+    "draftId",
+    "week",
+    "scoring",
+    "teScoring",
+    "sixPointPassTds",
+  ]),
 
   // AI-written (Gemini) narrative recap for one completed real draft's
   // Report Card - see convex/gemini/reportSummary.ts's generateReportSummary
@@ -717,6 +748,8 @@ export default defineSchema({
   genericDraftValues: defineTable({
     week: v.string(),
     scoring: scoringValidator,
+    teScoring: teScoringValidator,
+    sixPointPassTds: v.boolean(),
     fpid: v.number(),
     name: v.string(),
     team: v.union(v.string(), v.null()),
@@ -727,5 +760,10 @@ export default defineSchema({
     usedFallback: v.boolean(),
     valueOverReplacement: v.number(),
     dollarValue: v.number(),
-  }).index("by_week_scoring", ["week", "scoring"]),
+  }).index("by_week_scoring_teScoring_sixPointPassTds", [
+    "week",
+    "scoring",
+    "teScoring",
+    "sixPointPassTds",
+  ]),
 });

@@ -4,6 +4,7 @@ import type { Doc } from "../_generated/dataModel";
 import { requireSeasonOwner, requireRealDraft } from "./auth";
 import { refreshDraftValuesForLeague } from "../draftValues";
 import { ensureValueGapsCached } from "../valueGaps";
+import { scoringConfigFromSeason } from "../scoring";
 
 // Mirrors src/constants/general.ts's WEEK - see convex/leagues.ts's copy of
 // this same constant for why it's duplicated here rather than imported.
@@ -148,6 +149,10 @@ export const createNextSeason = mutation({
       flexPositions: source.flexPositions,
       superflexPositions: source.superflexPositions,
       createdAt: now,
+      ...(source.teScoring !== undefined ? { teScoring: source.teScoring } : {}),
+      ...(source.sixPointPassTds !== undefined
+        ? { sixPointPassTds: source.sixPointPassTds }
+        : {}),
       ...(source.useKeepers !== undefined
         ? { useKeepers: source.useKeepers }
         : {}),
@@ -215,11 +220,11 @@ export const createNextSeason = mutation({
     await refreshDraftValuesForLeague(ctx, {
       draftId: newDraftId,
       week: DRAFT_PREP_WEEK,
-      scoring: source.scoring,
+      scoringConfig: scoringConfigFromSeason(source),
     });
     await ensureValueGapsCached(ctx, {
       week: DRAFT_PREP_WEEK,
-      scoring: source.scoring,
+      scoringConfig: scoringConfigFromSeason(source),
       lastSeason: String(Number(args.season) - 1),
     });
 

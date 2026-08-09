@@ -6,7 +6,7 @@ import {
   internalQuery,
 } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { scoringValidator } from "../scoring";
+import { scoringValidator, scoringConfigValidator } from "../scoring";
 import { generateGeminiText, MODEL } from "./client";
 
 type ReportSummaryData = NonNullable<
@@ -132,15 +132,19 @@ export const generateReportSummary = internalAction({
   args: {
     draftId: v.id("drafts"),
     week: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
   },
   handler: async (ctx, args) => {
+    // draftReportSummaries stays keyed on base scoring only (see its schema
+    // comment) - deliberately not widened to the full ScoringConfig.
+    const scoring = args.scoringConfig.scoring;
+
     // Guards against a flapping syncDraftStatus (complete -> in_progress ->
     // complete, e.g. a commissioner correction) scheduling a second paid
     // call for a draft that's already got a cached recap.
     const alreadyGenerated: boolean = await ctx.runQuery(
       internal.gemini.reportSummary.hasCachedSummary,
-      args,
+      { draftId: args.draftId, week: args.week, scoring },
     );
     if (alreadyGenerated) return;
 
@@ -161,7 +165,7 @@ export const generateReportSummary = internalAction({
     await ctx.runMutation(internal.gemini.reportSummary.saveSummary, {
       draftId: args.draftId,
       week: args.week,
-      scoring: args.scoring,
+      scoring,
       summary: text,
       model: MODEL,
     });

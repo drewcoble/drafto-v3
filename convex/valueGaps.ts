@@ -5,12 +5,13 @@ import {
   QueryCtx,
   MutationCtx,
 } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { POSITIONS } from "./positions";
 import {
-  scoringValidator,
-  pointsForScoring,
+  scoringConfigValidator,
+  pointsForScoringConfig,
   adpForScoring,
-  Scoring,
+  ScoringConfig,
 } from "./scoring";
 
 type Position = (typeof POSITIONS)[number];
@@ -135,7 +136,7 @@ function percentile(rank: number, n: number): number {
 // reads (ctx.db.query/.get), never writes.
 async function computeValueGaps(
   ctx: QueryCtx | MutationCtx,
-  args: { week: string; scoring: Scoring; lastSeason: string },
+  args: { week: string; scoringConfig: ScoringConfig; lastSeason: string },
 ): Promise<ValueGapRow[]> {
   const output: ValueGapRow[] = [];
 
@@ -157,7 +158,9 @@ async function computeValueGaps(
 
     const relevant = projections.filter((row) => {
       const adpRow = adpByFpid.get(row.fpid);
-      const adp = adpRow ? adpForScoring(adpRow, args.scoring) : undefined;
+      const adp = adpRow
+        ? adpForScoring(adpRow, args.scoringConfig.scoring)
+        : undefined;
       return adp !== undefined && adp < NO_REAL_ADP;
     });
 
@@ -166,14 +169,18 @@ async function computeValueGaps(
     // exceeding the 32k-documents-per-transaction limit. playerSeasonStats
     // is maintained incrementally by upsertPlayerPoints (see
     // convex/playerPoints.ts), including the same "0-point week doesn't
-    // count as a game" rule this file used to apply inline.
+    // count as a game" rule this file used to apply inline. Deliberately
+    // keyed by base scoring only, not the full ScoringConfig - it isn't
+    // bonus-aware (see its schema comment), so lastYearPpg below compares a
+    // bonus-inclusive projection against a bonus-exclusive track record for
+    // TE-premium/6pt-passing leagues. Known limitation, not fixed here.
     const seasonStats = await ctx.db
       .query("playerSeasonStats")
       .withIndex("by_position_season_scoring", (q) =>
         q
           .eq("position", position)
           .eq("season", args.lastSeason)
-          .eq("scoring", args.scoring),
+          .eq("scoring", args.scoringConfig.scoring),
       )
       .collect();
     const pointsByFpid = new Map(
@@ -189,8 +196,8 @@ async function computeValueGaps(
       .filter((row) => (gamesByFpid.get(row.fpid) ?? 0) >= MIN_GAMES)
       .map((row) => ({
         fpid: row.fpid,
-        points: pointsForScoring(row, args.scoring),
-        adp: adpForScoring(adpByFpid.get(row.fpid)!, args.scoring),
+        points: pointsForScoringConfig(row, args.scoringConfig),
+        adp: adpForScoring(adpByFpid.get(row.fpid)!, args.scoringConfig.scoring),
         ppg: pointsByFpid.get(row.fpid)! / gamesByFpid.get(row.fpid)!,
         games: gamesByFpid.get(row.fpid)!,
       }));
@@ -261,16 +268,18 @@ async function computeValueGaps(
 export const getAllValueGaps = query({
   args: {
     week: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
     lastSeason: v.string(),
   },
   handler: async (ctx, args) => {
     const cached = await ctx.db
       .query("valueGaps")
-      .withIndex("by_week_scoring_lastSeason", (q) =>
+      .withIndex("by_week_scoring_teScoring_sixPointPassTds_lastSeason", (q) =>
         q
           .eq("week", args.week)
-          .eq("scoring", args.scoring)
+          .eq("scoring", args.scoringConfig.scoring)
+          .eq("teScoring", args.scoringConfig.teScoring)
+          .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds)
           .eq("lastSeason", args.lastSeason),
       )
       .collect();
@@ -303,30 +312,37 @@ export const getAllValueGaps = query({
 // immediately at creation time rather than waiting on the daily cron.
 export async function refreshValueGapsForCombo(
   ctx: MutationCtx,
-  args: { week: string; scoring: Scoring; lastSeason: string },
+  args: { week: string; scoringConfig: ScoringConfig; lastSeason: string },
 ) {
   const rows = await computeValueGaps(ctx, args);
 
   const existing = await ctx.db
     .query("valueGaps")
-    .withIndex("by_week_scoring_lastSeason", (q) =>
+    .withIndex("by_week_scoring_teScoring_sixPointPassTds_lastSeason", (q) =>
       q
         .eq("week", args.week)
-        .eq("scoring", args.scoring)
+        .eq("scoring", args.scoringConfig.scoring)
+        .eq("teScoring", args.scoringConfig.teScoring)
+        .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds)
         .eq("lastSeason", args.lastSeason),
     )
     .collect();
   for (const row of existing) await ctx.db.delete(row._id);
 
   for (const row of rows) {
-    await ctx.db.insert("valueGaps", { ...row, ...args });
+    await ctx.db.insert("valueGaps", {
+      ...row,
+      week: args.week,
+      lastSeason: args.lastSeason,
+      ...args.scoringConfig,
+    });
   }
 }
 
 export const refreshValueGaps = internalMutation({
   args: {
     week: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
     lastSeason: v.string(),
   },
   handler: async (ctx, args) => {
@@ -340,17 +356,46 @@ export const refreshValueGaps = internalMutation({
 // existing league already seeded shouldn't pay to recompute it again.
 export async function ensureValueGapsCached(
   ctx: MutationCtx,
-  args: { week: string; scoring: Scoring; lastSeason: string },
+  args: { week: string; scoringConfig: ScoringConfig; lastSeason: string },
 ) {
   const cached = await ctx.db
     .query("valueGaps")
-    .withIndex("by_week_scoring_lastSeason", (q) =>
+    .withIndex("by_week_scoring_teScoring_sixPointPassTds_lastSeason", (q) =>
       q
         .eq("week", args.week)
-        .eq("scoring", args.scoring)
+        .eq("scoring", args.scoringConfig.scoring)
+        .eq("teScoring", args.scoringConfig.teScoring)
+        .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds)
         .eq("lastSeason", args.lastSeason),
     )
     .first();
   if (cached) return;
   await refreshValueGapsForCombo(ctx, args);
 }
+
+// One-off migration helper: wipes every valueGaps row so it can be reseeded
+// with the new required teScoring/sixPointPassTds fields (added when TE
+// Premium/6pt passing TDs shipped) - existing rows predate those fields and
+// would fail schema validation otherwise. Same wipe-and-rebuild precedent as
+// convex/playerPoints.ts's clearSeasonStats. Safe to run any time after
+// that: getAllValueGaps' cache-miss fallback (computeValueGaps) keeps every
+// read correct while the cache is empty, and refreshCaches (or the next
+// daily cron) reseeds it.
+export const clearValueGaps = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("valueGaps")
+      .paginate({ cursor: args.cursor ?? null, numItems: 500 });
+
+    for (const row of result.page) {
+      await ctx.db.delete(row._id);
+    }
+
+    if (!result.isDone) {
+      await ctx.scheduler.runAfter(0, internal.valueGaps.clearValueGaps, {
+        cursor: result.continueCursor,
+      });
+    }
+  },
+});

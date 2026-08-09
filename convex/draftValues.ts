@@ -6,8 +6,13 @@ import {
   MutationCtx,
 } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { internal } from "./_generated/api";
 import { positionValidator, POSITIONS } from "./positions";
-import { scoringValidator, pointsForScoring, Scoring } from "./scoring";
+import {
+  scoringConfigValidator,
+  pointsForScoringConfig,
+  ScoringConfig,
+} from "./scoring";
 import { Doc, Id } from "./_generated/dataModel";
 import type { RosterSlotCounts } from "./draft/slots";
 import { hasProAccess } from "./billing/entitlements";
@@ -78,7 +83,7 @@ async function computeDraftValuesForSettings(
   ctx: QueryCtx | MutationCtx,
   args: {
     week: string;
-    scoring: Scoring;
+    scoringConfig: ScoringConfig;
     rosterSlots: RosterSlotCounts;
     flexPositions: Position[];
     superflexPositions: Position[];
@@ -92,7 +97,7 @@ async function computeDraftValuesForSettings(
 ): Promise<DraftValueRow[]> {
   const {
     week,
-    scoring,
+    scoringConfig,
     rosterSlots,
     flexPositions,
     superflexPositions,
@@ -128,7 +133,9 @@ async function computeDraftValuesForSettings(
       .collect();
     const available = rows.filter((row) => !keptFpids.has(row.fpid));
     available.sort(
-      (a, b) => pointsForScoring(b, scoring) - pointsForScoring(a, scoring),
+      (a, b) =>
+        pointsForScoringConfig(b, scoringConfig) -
+        pointsForScoringConfig(a, scoringConfig),
     );
     byPosition.set(pos, available);
   }
@@ -157,7 +164,10 @@ async function computeDraftValuesForSettings(
   for (const pos of flexPositions) {
     const sorted = byPosition.get(pos) ?? [];
     for (const row of sorted.slice(nonFlexDemand[pos])) {
-      flexCandidates.push({ position: pos, points: pointsForScoring(row, scoring) });
+      flexCandidates.push({
+        position: pos,
+        points: pointsForScoringConfig(row, scoringConfig),
+      });
     }
   }
   flexCandidates.sort((a, b) => b.points - a.points);
@@ -184,7 +194,10 @@ async function computeDraftValuesForSettings(
     const sorted = byPosition.get(pos) ?? [];
     const alreadyClaimed = nonFlexDemand[pos] + (flexWonCount.get(pos) ?? 0);
     for (const row of sorted.slice(alreadyClaimed)) {
-      superflexCandidates.push({ position: pos, points: pointsForScoring(row, scoring) });
+      superflexCandidates.push({
+        position: pos,
+        points: pointsForScoringConfig(row, scoringConfig),
+      });
     }
   }
   superflexCandidates.sort((a, b) => b.points - a.points);
@@ -217,10 +230,10 @@ async function computeDraftValuesForSettings(
     const last = sorted[sorted.length - 1];
 
     if (replacement) {
-      replacementPoints[pos] = pointsForScoring(replacement, scoring);
+      replacementPoints[pos] = pointsForScoringConfig(replacement, scoringConfig);
       usedFallback[pos] = false;
     } else if (last) {
-      replacementPoints[pos] = pointsForScoring(last, scoring);
+      replacementPoints[pos] = pointsForScoringConfig(last, scoringConfig);
       usedFallback[pos] = true;
     } else {
       replacementPoints[pos] = 0;
@@ -260,7 +273,10 @@ async function computeDraftValuesForSettings(
   const weightByFpid = new Map<number, number>();
   for (const pos of activePositions) {
     for (const row of byPosition.get(pos) ?? []) {
-      const vor = Math.max(pointsForScoring(row, scoring) - replacementPoints[pos], 0);
+      const vor = Math.max(
+        pointsForScoringConfig(row, scoringConfig) - replacementPoints[pos],
+        0,
+      );
       const weight = Math.pow(vor, FALLOFF_EXPONENT);
       vorByFpid.set(row.fpid, vor);
       weightByFpid.set(row.fpid, weight);
@@ -273,7 +289,7 @@ async function computeDraftValuesForSettings(
     const targetRows = byPosition.get(pos) ?? [];
     output.push(
       ...targetRows.map((row, index) => {
-        const points = pointsForScoring(row, scoring);
+        const points = pointsForScoringConfig(row, scoringConfig);
         const vor = vorByFpid.get(row.fpid) ?? 0;
         const weight = weightByFpid.get(row.fpid) ?? 0;
         const dollarValue =
@@ -307,7 +323,7 @@ async function computeDraftValues(
   args: {
     draftId: Id<"drafts">;
     week: string;
-    scoring: Scoring;
+    scoringConfig: ScoringConfig;
   },
 ): Promise<DraftValueRow[]> {
   const draft = await ctx.db.get(args.draftId);
@@ -360,7 +376,7 @@ async function computeDraftValues(
 
   return await computeDraftValuesForSettings(ctx, {
     week: args.week,
-    scoring: args.scoring,
+    scoringConfig: args.scoringConfig,
     rosterSlots: settings.rosterSlots,
     flexPositions: settings.flexPositions,
     superflexPositions: settings.superflexPositions,
@@ -380,12 +396,12 @@ async function computeDraftValues(
 // cache this feeds.
 async function computeGenericDraftValues(
   ctx: QueryCtx | MutationCtx,
-  args: { week: string; scoring: Scoring },
+  args: { week: string; scoringConfig: ScoringConfig },
 ): Promise<DraftValueRow[]> {
   const defaults = DEFAULT_GENERIC_LEAGUE_SETTINGS;
   return await computeDraftValuesForSettings(ctx, {
     week: args.week,
-    scoring: args.scoring,
+    scoringConfig: args.scoringConfig,
     rosterSlots: defaults.rosterSlots,
     flexPositions: defaults.flexPositions,
     superflexPositions: defaults.superflexPositions,
@@ -400,12 +416,16 @@ async function computeGenericDraftValues(
 
 async function getGenericDraftValues(
   ctx: QueryCtx,
-  args: { week: string; scoring: Scoring },
+  args: { week: string; scoringConfig: ScoringConfig },
 ): Promise<DraftValueRow[]> {
   const cached = await ctx.db
     .query("genericDraftValues")
-    .withIndex("by_week_scoring", (q) =>
-      q.eq("week", args.week).eq("scoring", args.scoring),
+    .withIndex("by_week_scoring_teScoring_sixPointPassTds", (q) =>
+      q
+        .eq("week", args.week)
+        .eq("scoring", args.scoringConfig.scoring)
+        .eq("teScoring", args.scoringConfig.teScoring)
+        .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
     )
     .collect();
   if (cached.length > 0) {
@@ -443,7 +463,7 @@ export const getDraftValues = query({
   args: {
     seasonId: v.id("seasons"),
     week: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
     // Omit to get every position back in one call (the combined players
     // table) - computeDraftValues always computes every active position
     // regardless, this only changes which rows are returned.
@@ -456,7 +476,7 @@ export const getDraftValues = query({
     if (!proAccess) {
       const rows = await getGenericDraftValues(ctx, {
         week: args.week,
-        scoring: args.scoring,
+        scoringConfig: args.scoringConfig,
       });
       return {
         isGeneric: true,
@@ -474,11 +494,13 @@ export const getDraftValues = query({
 
     const cached = await ctx.db
       .query("draftValues")
-      .withIndex("by_draft_week_scoring", (q) =>
+      .withIndex("by_draft_week_scoring_teScoring_sixPointPassTds", (q) =>
         q
           .eq("draftId", draft._id)
           .eq("week", args.week)
-          .eq("scoring", args.scoring),
+          .eq("scoring", args.scoringConfig.scoring)
+          .eq("teScoring", args.scoringConfig.teScoring)
+          .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
       )
       .collect();
 
@@ -499,7 +521,7 @@ export const getDraftValues = query({
         : await computeDraftValues(ctx, {
             draftId: draft._id,
             week: args.week,
-            scoring: args.scoring,
+            scoringConfig: args.scoringConfig,
           });
 
     return {
@@ -524,24 +546,31 @@ export async function refreshDraftValuesForLeague(
   args: {
     draftId: Id<"drafts">;
     week: string;
-    scoring: Scoring;
+    scoringConfig: ScoringConfig;
   },
 ) {
   const rows = await computeDraftValues(ctx, args);
 
   const existing = await ctx.db
     .query("draftValues")
-    .withIndex("by_draft_week_scoring", (q) =>
+    .withIndex("by_draft_week_scoring_teScoring_sixPointPassTds", (q) =>
       q
         .eq("draftId", args.draftId)
         .eq("week", args.week)
-        .eq("scoring", args.scoring),
+        .eq("scoring", args.scoringConfig.scoring)
+        .eq("teScoring", args.scoringConfig.teScoring)
+        .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
     )
     .collect();
   for (const row of existing) await ctx.db.delete(row._id);
 
   for (const row of rows) {
-    await ctx.db.insert("draftValues", { ...row, ...args });
+    await ctx.db.insert("draftValues", {
+      ...row,
+      draftId: args.draftId,
+      week: args.week,
+      ...args.scoringConfig,
+    });
   }
 }
 
@@ -549,7 +578,7 @@ export const refreshDraftValues = internalMutation({
   args: {
     draftId: v.id("drafts"),
     week: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
   },
   handler: async (ctx, args) => {
     await refreshDraftValuesForLeague(ctx, args);
@@ -561,25 +590,33 @@ export const refreshDraftValues = internalMutation({
 // aren't hitting the expensive live-compute fallback on every cold cache.
 export async function refreshGenericDraftValuesForWeek(
   ctx: MutationCtx,
-  args: { week: string; scoring: Scoring },
+  args: { week: string; scoringConfig: ScoringConfig },
 ) {
   const rows = await computeGenericDraftValues(ctx, args);
 
   const existing = await ctx.db
     .query("genericDraftValues")
-    .withIndex("by_week_scoring", (q) =>
-      q.eq("week", args.week).eq("scoring", args.scoring),
+    .withIndex("by_week_scoring_teScoring_sixPointPassTds", (q) =>
+      q
+        .eq("week", args.week)
+        .eq("scoring", args.scoringConfig.scoring)
+        .eq("teScoring", args.scoringConfig.teScoring)
+        .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
     )
     .collect();
   for (const row of existing) await ctx.db.delete(row._id);
 
   for (const row of rows) {
-    await ctx.db.insert("genericDraftValues", { ...row, ...args });
+    await ctx.db.insert("genericDraftValues", {
+      ...row,
+      week: args.week,
+      ...args.scoringConfig,
+    });
   }
 }
 
 export const refreshGenericDraftValues = internalMutation({
-  args: { week: v.string(), scoring: scoringValidator },
+  args: { week: v.string(), scoringConfig: scoringConfigValidator },
   handler: async (ctx, args) => {
     await refreshGenericDraftValuesForWeek(ctx, args);
   },
@@ -600,7 +637,57 @@ export async function invalidateDraftValues(
 ) {
   const cached = await ctx.db
     .query("draftValues")
-    .withIndex("by_draft_week_scoring", (q) => q.eq("draftId", draftId))
+    .withIndex("by_draft_week_scoring_teScoring_sixPointPassTds", (q) =>
+      q.eq("draftId", draftId),
+    )
     .collect();
   for (const row of cached) await ctx.db.delete(row._id);
 }
+
+// One-off migration helpers: wipe draftValues/genericDraftValues so they can
+// be reseeded with the new required teScoring/sixPointPassTds fields (added
+// when TE Premium/6pt passing TDs shipped) - existing rows predate those
+// fields and would fail schema validation otherwise. Same wipe-and-rebuild
+// precedent as convex/playerPoints.ts's clearSeasonStats / convex/
+// valueGaps.ts's clearValueGaps. Safe to run any time after that:
+// getDraftValues' cache-miss fallback keeps every read correct while the
+// cache is empty, and refreshCaches (or the next daily cron) reseeds it.
+export const clearDraftValues = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("draftValues")
+      .paginate({ cursor: args.cursor ?? null, numItems: 500 });
+
+    for (const row of result.page) {
+      await ctx.db.delete(row._id);
+    }
+
+    if (!result.isDone) {
+      await ctx.scheduler.runAfter(0, internal.draftValues.clearDraftValues, {
+        cursor: result.continueCursor,
+      });
+    }
+  },
+});
+
+export const clearGenericDraftValues = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("genericDraftValues")
+      .paginate({ cursor: args.cursor ?? null, numItems: 500 });
+
+    for (const row of result.page) {
+      await ctx.db.delete(row._id);
+    }
+
+    if (!result.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.draftValues.clearGenericDraftValues,
+        { cursor: result.continueCursor },
+      );
+    }
+  },
+});

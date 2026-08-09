@@ -27,6 +27,7 @@ import {
 } from "../../lib/reportCardSummary";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { UpgradePrompt } from "../../components/UpgradePrompt";
+import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
 import { WEEK } from "../../constants/general";
 
 interface DraftReportCardProps {
@@ -58,7 +59,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
   const report = useQuery(
     api.draft.reportCard.getDraftReportCard,
     settings
-      ? { seasonId, week: WEEK, scoring: settings.scoring }
+      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
       : "skip",
   );
   const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(
@@ -92,7 +93,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
       void ensureSummaryGenerated({
         seasonId,
         week: WEEK,
-        scoring: settings.scoring,
+        scoringConfig: scoringConfigFromSeason(settings),
       });
     }
   }, [report, settings, seasonId, ensureSummaryGenerated]);
@@ -101,7 +102,11 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
     if (!settings) return;
     setIsRegenerating(true);
     try {
-      await regenerateSummary({ seasonId, week: WEEK, scoring: settings.scoring });
+      await regenerateSummary({
+        seasonId,
+        week: WEEK,
+        scoringConfig: scoringConfigFromSeason(settings),
+      });
     } finally {
       setIsRegenerating(false);
     }
@@ -247,7 +252,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
-        scoring={settings.scoring}
+        scoringConfig={scoringConfigFromSeason(settings)}
         season={settings.year}
         seasonId={undefined}
       />

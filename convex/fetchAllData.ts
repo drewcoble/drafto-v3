@@ -3,12 +3,27 @@ import { action, internalAction, ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireSuperAdmin, currentSeason } from "./fantasyPros/client";
 import { fetchCurrentNflWeek, fetchNflSeasonState } from "./sleeper/state";
-import { Scoring } from "./scoring";
+import { Scoring, TeScoring, ScoringConfig, scoringConfigFromSeason } from "./scoring";
 
 // valueGaps.getAllValueGaps is only ever called with the current draft week
 // (see src/constants/general.ts's WEEK), so these are the only combos worth
 // precomputing daily - see convex/valueGaps.ts's cache comment.
-const VALUE_GAP_SCORINGS: Scoring[] = ["STD", "HALF", "PPR"];
+const SCORINGS: Scoring[] = ["STD", "HALF", "PPR"];
+const TE_SCORINGS: TeScoring[] = ["NONE", "HALF", "FULL"];
+
+// Full cross-product for the two league-independent shared caches
+// (valueGaps, genericDraftValues) - 3 x 3 x 2 = 18 combos. draftValues stays
+// one combo per real draft (that league's own scoringConfigFromSeason), so
+// its cardinality is unaffected by this fan-out.
+const ALL_SCORING_CONFIGS: ScoringConfig[] = SCORINGS.flatMap((scoring) =>
+  TE_SCORINGS.flatMap((teScoring) =>
+    [false, true].map((sixPointPassTds) => ({
+      scoring,
+      teScoring,
+      sixPointPassTds,
+    })),
+  ),
+);
 
 // Shared by fetchAll (after a fresh external fetch) and refreshCaches (an
 // on-demand repair with no external calls) - recomputes the valueGaps and
@@ -19,10 +34,10 @@ async function refreshCachedComputations(
   args: { week: string; season: string },
 ): Promise<void> {
   const lastSeason = String(Number(args.season) - 1);
-  for (const scoring of VALUE_GAP_SCORINGS) {
+  for (const scoringConfig of ALL_SCORING_CONFIGS) {
     await ctx.runMutation(internal.valueGaps.refreshValueGaps, {
       week: args.week,
-      scoring,
+      scoringConfig,
       lastSeason,
     });
   }
@@ -36,18 +51,18 @@ async function refreshCachedComputations(
     await ctx.runMutation(internal.draftValues.refreshDraftValues, {
       draftId: draft._id,
       week: args.week,
-      scoring: season.scoring,
+      scoringConfig: scoringConfigFromSeason(season),
     });
   }
 
   // Free-plan users get a shared, league-independent value set (see
   // convex/draftValues.ts's computeGenericDraftValues) instead of any real
-  // league's numbers - refreshed for every scoring format so its cache is
-  // never cold for whichever format a free user's league happens to use.
-  for (const scoring of VALUE_GAP_SCORINGS) {
+  // league's numbers - refreshed for every scoring config so its cache is
+  // never cold for whichever combo a free user's league happens to use.
+  for (const scoringConfig of ALL_SCORING_CONFIGS) {
     await ctx.runMutation(internal.draftValues.refreshGenericDraftValues, {
       week: args.week,
-      scoring,
+      scoringConfig,
     });
   }
 }

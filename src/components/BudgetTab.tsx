@@ -12,6 +12,7 @@ import {
 } from "../lib/budgetPresets";
 import { categoryForSlot } from "../lib/budgetCategories";
 import { resolveTeamSalaryCap } from "../lib/teamBudget";
+import { scoringConfigFromSeason } from "../lib/relevantPlayers";
 import {
   unallocatedBadgeColor,
   unallocatedBadgeLabel,
@@ -108,7 +109,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
   const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
-      ? { seasonId, week: WEEK, scoring: settings.scoring }
+      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
       : "skip",
   );
   const draftValues = draftValuesResult?.values;
@@ -556,7 +557,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
-        scoring={settings.scoring}
+        scoringConfig={scoringConfigFromSeason(settings)}
         season={settings.year}
         seasonId={seasonId}
       />

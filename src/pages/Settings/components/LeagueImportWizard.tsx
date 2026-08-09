@@ -107,6 +107,12 @@ export function LeagueImportWizard({
         teamCount: result.teamCount,
         salaryCap: DEFAULT_FORM.salaryCap,
         scoring: result.scoring,
+        // Sleeper's TE-premium/passing-TD settings aren't mapped yet (see
+        // convex/sleeper/leagueSettingsMapping.ts) - default off, same as a
+        // brand-new custom league, and the owner can adjust after import if
+        // their real league differs.
+        teScoring: DEFAULT_FORM.teScoring,
+        sixPointPassTds: DEFAULT_FORM.sixPointPassTds,
         rosterSlots: result.rosterSlots,
         flexPositions: result.flexPositions,
         superflexPositions: result.superflexPositions,
@@ -130,6 +136,8 @@ export function LeagueImportWizard({
         teamCount: form.teamCount,
         salaryCap: form.salaryCap,
         scoring: form.scoring,
+        teScoring: form.teScoring,
+        sixPointPassTds: form.sixPointPassTds,
         rosterSlots: form.rosterSlots,
         flexPositions: form.flexPositions,
         superflexPositions: form.superflexPositions,

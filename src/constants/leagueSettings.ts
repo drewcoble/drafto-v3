@@ -1,4 +1,4 @@
-import type { Position, ScoringFormat } from "../types";
+import type { Position, ScoringFormat, TeScoringFormat } from "../types";
 import type { KeeperRules } from "../lib/keeperCost";
 
 export const ROSTER_SLOT_KEYS = [
@@ -19,11 +19,22 @@ export const SCORING_OPTIONS: Array<{ label: string; value: ScoringFormat }> = [
   { label: "PPR", value: "PPR" },
 ];
 
+export const TE_SCORING_OPTIONS: Array<{
+  label: string;
+  value: TeScoringFormat;
+}> = [
+  { label: "No Bonus", value: "NONE" },
+  { label: "+0.5 / Rec", value: "HALF" },
+  { label: "+1 / Rec", value: "FULL" },
+];
+
 export interface LeagueSettingsFormValues {
   name: string;
   teamCount: number;
   salaryCap: number;
   scoring: ScoringFormat;
+  teScoring: TeScoringFormat;
+  sixPointPassTds: boolean;
   rosterSlots: Record<(typeof ROSTER_SLOT_KEYS)[number], number>;
   flexPositions: Position[];
   superflexPositions: Position[];
@@ -34,6 +45,8 @@ export const DEFAULT_FORM: LeagueSettingsFormValues = {
   teamCount: 12,
   salaryCap: 200,
   scoring: "PPR",
+  teScoring: "NONE",
+  sixPointPassTds: false,
   rosterSlots: {
     QB: 1,
     SUPERFLEX: 0,

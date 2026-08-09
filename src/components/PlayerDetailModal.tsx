@@ -17,10 +17,10 @@ import {
 import { Ban, Target } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import type { ScoringFormat } from "../types";
+import type { ScoringConfig } from "../types";
 import { POSITION_COLORS } from "../lib/positionColors";
 import { formatStatKey, injuryColor } from "../lib/playerFormatting";
-import { adpForScoring, pointsForScoring } from "../lib/relevantPlayers";
+import { adpForScoring, pointsForScoringConfig } from "../lib/relevantPlayers";
 import { ValueGapIcon } from "../pages/Settings/components/ValueGapIcon";
 import { GenericValueBadge } from "./GenericValueBadge";
 import { PlayerSeasonGameLog } from "./PlayerSeasonGameLog";
@@ -38,7 +38,7 @@ interface PlayerDetailModalProps {
   fpid: number | null;
   onClose: () => void;
   week: string;
-  scoring: ScoringFormat;
+  scoringConfig: ScoringConfig;
   season: string;
   // Omit (or pass undefined) from read-only/historical contexts - e.g.
   // Settings' SeasonSummary passes undefined even though it has a
@@ -51,7 +51,7 @@ export function PlayerDetailModal({
   fpid,
   onClose,
   week,
-  scoring,
+  scoringConfig,
   season,
   seasonId,
 }: PlayerDetailModalProps) {
@@ -71,13 +71,13 @@ export function PlayerDetailModal({
   // already subscribed to the same values (e.g. the Players tab) is free.
   const valueGaps = useQuery(api.valueGaps.getAllValueGaps, {
     week,
-    scoring,
+    scoringConfig,
     lastSeason: String(Number(season) - 1),
   });
   const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     seasonId && detail?.player
-      ? { seasonId, week, scoring, position: detail.player.position }
+      ? { seasonId, week, scoringConfig, position: detail.player.position }
       : "skip",
   );
   const draftValues = draftValuesResult?.values;
@@ -98,7 +98,7 @@ export function PlayerDetailModal({
   const seasonHistory = useQuery(
     api.playerPoints.getPlayerSeasonStatsHistory,
     fpid !== null
-      ? { fpid, scoring, seasons: recentSeasons }
+      ? { fpid, scoring: scoringConfig.scoring, seasons: recentSeasons }
       : "skip",
   );
   const seasonStatsBySeason = useMemo(() => {
@@ -119,7 +119,7 @@ export function PlayerDetailModal({
     detail?.player
       ? {
           season: lastSeason,
-          scoring,
+          scoring: scoringConfig.scoring,
           position: detail.player.position,
         }
       : "skip",
@@ -234,14 +234,14 @@ export function PlayerDetailModal({
             {detail.projection && (
               <Text size="sm">
                 <Text span fw={600}>
-                  {pointsForScoring(detail.projection, scoring).toFixed(1)}
+                  {pointsForScoringConfig(detail.projection, scoringConfig).toFixed(1)}
                 </Text>{" "}
                 proj pts
               </Text>
             )}
             {detail.ranking && (
               <Text size="sm">
-                ADP {adpForScoring(detail.ranking, scoring).toFixed(1)}
+                ADP {adpForScoring(detail.ranking, scoringConfig.scoring).toFixed(1)}
               </Text>
             )}
             {draftValue && (
@@ -320,7 +320,7 @@ export function PlayerDetailModal({
                       <PlayerSeasonGameLog
                         fpid={fpid}
                         season={seasonYear}
-                        scoring={scoring}
+                        scoring={scoringConfig.scoring}
                         isOpen={openSeasons.includes(seasonYear)}
                       />
                     </Accordion.Panel>

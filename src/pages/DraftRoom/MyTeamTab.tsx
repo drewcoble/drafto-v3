@@ -17,6 +17,7 @@ import { useTeamBudget } from "../../hooks/useTeamBudget";
 import { positionColorOrDefault } from "../../lib/positionColors";
 import { WEEK } from "../../constants/general";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
 import { SlotTable } from "./components/SlotTable";
 import { getErrorMessage } from "../../lib/errors";
 
@@ -223,7 +224,11 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={WEEK}
-        scoring={settings?.scoring ?? "PPR"}
+        scoringConfig={
+          settings
+            ? scoringConfigFromSeason(settings)
+            : { scoring: "PPR", teScoring: "NONE", sixPointPassTds: false }
+        }
         season={thisSeason}
         seasonId={seasonId}
       />

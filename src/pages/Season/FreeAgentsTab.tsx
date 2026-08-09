@@ -16,6 +16,7 @@ import { POSITIONS, type Position } from "../../types";
 import { POSITION_COLORS } from "../../lib/positionColors";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
 import {
   MOBILE_HEADER_HEIGHT,
   POSITION_FILTER_BAR_HEIGHT,
@@ -138,7 +139,7 @@ export function FreeAgentsTab({
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}
         week={result.week}
-        scoring={settings.scoring}
+        scoringConfig={scoringConfigFromSeason(settings)}
         season={result.season}
         seasonId={seasonId}
       />
