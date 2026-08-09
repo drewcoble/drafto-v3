@@ -144,9 +144,14 @@ export function SettingsForm({
       </Stack>
       {form.rosterSlots.FLEX > 0 && (
         <Stack gap={6}>
-          <Text size="sm" fw={500}>
-            FLEX eligible positions
-          </Text>
+          <Group gap={6} wrap="nowrap">
+            <Badge size="sm" variant="light" color={positionColorOrDefault("FLEX")}>
+              FLEX
+            </Badge>
+            <Text size="sm" fw={500}>
+              eligible positions
+            </Text>
+          </Group>
           <Chip.Group
             multiple
             value={form.flexPositions}
@@ -166,9 +171,18 @@ export function SettingsForm({
       )}
       {form.rosterSlots.SUPERFLEX > 0 && (
         <Stack gap={6}>
-          <Text size="sm" fw={500}>
-            SUPERFLEX eligible positions
-          </Text>
+          <Group gap={6} wrap="nowrap">
+            <Badge
+              size="sm"
+              variant="light"
+              color={positionColorOrDefault("SUPERFLEX")}
+            >
+              SUPERFLEX
+            </Badge>
+            <Text size="sm" fw={500}>
+              eligible positions
+            </Text>
+          </Group>
           <Chip.Group
             multiple
             value={form.superflexPositions}
