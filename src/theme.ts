@@ -1,4 +1,12 @@
-import { createTheme, type CSSVariablesResolver } from "@mantine/core";
+import {
+  alpha,
+  createTheme,
+  defaultVariantColorsResolver,
+  getPrimaryShade,
+  parseThemeColor,
+  type CSSVariablesResolver,
+  type VariantColorsResolver,
+} from "@mantine/core";
 
 // Base color "saddlebrown" (#8b4513), pinned to shade 7 rather than the
 // darkest shade (@mantine/colors-generator's default placement, since
@@ -251,7 +259,49 @@ const yahoo = [
   "#4e00b0",
 ] as const;
 
+// Position/status badges (QB/RB/WR/..., HOLD/WAIT, target/avoid tags, etc.)
+// all use variant="light" with a plain color name and no explicit shade
+// (e.g. color="qb", not color="qb.8") - Mantine's default shade for that
+// case in light mode (theme.primaryShade's light value, 6) reads too pale
+// against this app's light backgrounds. Bumps it 2 shades darker in light
+// mode only, via light-dark() so dark mode falls through to Mantine's own
+// unmodified result untouched. Leaves every other variant (filled,
+// outline, etc.) and any call site that already passes an explicit shade
+// alone.
+const LIGHT_VARIANT_SHADE_BUMP = 2;
+
+const variantColorResolver: VariantColorsResolver = (input) => {
+  const defaultResult = defaultVariantColorsResolver(input);
+  const parsed = parseThemeColor({ color: input.color, theme: input.theme });
+  const colorTuple = parsed.isThemeColor
+    ? input.theme.colors[parsed.color]
+    : undefined;
+  if (
+    input.variant !== "light" ||
+    !colorTuple ||
+    parsed.shade !== undefined
+  ) {
+    return defaultResult;
+  }
+
+  const lightShade = Math.min(
+    getPrimaryShade(input.theme, "light") + LIGHT_VARIANT_SHADE_BUMP,
+    9,
+  );
+  // Safe - lightShade is always 0-9, same range colorTuple is guaranteed
+  // to have a value for (see MantineColorsTuple).
+  const baseHex = colorTuple[lightShade]!;
+
+  return {
+    ...defaultResult,
+    background: `light-dark(${alpha(baseHex, 0.15)}, ${defaultResult.background})`,
+    hover: `light-dark(${alpha(baseHex, 0.18)}, ${defaultResult.hover})`,
+    color: `light-dark(var(--mantine-color-${parsed.color}-${lightShade}), ${defaultResult.color})`,
+  };
+};
+
 export const theme = createTheme({
+  variantColorResolver,
   fontFamily: "Inter, sans-serif",
   fontFamilyMonospace: "IBM Plex Mono, monospace",
   headings: {
@@ -417,7 +467,7 @@ export const theme = createTheme({
 // distinct "surface" to pop off of. Dark mode already has that contrast
 // for free (body is dark-7, Card/Popover default to the lighter dark-6),
 // so this gives light mode the same relationship: body drops to a plain
-// gray-2, while Card/Popover's gray-0 default (see the Popover entry
+// gray-2, while Card/Popover's gray-1 default (see the Popover entry
 // above) reads as a distinctly lighter surface again. Only --mantine-
 // color-body changes - theme.white itself (button text contrast, etc.)
 // is untouched.
@@ -428,3 +478,4 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
   },
   dark: {},
 });
+
