@@ -246,7 +246,11 @@ export function AppHeader({
               order={2}
               c="var(--mantine-color-text)"
               fz={{ base: "1.125rem", sm: "1.625rem" }}
-              visibleFrom="sm"
+              // Hidden below "sm" everywhere else - the league picker and
+              // mode-switch button need the room on mobile. Pages that hide
+              // those (hideLeagueControls, e.g. the dashboard) have room to
+              // spare, so the wordmark stays visible there instead.
+              {...(hideLeagueControls ? {} : { visibleFrom: "sm" })}
             >
               <Text component="span" inherit c="saddlebrown.7">
                 infini
