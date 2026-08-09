@@ -12,7 +12,7 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
-import { UserPlus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, UserPlus, X } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
@@ -88,6 +88,27 @@ export function MobileNomination({
   useEffect(() => {
     if (hasActiveNomination) setPopoverOpen(false);
   }, [hasActiveNomination]);
+
+  // Steps "whose turn" one team over in `teams`' own order (a plain list
+  // wrap, not the configured snake/linear nomination order - this is just a
+  // manual override control, same as the Select it replaced). From manual
+  // (turnTeamId null, no index), either arrow lands on the end of the list
+  // nearest that direction rather than skipping past it.
+  const currentTeamIndex = teams.findIndex((team) => team._id === turnTeamId);
+  const currentTeamName =
+    currentTeamIndex === -1 ? null : teams[currentTeamIndex]?.name;
+  const bumpTurnTeam = (direction: 1 | -1) => {
+    if (teams.length === 0) return;
+    if (currentTeamIndex === -1) {
+      onSetTurnTeam(
+        direction === 1 ? teams[0]!._id : teams[teams.length - 1]!._id,
+      );
+      return;
+    }
+    const nextIndex =
+      (currentTeamIndex + direction + teams.length) % teams.length;
+    onSetTurnTeam(teams[nextIndex]!._id);
+  };
 
   return (
     <>
@@ -173,38 +194,50 @@ export function MobileNomination({
                 </Group>
               )}
               {nominationOrderEnabled && (
-                <Group gap={8} wrap="nowrap">
-                  <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                <Stack gap={4}>
+                  <Text size="sm" c="dimmed">
                     Nominating team
                   </Text>
-                  <Select
-                    size="sm"
-                    w={170}
-                    placeholder="Set turn..."
-                    data={[
-                      { value: "__manual__", label: "— Manual —" },
-                      ...teams.map((team) => ({
-                        value: team._id,
-                        label: team.name,
-                      })),
-                    ]}
-                    value={turnTeamId ?? "__manual__"}
-                    onChange={(value) =>
-                      onSetTurnTeam(
-                        !value || value === "__manual__"
-                          ? null
-                          : (value as Id<"seasonTeams">),
-                      )
-                    }
-                    allowDeselect={false}
-                    // Without this, the Select's own dropdown portals to
-                    // document.body outside our outer Popover's DOM
-                    // subtree, so tapping an option reads as an "outside"
-                    // click and closes the whole nominate popover before
-                    // the selection even registers.
-                    comboboxProps={{ withinPortal: false }}
-                  />
-                </Group>
+                  <Group gap={8} wrap="nowrap" justify="space-between">
+                    <Group gap={4} wrap="nowrap">
+                      <ActionIcon
+                        variant="default"
+                        size="lg"
+                        onClick={() => bumpTurnTeam(-1)}
+                        aria-label="Previous team"
+                      >
+                        <ChevronLeft size={18} />
+                      </ActionIcon>
+                      <Text
+                        size="sm"
+                        fw={600}
+                        ta="center"
+                        style={{ minWidth: 108 }}
+                      >
+                        {currentTeamName ?? "Manual"}
+                      </Text>
+                      <ActionIcon
+                        variant="default"
+                        size="lg"
+                        onClick={() => bumpTurnTeam(1)}
+                        aria-label="Next team"
+                      >
+                        <ChevronRight size={18} />
+                      </ActionIcon>
+                    </Group>
+                    {/* Manual isn't part of the team cycle above (the
+                        arrows only ever bump between actual teams), so it
+                        needs its own explicit way in. */}
+                    <Button
+                      size="xs"
+                      variant={turnTeamId == null ? "filled" : "default"}
+                      {...(turnTeamId == null ? { color: "burlywood" } : {})}
+                      onClick={() => onSetTurnTeam(null)}
+                    >
+                      Manual
+                    </Button>
+                  </Group>
+                </Stack>
               )}
               <SearchBody
                 search={search}
