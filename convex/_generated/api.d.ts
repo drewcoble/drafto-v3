@@ -20,6 +20,7 @@ import type * as billing_webhookHandler from "../billing/webhookHandler.js";
 import type * as crons from "../crons.js";
 import type * as draft_auth from "../draft/auth.js";
 import type * as draft_board from "../draft/board.js";
+import type * as draft_budgetAutoAdjust from "../draft/budgetAutoAdjust.js";
 import type * as draft_consistency from "../draft/consistency.js";
 import type * as draft_fetchHelpers from "../draft/fetchHelpers.js";
 import type * as draft_history from "../draft/history.js";
@@ -88,6 +89,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   "draft/auth": typeof draft_auth;
   "draft/board": typeof draft_board;
+  "draft/budgetAutoAdjust": typeof draft_budgetAutoAdjust;
   "draft/consistency": typeof draft_consistency;
   "draft/fetchHelpers": typeof draft_fetchHelpers;
   "draft/history": typeof draft_history;

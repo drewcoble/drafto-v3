@@ -17,6 +17,8 @@ import {
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import { AppHeader } from "../../components/AppHeader";
+import { MOBILE_HEADER_HEIGHT } from "../../constants/general";
 import { getErrorMessage } from "../../lib/errors";
 
 // Super-admin-only tool for granting a user Pro access without collecting
@@ -38,20 +40,31 @@ export function AdminBillingPanel() {
 
   if (currentUser === undefined) {
     return (
-      <Center py="xl">
-        <Loader />
-      </Center>
+      <>
+        <AppHeader />
+        <Center pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }} pb="xl">
+          <Loader />
+        </Center>
+      </>
     );
   }
 
   if (currentUser?.role !== "super-admin") {
     return (
-      <Stack gap="md" py="xl" align="center">
-        <Text c="dimmed">You don't have access to this page.</Text>
-        <Button component={Link} to="/" variant="default">
-          Back to dashboard
-        </Button>
-      </Stack>
+      <>
+        <AppHeader />
+        <Stack
+          gap="md"
+          pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }}
+          pb="xl"
+          align="center"
+        >
+          <Text c="dimmed">You don't have access to this page.</Text>
+          <Button component={Link} to="/" variant="default">
+            Back to dashboard
+          </Button>
+        </Stack>
+      </>
     );
   }
 
@@ -73,91 +86,101 @@ export function AdminBillingPanel() {
   };
 
   return (
-    <Container size="sm" py="xl">
-      <Stack gap="lg">
-        <Group gap="xs">
-          <ActionIcon
-            component={Link}
-            to="/"
-            variant="subtle"
-            color="gray"
-            aria-label="Back to dashboard"
-          >
-            <ArrowLeft size={18} />
-          </ActionIcon>
-          <Title order={2}>Admin: Comp Access</Title>
-        </Group>
+    <>
+      <AppHeader />
+      <Container
+        size="sm"
+        pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }}
+        pb="xl"
+      >
+        <Stack gap="lg">
+          <Group gap="xs">
+            <ActionIcon
+              component={Link}
+              to="/"
+              variant="subtle"
+              color="gray"
+              aria-label="Back to dashboard"
+            >
+              <ArrowLeft size={18} />
+            </ActionIcon>
+            <Title order={2}>Admin: Comp Access</Title>
+          </Group>
 
-        <Card withBorder padding="lg">
-          <Stack gap="sm">
-            <Group align="flex-end">
-              <TextInput
-                label="User email"
-                placeholder="user@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.currentTarget.value)}
-                style={{ flex: 1 }}
-              />
-              <Button onClick={() => setSearchedEmail(email.trim())} disabled={!email.trim()}>
-                Search
-              </Button>
-            </Group>
-
-            {searchedEmail && found === undefined && (
-              <Center py="md">
-                <Loader size="sm" />
-              </Center>
-            )}
-            {searchedEmail && found === null && (
-              <Text size="sm" c="dimmed">
-                No user found with that email.
-              </Text>
-            )}
-            {found && (
-              <Stack gap="xs" pt="sm">
-                <Group justify="space-between">
-                  <Text fw={600}>{found.name}</Text>
-                  <Badge color={found.comped ? "green" : "gray"}>
-                    {found.comped ? "Comped" : "Not comped"}
-                  </Badge>
-                </Group>
-                <Text size="sm" c="dimmed">
-                  Subscription status: {found.status}
-                </Text>
+          <Card withBorder padding="lg">
+            <Stack gap="sm">
+              <Group align="flex-end">
                 <TextInput
-                  label="Note (optional)"
-                  placeholder="Reason for comp access"
-                  value={note}
-                  onChange={(e) => setNote(e.currentTarget.value)}
+                  label="User email"
+                  placeholder="user@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.currentTarget.value)}
+                  style={{ flex: 1 }}
                 />
-                <Group>
-                  <Button
-                    onClick={() => void handleToggleComp(true)}
-                    loading={isSaving}
-                    disabled={found.comped}
-                  >
-                    Grant comp access
-                  </Button>
-                  <Button
-                    onClick={() => void handleToggleComp(false)}
-                    loading={isSaving}
-                    variant="light"
-                    color="red"
-                    disabled={!found.comped}
-                  >
-                    Revoke comp access
-                  </Button>
-                </Group>
-                {error && (
-                  <Text size="sm" c="red">
-                    {error}
+                <Button
+                  onClick={() => setSearchedEmail(email.trim())}
+                  disabled={!email.trim()}
+                >
+                  Search
+                </Button>
+              </Group>
+
+              {searchedEmail && found === undefined && (
+                <Center py="md">
+                  <Loader size="sm" />
+                </Center>
+              )}
+              {searchedEmail && found === null && (
+                <Text size="sm" c="dimmed">
+                  No user found with that email.
+                </Text>
+              )}
+              {found && (
+                <Stack gap="xs" pt="sm">
+                  <Group justify="space-between">
+                    <Text fw={600}>{found.name}</Text>
+                    <Badge color={found.comped ? "green" : "gray"}>
+                      {found.comped ? "Comped" : "Not comped"}
+                    </Badge>
+                  </Group>
+                  <Text size="sm" c="dimmed">
+                    Subscription status: {found.status}
                   </Text>
-                )}
-              </Stack>
-            )}
-          </Stack>
-        </Card>
-      </Stack>
-    </Container>
+                  <TextInput
+                    label="Note (optional)"
+                    placeholder="Reason for comp access"
+                    value={note}
+                    onChange={(e) => setNote(e.currentTarget.value)}
+                  />
+                  <Group>
+                    <Button
+                      onClick={() => void handleToggleComp(true)}
+                      loading={isSaving}
+                      disabled={found.comped}
+                    >
+                      Grant comp access
+                    </Button>
+                    <Button
+                      onClick={() => void handleToggleComp(false)}
+                      loading={isSaving}
+                      variant="light"
+                      color="red"
+                      disabled={!found.comped}
+                    >
+                      Revoke comp access
+                    </Button>
+                  </Group>
+                  {error && (
+                    <Text size="sm" c="red">
+                      {error}
+                    </Text>
+                  )}
+                </Stack>
+              )}
+            </Stack>
+          </Card>
+        </Stack>
+      </Container>
+    </>
   );
 }

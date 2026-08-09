@@ -1,11 +1,13 @@
 import { useEffect, useMemo } from "react";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { Center, Container, Loader, Stack, Text, Title } from "@mantine/core";
+import { Center, Container, Loader, Stack, Text } from "@mantine/core";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { AppHeader } from "../components/AppHeader";
 import { AuthPanel } from "../components/AuthPanel";
 import { RouteErrorFallback } from "../components/RouteErrorFallback";
+import { MOBILE_HEADER_HEIGHT } from "../constants/general";
 import { getConfiguredSuperAdminEmails } from "../lib/superAdmin";
 
 export const Route = createRootRoute({
@@ -29,26 +31,30 @@ function RootComponent() {
 
   if (isLoading) {
     return (
-      <Center py="xl">
-        <Loader />
-      </Center>
+      <>
+        <AppHeader minimal />
+        <Center pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }} pb="xl">
+          <Loader />
+        </Center>
+      </>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <Container size="lg" py="xl">
-        <Stack gap="md">
-          <Title order={2}>
-            <Text component="span" inherit c="saddlebrown.6">
-              infini
-            </Text>
-            draft
-          </Title>
-          <Text c="dimmed">Sign in to view projections and draft.</Text>
-          <AuthPanel />
-        </Stack>
-      </Container>
+      <>
+        <AppHeader minimal />
+        <Container
+          size="lg"
+          pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }}
+          pb="xl"
+        >
+          <Stack gap="md">
+            <Text c="dimmed">Sign in to view projections and draft.</Text>
+            <AuthPanel />
+          </Stack>
+        </Container>
+      </>
     );
   }
 

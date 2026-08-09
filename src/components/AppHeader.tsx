@@ -58,13 +58,22 @@ const NEW_LEAGUE_VALUE = "new";
 // than scrolling away with the page - callers must reserve
 // MOBILE_HEADER_HEIGHT of top padding on mobile so page content doesn't
 // start out hidden underneath it (see setup/draft route layouts).
-export function AppHeader() {
+interface AppHeaderProps {
+  // Logo only, no league picker/mode-switch/overflow menu - for the
+  // signed-out view (routes/__root.tsx), which has no league or user
+  // context to show any of that for. listSeasons throws when signed out
+  // (unlike getCurrentUser/getMyEntitlement, which degrade gracefully), so
+  // this also skips it entirely rather than just hiding its output.
+  minimal?: boolean;
+}
+
+export function AppHeader({ minimal = false }: AppHeaderProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { leagueId } = useParams({ strict: false });
   const { signOut } = useAuthActions();
   const currentUser = useQuery(api.users.getCurrentUser);
-  const seasonsList = useQuery(api.leagues.listSeasons, {});
+  const seasonsList = useQuery(api.leagues.listSeasons, minimal ? "skip" : {});
   const entitlement = useQuery(api.billing.queries.getMyEntitlement);
   const { colorScheme, setColorScheme } = useMantineColorScheme();
 
@@ -237,92 +246,103 @@ export function AppHeader() {
             </Title>
           </Group>
         </Link>
-        <Group gap="xs" wrap="nowrap" align="center" style={{ flexShrink: 0 }}>
-          <Menu position="bottom-end" withArrow offset={8} width={220}>
-            <Menu.Target>
-              <Button
-                variant="default"
-                size="sm"
-                w={{ base: 130, sm: 220 }}
-                justify="space-between"
-                rightSection={<ChevronDown size={16} />}
-              >
-                <Text truncate span>
-                  {selectedLeague ? selectedLeague.name : "Select league"}
-                </Text>
-              </Button>
-            </Menu.Target>
-            <Menu.Dropdown>{leagueMenuItems}</Menu.Dropdown>
-          </Menu>
-          {modeSwitchButton}
-          <Menu position="bottom-end" withArrow offset={8}>
-            <Menu.Target>
-              <ActionIcon variant="default" size={40} aria-label="More options">
-                <MoreVertical size={18} />
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              {inDraftRoom && hasRealLeague && (
-                <Link
-                  to="/board/$leagueId"
-                  params={{ leagueId }}
-                  target="_blank"
-                  style={{ textDecoration: "none" }}
+        {!minimal && (
+          <Group
+            gap="xs"
+            wrap="nowrap"
+            align="center"
+            style={{ flexShrink: 0 }}
+          >
+            <Menu position="bottom-end" withArrow offset={8} width={220}>
+              <Menu.Target>
+                <Button
+                  variant="default"
+                  size="sm"
+                  w={{ base: 130, sm: 220 }}
+                  justify="space-between"
+                  rightSection={<ChevronDown size={16} />}
                 >
-                  <Menu.Item component="span" leftSection={<Tv size={16} />}>
-                    TV Board
-                  </Menu.Item>
-                </Link>
-              )}
-              {BILLING_LINK_ENABLED && (
-                <Link to="/billing" style={{ textDecoration: "none" }}>
-                  <Menu.Item
-                    component="span"
-                    leftSection={
-                      entitlement?.hasProAccess ? (
-                        <CreditCard size={16} />
-                      ) : (
-                        <Trophy size={16} />
-                      )
-                    }
+                  <Text truncate span>
+                    {selectedLeague ? selectedLeague.name : "Select league"}
+                  </Text>
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>{leagueMenuItems}</Menu.Dropdown>
+            </Menu>
+            {modeSwitchButton}
+            <Menu position="bottom-end" withArrow offset={8}>
+              <Menu.Target>
+                <ActionIcon
+                  variant="default"
+                  size={40}
+                  aria-label="More options"
+                >
+                  <MoreVertical size={18} />
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown>
+                {inDraftRoom && hasRealLeague && (
+                  <Link
+                    to="/board/$leagueId"
+                    params={{ leagueId }}
+                    target="_blank"
+                    style={{ textDecoration: "none" }}
                   >
-                    {entitlement?.hasProAccess ? "Billing" : "Go Pro"}
-                  </Menu.Item>
-                </Link>
-              )}
-              {currentUser?.role === "super-admin" && (
-                <Link to="/admin" style={{ textDecoration: "none" }}>
-                  <Menu.Item
-                    component="span"
-                    leftSection={<ShieldCheck size={16} />}
-                  >
-                    Admin
-                  </Menu.Item>
-                </Link>
-              )}
-              <Menu.Item
-                leftSection={isDark ? <Sun size={16} /> : <Moon size={16} />}
-                onClick={() => setColorScheme(isDark ? "light" : "dark")}
-              >
-                {isDark ? "Light mode" : "Dark mode"}
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<LogOut size={16} />}
-                onClick={() => {
-                  void signOut();
-                  // Otherwise the next sign-in (possibly a different
-                  // account on this browser) re-renders whatever league
-                  // route was still in the address bar, which fails that
-                  // owner check as "not authorized" if it belonged to
-                  // whoever was signed in before.
-                  void navigate({ to: "/", replace: true });
-                }}
-              >
-                Sign out
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </Group>
+                    <Menu.Item component="span" leftSection={<Tv size={16} />}>
+                      TV Board
+                    </Menu.Item>
+                  </Link>
+                )}
+                {BILLING_LINK_ENABLED && (
+                  <Link to="/billing" style={{ textDecoration: "none" }}>
+                    <Menu.Item
+                      component="span"
+                      leftSection={
+                        entitlement?.hasProAccess ? (
+                          <CreditCard size={16} />
+                        ) : (
+                          <Trophy size={16} />
+                        )
+                      }
+                    >
+                      {entitlement?.hasProAccess ? "Billing" : "Go Pro"}
+                    </Menu.Item>
+                  </Link>
+                )}
+                {currentUser?.role === "super-admin" && (
+                  <Link to="/admin" style={{ textDecoration: "none" }}>
+                    <Menu.Item
+                      component="span"
+                      leftSection={<ShieldCheck size={16} />}
+                    >
+                      Admin
+                    </Menu.Item>
+                  </Link>
+                )}
+                <Menu.Item
+                  leftSection={isDark ? <Sun size={16} /> : <Moon size={16} />}
+                  onClick={() => setColorScheme(isDark ? "light" : "dark")}
+                >
+                  {isDark ? "Light mode" : "Dark mode"}
+                </Menu.Item>
+                <Menu.Item
+                  leftSection={<LogOut size={16} />}
+                  onClick={() => {
+                    void signOut();
+                    // Otherwise the next sign-in (possibly a different
+                    // account on this browser) re-renders whatever league
+                    // route was still in the address bar, which fails that
+                    // owner check as "not authorized" if it belonged to
+                    // whoever was signed in before.
+                    void navigate({ to: "/", replace: true });
+                  }}
+                >
+                  Sign out
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          </Group>
+        )}
       </Group>
     </Box>
   );

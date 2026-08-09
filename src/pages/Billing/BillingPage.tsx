@@ -17,7 +17,9 @@ import {
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import { AppHeader } from "../../components/AppHeader";
 import { PRO_FEATURES } from "../../constants/proFeatures";
+import { MOBILE_HEADER_HEIGHT } from "../../constants/general";
 import { useProPricing } from "../../hooks/useProPricing";
 import { formatProPrice } from "../../lib/formatPrice";
 import { getErrorMessage } from "../../lib/errors";
@@ -93,9 +95,12 @@ export function BillingPage() {
 
   if (subscription === undefined || isReconciling) {
     return (
-      <Center py="xl">
-        <Loader />
-      </Center>
+      <>
+        <AppHeader />
+        <Center pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }} pb="xl">
+          <Loader />
+        </Center>
+      </>
     );
   }
 
@@ -105,92 +110,105 @@ export function BillingPage() {
     subscription?.status === "past_due";
 
   return (
-    <Container size="sm" py="xl">
-      <Stack gap="lg">
-        <Group gap="xs">
-          <ActionIcon
-            component={Link}
-            to="/"
-            variant="subtle"
-            color="gray"
-            aria-label="Back to dashboard"
-          >
-            <ArrowLeft size={18} />
-          </ActionIcon>
-          <Title order={2}>Billing</Title>
-        </Group>
+    <>
+      <AppHeader />
+      <Container
+        size="sm"
+        pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }}
+        pb="xl"
+      >
+        <Stack gap="lg">
+          <Group gap="xs">
+            <ActionIcon
+              component={Link}
+              to="/"
+              variant="subtle"
+              color="gray"
+              aria-label="Back to dashboard"
+            >
+              <ArrowLeft size={18} />
+            </ActionIcon>
+            <Title order={2}>Billing</Title>
+          </Group>
 
-        {isActive ? (
-          <Card withBorder padding="lg">
-            <Stack gap="sm">
-              <Group justify="space-between">
-                <Title order={4}>Pro plan</Title>
-                <Badge color="green">Active</Badge>
-              </Group>
-              {subscription?.comped && (
-                <Text size="sm" c="dimmed">
-                  You have complimentary Pro access.
-                </Text>
-              )}
-              {subscription?.status === "past_due" && (
-                <Text size="sm" c="orange">
-                  Your last payment failed - Stripe is retrying automatically.
-                  Update your card to avoid losing access.
-                </Text>
-              )}
-              {subscription?.currentPeriodEnd && (
-                <Text size="sm" c="dimmed">
-                  {subscription.cancelAtPeriodEnd ? "Cancels" : "Renews"} on{" "}
-                  {formatDate(subscription.currentPeriodEnd)}.
-                </Text>
-              )}
-              {subscription?.hasStripeCustomer ? (
-                <Button
-                  onClick={() => void handleManage()}
-                  loading={isRedirecting}
-                  variant="light"
-                >
-                  Manage subscription
-                </Button>
-              ) : (
-                <Text size="sm" c="dimmed">
-                  Contact support to make changes to your complimentary access.
-                </Text>
-              )}
-            </Stack>
-          </Card>
-        ) : (
-          <Card withBorder padding="lg">
-            <Stack gap="sm">
-              <Group justify="space-between" align="flex-end">
-                <Title order={4}>Pro</Title>
-                {pricing && (
-                  <Text size="lg" fw={700}>
-                    {formatProPrice(pricing)}
+          {isActive ? (
+            <Card withBorder padding="lg">
+              <Stack gap="sm">
+                <Group justify="space-between">
+                  <Title order={4}>Pro plan</Title>
+                  <Badge color="green">Active</Badge>
+                </Group>
+                {subscription?.comped && (
+                  <Text size="sm" c="dimmed">
+                    You have complimentary Pro access.
                   </Text>
                 )}
-              </Group>
-              <Text size="sm" c="dimmed">
-                Unlock everything the free plan limits.
-              </Text>
-              <List size="sm" spacing={4}>
-                {PRO_FEATURES.map((feature) => (
-                  <List.Item key={feature}>{feature}</List.Item>
-                ))}
-              </List>
-              <Button onClick={() => void handleSubscribe()} loading={isRedirecting}>
-                {pricing ? `Subscribe - ${formatProPrice(pricing)}` : "Subscribe"}
-              </Button>
-            </Stack>
-          </Card>
-        )}
+                {subscription?.status === "past_due" && (
+                  <Text size="sm" c="orange">
+                    Your last payment failed - Stripe is retrying automatically.
+                    Update your card to avoid losing access.
+                  </Text>
+                )}
+                {subscription?.currentPeriodEnd && (
+                  <Text size="sm" c="dimmed">
+                    {subscription.cancelAtPeriodEnd ? "Cancels" : "Renews"} on{" "}
+                    {formatDate(subscription.currentPeriodEnd)}.
+                  </Text>
+                )}
+                {subscription?.hasStripeCustomer ? (
+                  <Button
+                    onClick={() => void handleManage()}
+                    loading={isRedirecting}
+                    variant="light"
+                  >
+                    Manage subscription
+                  </Button>
+                ) : (
+                  <Text size="sm" c="dimmed">
+                    Contact support to make changes to your complimentary
+                    access.
+                  </Text>
+                )}
+              </Stack>
+            </Card>
+          ) : (
+            <Card withBorder padding="lg">
+              <Stack gap="sm">
+                <Group justify="space-between" align="flex-end">
+                  <Title order={4}>Pro</Title>
+                  {pricing && (
+                    <Text size="lg" fw={700}>
+                      {formatProPrice(pricing)}
+                    </Text>
+                  )}
+                </Group>
+                <Text size="sm" c="dimmed">
+                  Unlock everything the free plan limits.
+                </Text>
+                <List size="sm" spacing={4}>
+                  {PRO_FEATURES.map((feature) => (
+                    <List.Item key={feature}>{feature}</List.Item>
+                  ))}
+                </List>
+                <Button
+                  onClick={() => void handleSubscribe()}
+                  loading={isRedirecting}
+                >
+                  {pricing
+                    ? `Subscribe - ${formatProPrice(pricing)}`
+                    : "Subscribe"}
+                </Button>
+              </Stack>
+            </Card>
+          )}
 
-        {error && (
-          <Text size="sm" c="red">
-            {error}
-          </Text>
-        )}
-      </Stack>
-    </Container>
+          {error && (
+            <Text size="sm" c="red">
+              {error}
+            </Text>
+          )}
+        </Stack>
+      </Container>
+    </>
   );
 }
