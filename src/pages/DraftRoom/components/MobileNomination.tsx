@@ -5,9 +5,9 @@ import {
   Box,
   Button,
   Card,
-  Drawer,
   Group,
   NumberInput,
+  Popover,
   Select,
   Stack,
   Text,
@@ -54,10 +54,12 @@ interface MobileNominationProps {
 // Mobile replacement for the desktop NominationPanel card (hidden below the
 // "sm" breakpoint via visibleFrom="sm" on that component - see
 // DraftTopBar.tsx). A gavel FAB sits over the center of the bottom nav bar
-// and opens a bottom drawer with the search/nominate form; once a player is
-// nominated the drawer closes itself and a floating bar takes over above
-// the bottom nav with the live bid + winner controls, so the auction can be
-// run one-handed without digging through a tab.
+// and opens a Popover with the search/nominate form, styled like
+// PlayerBar.tsx's own nominate popover (withArrow shadow="md") rather than
+// a full bottom-sheet Drawer; once a player is nominated the popover closes
+// itself and a floating bar takes over above the bottom nav with the live
+// bid + winner controls, so the auction can be run one-handed without
+// digging through a tab.
 export function MobileNomination({
   nominationOrderEnabled,
   turnTeamId,
@@ -80,13 +82,13 @@ export function MobileNomination({
   usingGenericValues,
   onSelectPlayer,
 }: MobileNominationProps) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const hasActiveNomination = !!activeNomination;
 
-  // Auto-close the search drawer the moment a nomination lands - the
+  // Auto-close the search popover the moment a nomination lands - the
   // floating bar below takes over from here.
   useEffect(() => {
-    if (hasActiveNomination) setDrawerOpen(false);
+    if (hasActiveNomination) setPopoverOpen(false);
   }, [hasActiveNomination]);
 
   return (
@@ -109,105 +111,96 @@ export function MobileNomination({
           zIndex: 210,
         }}
       >
-        <ActionIcon
-          radius="xl"
-          size={56}
-          color="saddlebrown"
-          variant="filled"
-          disabled={!!activeNomination}
-          aria-label={drawerOpen ? "Close nominate a player" : "Nominate a player"}
-          onClick={() => setDrawerOpen((open) => !open)}
-          style={{
-            boxShadow: "var(--mantine-shadow-lg)",
-            border: "none",
-            // A saddlebrown gradient (lighter shade 3 to darker shade 7)
-            // instead of a flat fill, each stop still mixed with
-            // transparent at the same 65% as before so it stays translucent
-            // against the frosted bar underneath it (see BottomNav.tsx).
-            background:
-              "linear-gradient(135deg, color-mix(in srgb, var(--mantine-color-saddlebrown-3) 65%, transparent), color-mix(in srgb, var(--mantine-color-saddlebrown-7) 65%, transparent))",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-          }}
+        <Popover
+          opened={popoverOpen}
+          onChange={setPopoverOpen}
+          position="top"
+          withArrow
+          shadow="md"
+          withinPortal
+          width={320}
         >
-          {drawerOpen ? <X size={24} /> : <UserPlus size={24} />}
-        </ActionIcon>
-      </Box>
-
-      <Drawer
-        opened={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        position="bottom"
-        title="Nominate a player"
-        // Mantine doesn't actually define a --drawer-size-auto var, so
-        // size="auto" silently fell back to height: 100% - the drawer
-        // filled the whole screen instead of fitting its content, pushing
-        // the title/search up behind the fixed AppHeader/MobileStatsRow
-        // bars. Forcing height: auto (capped so it can't ever exceed most
-        // of the viewport) instead.
-        styles={{
-          content: { height: "auto", maxHeight: "80vh" },
-          // The drawer sits flush with the viewport bottom, same spot the
-          // nominate FAB floats over (BOTTOM_NAV_BOTTOM_OFFSET +
-          // BOTTOM_NAV_HEIGHT) - without this, the FAB/X button visually
-          // covers the drawer's last bit of content.
-          body: {
-            paddingBottom: `calc(${BOTTOM_NAV_BOTTOM_OFFSET + BOTTOM_NAV_HEIGHT + 12}px + env(safe-area-inset-bottom))`,
-          },
-        }}
-        overlayProps={{ blur: 3 }}
-        hiddenFrom="sm"
-      >
-        <Stack gap="sm">
-          {usingGenericValues && (
-            <Group gap={4} wrap="nowrap">
-              <Text size="xs" c="dimmed">
-                Values shown are estimates
-              </Text>
-              <GenericValueBadge />
-            </Group>
-          )}
-          {nominationOrderEnabled && (
-            <Group gap={6} wrap="nowrap">
-              <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                {turnTeamName ? `${turnTeamName}'s turn` : "Manual turn"}
-              </Text>
-              <Select
-                size="xs"
-                w={140}
-                placeholder="Set turn..."
-                data={[
-                  { value: "__manual__", label: "— Manual —" },
-                  ...teams.map((team) => ({
-                    value: team._id,
-                    label: team.name,
-                  })),
-                ]}
-                value={turnTeamId ?? "__manual__"}
-                onChange={(value) =>
-                  onSetTurnTeam(
-                    !value || value === "__manual__"
-                      ? null
-                      : (value as Id<"seasonTeams">),
-                  )
-                }
-                allowDeselect={false}
+          <Popover.Target>
+            <ActionIcon
+              radius="xl"
+              size={56}
+              color="saddlebrown"
+              variant="filled"
+              disabled={!!activeNomination}
+              aria-label={
+                popoverOpen ? "Close nominate a player" : "Nominate a player"
+              }
+              onClick={() => setPopoverOpen((open) => !open)}
+              style={{
+                boxShadow: "var(--mantine-shadow-lg)",
+                border: "none",
+                // A saddlebrown gradient (lighter shade 3 to darker shade 7)
+                // instead of a flat fill, each stop still mixed with
+                // transparent at the same 65% as before so it stays
+                // translucent against the frosted bar underneath it (see
+                // BottomNav.tsx).
+                background:
+                  "linear-gradient(135deg, color-mix(in srgb, var(--mantine-color-saddlebrown-3) 65%, transparent), color-mix(in srgb, var(--mantine-color-saddlebrown-7) 65%, transparent))",
+                backdropFilter: "blur(16px)",
+                WebkitBackdropFilter: "blur(16px)",
+              }}
+            >
+              {popoverOpen ? <X size={24} /> : <UserPlus size={24} />}
+            </ActionIcon>
+          </Popover.Target>
+          <Popover.Dropdown>
+            <Stack gap="sm">
+              {usingGenericValues && (
+                <Group gap={4} wrap="nowrap">
+                  <Text size="xs" c="dimmed">
+                    Values shown are estimates
+                  </Text>
+                  <GenericValueBadge />
+                </Group>
+              )}
+              {nominationOrderEnabled && (
+                <Group gap={6} wrap="nowrap">
+                  <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                    {turnTeamName ? `${turnTeamName}'s turn` : "Manual turn"}
+                  </Text>
+                  <Select
+                    size="xs"
+                    w={140}
+                    placeholder="Set turn..."
+                    data={[
+                      { value: "__manual__", label: "— Manual —" },
+                      ...teams.map((team) => ({
+                        value: team._id,
+                        label: team.name,
+                      })),
+                    ]}
+                    value={turnTeamId ?? "__manual__"}
+                    onChange={(value) =>
+                      onSetTurnTeam(
+                        !value || value === "__manual__"
+                          ? null
+                          : (value as Id<"seasonTeams">),
+                      )
+                    }
+                    allowDeselect={false}
+                  />
+                </Group>
+              )}
+              <SearchBody
+                search={search}
+                onSearchChange={onSearchChange}
+                searchResults={searchResults}
+                draftValueByFpid={draftValueByFpid}
+                onNominate={(fpid) => {
+                  onNominate(fpid);
+                  setPopoverOpen(false);
+                }}
+                onSelectPlayer={onSelectPlayer}
               />
-            </Group>
-          )}
-          <SearchBody
-            search={search}
-            onSearchChange={onSearchChange}
-            searchResults={searchResults}
-            draftValueByFpid={draftValueByFpid}
-            onNominate={(fpid) => {
-              onNominate(fpid);
-              setDrawerOpen(false);
-            }}
-            onSelectPlayer={onSelectPlayer}
-          />
-        </Stack>
-      </Drawer>
+            </Stack>
+          </Popover.Dropdown>
+        </Popover>
+      </Box>
 
       {activeNomination && (
         <MobileNominationBar
