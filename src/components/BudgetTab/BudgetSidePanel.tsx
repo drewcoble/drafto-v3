@@ -24,6 +24,10 @@ interface BudgetSidePanelProps {
   // "Superflex heavy" is meaningless without a SUPERFLEX slot to spend on -
   // dropped from the list entirely for leagues without one.
   hasSuperflex: boolean;
+  // Which preset (if any) the current amounts still exactly match - null
+  // the instant the user edits a slot away from it. See BudgetTab.tsx's
+  // activePreset for how that's derived.
+  activePreset: BudgetPreset | null;
   onApplyPreset: (preset: BudgetPreset) => void;
   perStarter: number;
   perRosterSpot: number;
@@ -69,6 +73,7 @@ function CollapsibleCard({
 export function BudgetSidePanel({
   showPresets,
   hasSuperflex,
+  activePreset,
   onApplyPreset,
   perStarter,
   perRosterSpot,
@@ -95,7 +100,7 @@ export function BudgetSidePanel({
           {presets.map((preset) => (
             <Button
               key={preset.value}
-              variant="default"
+              variant={preset.value === activePreset ? "filled" : "default"}
               fullWidth
               onClick={() => onApplyPreset(preset.value)}
             >

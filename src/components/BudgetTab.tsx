@@ -136,6 +136,13 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
     amounts: Record<string, number>;
     overspendBehavior: OverspendBehavior;
   } | null>(null);
+  // Which Starter Budget button (if any) should read as "selected" - see
+  // activePreset below, which derives that reactively by comparing amounts
+  // against this preset's own generated shape, rather than this flag being
+  // cleared explicitly on every edit.
+  const [lastAppliedPreset, setLastAppliedPreset] = useState<BudgetPreset | null>(
+    null,
+  );
 
   // Seed the form once, after which further refetches (e.g. from another
   // tab, or a live-mirrored pre-draft edit) shouldn't clobber whatever the
@@ -232,6 +239,19 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
     [draftValues, draftedFpids],
   );
 
+  // Regenerated only when the applied preset or the league's own shape
+  // changes, not on every render/keystroke - activePreset below compares
+  // this against the live `amounts` to decide whether the preset's button
+  // should still read as selected.
+  const lastAppliedPresetAmounts = useMemo(() => {
+    if (!lastAppliedPreset || !settings) return null;
+    return generatePresetAmounts(
+      lastAppliedPreset,
+      settings.rosterSlots,
+      resolveTeamSalaryCap(selfTeam, settings.salaryCap),
+    );
+  }, [lastAppliedPreset, settings, selfTeam]);
+
   if (!settings || !teams || !isInitialized) {
     return null;
   }
@@ -277,6 +297,16 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
     !amountsEqual(amounts, savedSnapshot.amounts) ||
     overspendBehavior !== savedSnapshot.overspendBehavior;
 
+  // No explicit "clear the selection" needed - editing any slot makes
+  // amounts diverge from lastAppliedPresetAmounts, so this just goes null
+  // on its own the next render.
+  const activePreset =
+    lastAppliedPreset &&
+    lastAppliedPresetAmounts &&
+    amountsEqual(amounts, lastAppliedPresetAmounts)
+      ? lastAppliedPreset
+      : null;
+
   const categoryTotals = CATEGORY_ORDER.map((category) => ({
     category,
     total: slots
@@ -291,6 +321,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
       effectiveSalaryCap,
     );
     setAmounts(next);
+    setLastAppliedPreset(preset);
     if (mode === "live") {
       setTouchedKeys(new Set(Object.keys(next)));
     }
@@ -418,6 +449,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
       <BudgetSidePanel
         showPresets={mode === "predraft"}
         hasSuperflex={settings.rosterSlots.SUPERFLEX > 0}
+        activePreset={activePreset}
         onApplyPreset={applyPreset}
         perStarter={perStarter}
         perRosterSpot={perRosterSpot}
