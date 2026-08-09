@@ -362,7 +362,7 @@ function MobileNominationBar({
         // a fixed dark-palette shade that doesn't flip with color scheme on
         // its own.
         background:
-          "light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))",
+          "light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6))",
         boxShadow: "var(--mantine-shadow-lg)",
       }}
     >

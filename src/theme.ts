@@ -321,7 +321,7 @@ export const theme = createTheme({
       styles: {
         dropdown: {
           backgroundColor:
-            "light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))",
+            "light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6))",
         },
       },
     },
