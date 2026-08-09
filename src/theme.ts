@@ -417,14 +417,14 @@ export const theme = createTheme({
 // distinct "surface" to pop off of. Dark mode already has that contrast
 // for free (body is dark-7, Card/Popover default to the lighter dark-6),
 // so this gives light mode the same relationship: body drops to a plain
-// gray-1, while Card/Popover's gray-0 default (see the Popover entry
+// gray-2, while Card/Popover's gray-0 default (see the Popover entry
 // above) reads as a distinctly lighter surface again. Only --mantine-
 // color-body changes - theme.white itself (button text contrast, etc.)
 // is untouched.
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
   variables: {},
   light: {
-    "--mantine-color-body": "var(--mantine-color-gray-1)",
+    "--mantine-color-body": "var(--mantine-color-gray-2)",
   },
   dark: {},
 });
