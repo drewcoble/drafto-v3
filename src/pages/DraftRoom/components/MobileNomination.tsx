@@ -197,6 +197,12 @@ export function MobileNomination({
                       )
                     }
                     allowDeselect={false}
+                    // Without this, the Select's own dropdown portals to
+                    // document.body outside our outer Popover's DOM
+                    // subtree, so tapping an option reads as an "outside"
+                    // click and closes the whole nominate popover before
+                    // the selection even registers.
+                    comboboxProps={{ withinPortal: false }}
                   />
                 </Group>
               )}
