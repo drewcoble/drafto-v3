@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   Chip,
   Group,
@@ -10,6 +11,10 @@ import {
 } from "@mantine/core";
 import { CountStepper, EditableNumberStepper } from "../../../components/NumberStepper";
 import { POSITIONS, type Position, type ScoringFormat } from "../../../types";
+import {
+  POSITION_COLORS,
+  positionColorOrDefault,
+} from "../../../lib/positionColors";
 import {
   ROSTER_SLOT_KEYS,
   SCORING_OPTIONS,
@@ -112,7 +117,14 @@ export function SettingsForm({
         <SimpleGrid cols={4} spacing="sm">
           {ROSTER_SLOT_KEYS.map((key) => (
             <Stack key={key} gap={4}>
-              <Text size="sm">{key}</Text>
+              <Badge
+                size="sm"
+                variant="light"
+                color={positionColorOrDefault(key)}
+                style={{ alignSelf: "flex-start" }}
+              >
+                {key}
+              </Badge>
               <CountStepper
                 label={key}
                 value={form.rosterSlots[key]}
@@ -144,7 +156,7 @@ export function SettingsForm({
           >
             <Group gap="xs">
               {POSITIONS.map((pos) => (
-                <Chip key={pos} value={pos}>
+                <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
                   {pos}
                 </Chip>
               ))}
@@ -166,7 +178,7 @@ export function SettingsForm({
           >
             <Group gap="xs">
               {POSITIONS.map((pos) => (
-                <Chip key={pos} value={pos}>
+                <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
                   {pos}
                 </Chip>
               ))}
