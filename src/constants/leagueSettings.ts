@@ -28,6 +28,14 @@ export const TE_SCORING_OPTIONS: Array<{
   { label: "+1 / Rec", value: "FULL" },
 ];
 
+// SegmentedControl needs string values - "4"/"6" map to sixPointPassTds'
+// underlying boolean at the call site rather than changing that field's
+// type, since the schema/mutation payload still just wants a boolean.
+export const PASSING_TD_OPTIONS: Array<{ label: string; value: "4" | "6" }> = [
+  { label: "4pt Passing TD", value: "4" },
+  { label: "6pt Passing TD", value: "6" },
+];
+
 export interface LeagueSettingsFormValues {
   name: string;
   teamCount: number;

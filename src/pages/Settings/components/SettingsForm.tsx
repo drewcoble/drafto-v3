@@ -2,6 +2,7 @@ import {
   Anchor,
   Badge,
   Button,
+  Card,
   Chip,
   Group,
   SegmentedControl,
@@ -10,6 +11,7 @@ import {
   Switch,
   Text,
   TextInput,
+  Title,
 } from "@mantine/core";
 import { Link } from "@tanstack/react-router";
 import { CountStepper, EditableNumberStepper } from "../../../components/NumberStepper";
@@ -24,6 +26,7 @@ import {
   positionColorOrDefault,
 } from "../../../lib/positionColors";
 import {
+  PASSING_TD_OPTIONS,
   ROSTER_SLOT_KEYS,
   SCORING_OPTIONS,
   TE_SCORING_OPTIONS,
@@ -78,208 +81,239 @@ export function SettingsForm({
 }: SettingsFormProps) {
   return (
     <Stack gap="md" py="sm" maw={500}>
-      <TextInput
-        label="Name"
-        value={form.name}
-        onChange={(event) =>
-          onChange({ ...form, name: event.currentTarget.value })
-        }
-      />
-      <Group grow align="flex-start">
-        <Stack gap={4}>
-          <Text size="sm" fw={500}>
-            Teams
-          </Text>
-          {teamsLocked ? (
-            <Text size="xs" c="dimmed">
-              Managed from the Teams panel
-            </Text>
-          ) : null}
-          <CountStepper
-            label="Teams"
-            min={1}
-            value={form.teamCount}
-            onChange={(value) =>
-              onChange({ ...form, teamCount: value ?? form.teamCount })
-            }
-            disabled={teamsLocked}
-          />
-        </Stack>
-        <Stack gap={4}>
-          <Text size="sm" fw={500}>
-            Salary Cap
-          </Text>
-          <EditableNumberStepper
-            label="Salary Cap"
-            min={1}
-            prefix="$"
-            value={form.salaryCap}
-            onChange={(value) =>
-              onChange({ ...form, salaryCap: value ?? form.salaryCap })
+      <Card withBorder padding="md">
+        <Stack gap="md">
+          <Title order={5}>League Basics</Title>
+          <TextInput
+            label="Name"
+            value={form.name}
+            onChange={(event) =>
+              onChange({ ...form, name: event.currentTarget.value })
             }
           />
-        </Stack>
-      </Group>
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          Scoring
-        </Text>
-        <SegmentedControl
-          value={form.scoring}
-          onChange={(value) =>
-            onChange({ ...form, scoring: value as ScoringFormat })
-          }
-          data={SCORING_OPTIONS.map(({ label, value }) => ({
-            label,
-            value,
-          }))}
-        />
-      </Stack>
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          TE Premium
-        </Text>
-        <SegmentedControl
-          value={form.teScoring}
-          onChange={(value) =>
-            onChange({ ...form, teScoring: value as TeScoringFormat })
-          }
-          data={TE_SCORING_OPTIONS.map(({ label, value }) => ({
-            label,
-            value,
-          }))}
-        />
-      </Stack>
-      <Switch
-        label="6pt Passing TDs"
-        description="Off keeps the standard 4pt passing touchdown."
-        checked={form.sixPointPassTds}
-        onChange={(event) =>
-          onChange({ ...form, sixPointPassTds: event.currentTarget.checked })
-        }
-      />
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          Roster Slots
-        </Text>
-        {/* 4 columns of CountSteppers (now STEPPER_BUTTON_SIZE-wide +/-
-            buttons each) don't fit a mobile viewport without overlapping -
-            2 up narrow, same 4 from "sm" up where there's room. */}
-        <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md" verticalSpacing="lg">
-          {ROSTER_SLOT_KEYS.map((key) => (
-            <Stack key={key} gap={4}>
-              <Badge
-                size="sm"
-                variant="light"
-                color={positionColorOrDefault(key)}
-                style={{ alignSelf: "flex-start" }}
-              >
-                {key}
-              </Badge>
+          <Group grow align="flex-start">
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>
+                Teams
+              </Text>
+              {teamsLocked ? (
+                <Text size="xs" c="dimmed">
+                  Managed from the Teams panel
+                </Text>
+              ) : null}
               <CountStepper
-                label={key}
-                value={form.rosterSlots[key]}
+                label="Teams"
+                min={1}
+                value={form.teamCount}
                 onChange={(value) =>
-                  onChange({
-                    ...form,
-                    rosterSlots: {
-                      ...form.rosterSlots,
-                      [key]: value ?? 0,
-                    },
-                  })
+                  onChange({ ...form, teamCount: value ?? form.teamCount })
+                }
+                disabled={teamsLocked}
+              />
+            </Stack>
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>
+                Salary Cap
+              </Text>
+              <EditableNumberStepper
+                label="Salary Cap"
+                min={1}
+                prefix="$"
+                value={form.salaryCap}
+                onChange={(value) =>
+                  onChange({ ...form, salaryCap: value ?? form.salaryCap })
                 }
               />
             </Stack>
-          ))}
-        </SimpleGrid>
-      </Stack>
-      {form.rosterSlots.FLEX > 0 && (
-        <Stack gap={6}>
-          <Group gap={6} wrap="nowrap">
-            <Badge size="sm" variant="light" color={positionColorOrDefault("FLEX")}>
-              FLEX
-            </Badge>
-            <Text size="sm" fw={500}>
-              eligible positions
-            </Text>
           </Group>
-          <Chip.Group
-            multiple
-            value={form.flexPositions}
-            onChange={(value) =>
-              onChange({ ...form, flexPositions: value as Position[] })
-            }
-          >
-            <Group gap="xs">
-              {POSITIONS.map((pos) => (
-                <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
-                  {pos}
-                </Chip>
-              ))}
-            </Group>
-          </Chip.Group>
         </Stack>
-      )}
-      {form.rosterSlots.SUPERFLEX > 0 && (
-        <Stack gap={6}>
-          <Group gap={6} wrap="nowrap">
-            <Badge
-              size="sm"
-              variant="light"
-              color={positionColorOrDefault("SUPERFLEX")}
-            >
-              SUPERFLEX
-            </Badge>
+      </Card>
+
+      <Card withBorder padding="md">
+        <Stack gap="md">
+          <Title order={5}>Scoring</Title>
+          <Stack gap={6}>
             <Text size="sm" fw={500}>
-              eligible positions
+              Points per reception
             </Text>
-          </Group>
-          <Chip.Group
-            multiple
-            value={form.superflexPositions}
-            onChange={(value) =>
-              onChange({ ...form, superflexPositions: value as Position[] })
-            }
-          >
-            <Group gap="xs">
-              {POSITIONS.map((pos) => (
-                <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
-                  {pos}
-                </Chip>
-              ))}
-            </Group>
-          </Chip.Group>
+            <SegmentedControl
+              value={form.scoring}
+              onChange={(value) =>
+                onChange({ ...form, scoring: value as ScoringFormat })
+              }
+              data={SCORING_OPTIONS.map(({ label, value }) => ({
+                label,
+                value,
+              }))}
+            />
+          </Stack>
+          <Stack gap={6}>
+            <Text size="sm" fw={500}>
+              Passing TDs
+            </Text>
+            <SegmentedControl
+              value={form.sixPointPassTds ? "6" : "4"}
+              onChange={(value) =>
+                onChange({ ...form, sixPointPassTds: value === "6" })
+              }
+              data={PASSING_TD_OPTIONS.map(({ label, value }) => ({
+                label,
+                value,
+              }))}
+            />
+          </Stack>
+          <Stack gap={6}>
+            <Text size="sm" fw={500}>
+              TE Premium
+            </Text>
+            <SegmentedControl
+              value={form.teScoring}
+              onChange={(value) =>
+                onChange({ ...form, teScoring: value as TeScoringFormat })
+              }
+              data={TE_SCORING_OPTIONS.map(({ label, value }) => ({
+                label,
+                value,
+              }))}
+            />
+          </Stack>
         </Stack>
-      )}
-      {useKeepersControl && (
-        <Stack gap={4}>
-          <Switch
-            label="Use Keepers"
-            description={
-              useKeepersControl.disabled ? (
-                <>
-                  Pro only.{" "}
-                  <Anchor component={Link} to="/billing" size="xs">
-                    Upgrade to enable keepers.
-                  </Anchor>
-                </>
-              ) : (
-                "Shows or hides the Keepers tab, where keeper rules and tiers are configured."
-              )
-            }
-            checked={useKeepersControl.checked}
-            disabled={useKeepersControl.disabled}
-            onChange={(event) =>
-              useKeepersControl.onChange(event.currentTarget.checked)
-            }
-          />
-          {useKeepersControl.error && (
-            <Text c="red" size="sm">
-              {useKeepersControl.error}
+      </Card>
+
+      <Card withBorder padding="md">
+        <Stack gap="md">
+          <Title order={5}>Roster</Title>
+          <Stack gap={6}>
+            <Text size="sm" fw={500}>
+              Roster Slots
             </Text>
+            {/* 4 columns of CountSteppers (now STEPPER_BUTTON_SIZE-wide +/-
+                buttons each) don't fit a mobile viewport without overlapping -
+                2 up narrow, same 4 from "sm" up where there's room. */}
+            <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md" verticalSpacing="lg">
+              {ROSTER_SLOT_KEYS.map((key) => (
+                <Stack key={key} gap={4}>
+                  <Badge
+                    size="sm"
+                    variant="light"
+                    color={positionColorOrDefault(key)}
+                    style={{ alignSelf: "flex-start" }}
+                  >
+                    {key}
+                  </Badge>
+                  <CountStepper
+                    label={key}
+                    value={form.rosterSlots[key]}
+                    onChange={(value) =>
+                      onChange({
+                        ...form,
+                        rosterSlots: {
+                          ...form.rosterSlots,
+                          [key]: value ?? 0,
+                        },
+                      })
+                    }
+                  />
+                </Stack>
+              ))}
+            </SimpleGrid>
+          </Stack>
+          {form.rosterSlots.FLEX > 0 && (
+            <Stack gap={6}>
+              <Group gap={6} wrap="nowrap">
+                <Badge size="sm" variant="light" color={positionColorOrDefault("FLEX")}>
+                  FLEX
+                </Badge>
+                <Text size="sm" fw={500}>
+                  eligible positions
+                </Text>
+              </Group>
+              <Chip.Group
+                multiple
+                value={form.flexPositions}
+                onChange={(value) =>
+                  onChange({ ...form, flexPositions: value as Position[] })
+                }
+              >
+                <Group gap="xs">
+                  {POSITIONS.map((pos) => (
+                    <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
+                      {pos}
+                    </Chip>
+                  ))}
+                </Group>
+              </Chip.Group>
+            </Stack>
+          )}
+          {form.rosterSlots.SUPERFLEX > 0 && (
+            <Stack gap={6}>
+              <Group gap={6} wrap="nowrap">
+                <Badge
+                  size="sm"
+                  variant="light"
+                  color={positionColorOrDefault("SUPERFLEX")}
+                >
+                  SUPERFLEX
+                </Badge>
+                <Text size="sm" fw={500}>
+                  eligible positions
+                </Text>
+              </Group>
+              <Chip.Group
+                multiple
+                value={form.superflexPositions}
+                onChange={(value) =>
+                  onChange({ ...form, superflexPositions: value as Position[] })
+                }
+              >
+                <Group gap="xs">
+                  {POSITIONS.map((pos) => (
+                    <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
+                      {pos}
+                    </Chip>
+                  ))}
+                </Group>
+              </Chip.Group>
+            </Stack>
           )}
         </Stack>
+      </Card>
+
+      {useKeepersControl && (
+        <Card withBorder padding="md">
+          <Stack gap="md">
+            <Title order={5}>Keepers</Title>
+            <Stack gap={4}>
+              <Switch
+                label="Use Keepers"
+                description={
+                  useKeepersControl.disabled ? (
+                    <>
+                      Pro only.{" "}
+                      <Anchor component={Link} to="/billing" size="xs">
+                        Upgrade to enable keepers.
+                      </Anchor>
+                    </>
+                  ) : (
+                    "Shows or hides the Keepers tab, where keeper rules and tiers are configured."
+                  )
+                }
+                checked={useKeepersControl.checked}
+                disabled={useKeepersControl.disabled}
+                onChange={(event) =>
+                  useKeepersControl.onChange(event.currentTarget.checked)
+                }
+              />
+              {useKeepersControl.error && (
+                <Text c="red" size="sm">
+                  {useKeepersControl.error}
+                </Text>
+              )}
+            </Stack>
+          </Stack>
+        </Card>
       )}
+
       {error && (
         <Text c="red" size="sm">
           {error}

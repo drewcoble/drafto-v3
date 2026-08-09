@@ -10,7 +10,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
-import { CircleCheck, RotateCcw } from "lucide-react";
+import { CircleAlert, CircleCheck, RotateCcw } from "lucide-react";
 import type { SlotDescriptor } from "../../lib/rosterSlots";
 import { categoryForSlot } from "../../lib/budgetCategories";
 import { CATEGORY_COLORS } from "../../constants/budget";
@@ -31,6 +31,17 @@ export interface SlotPositionPreference {
   fallback: readonly Position[];
 }
 
+// The player actually occupying a filled slot (a live pick or a keeper -
+// see BudgetTab's filledSlotPlayers), not just its price - lets the popover
+// show who's there instead of the closest-available list, which only makes
+// sense for an open slot.
+export interface FilledSlotPlayer {
+  fpid: number;
+  name: string;
+  position: Position;
+  price: number;
+}
+
 interface SlotRowProps {
   slot: SlotDescriptor;
   amount: number;
@@ -38,11 +49,11 @@ interface SlotRowProps {
   onChange: (amount: number) => void;
   isOverridden?: boolean;
   onRevert?: () => void;
-  // Whether this slot already has a player in it (a live pick or a keeper -
-  // see BudgetTab's filledSlotKeys) - purely a visual cue that the amount
-  // below is no longer a plan, it's what got spent. The controls stay live
+  // Undefined while the slot's still open. Drives the mismatch check (price
+  // vs. `amount`, the budgeted amount) and swaps the popover's content from
+  // the closest-available list to this player - the controls stay live
   // either way, since correcting a filled slot's number is still valid.
-  isFilled?: boolean;
+  filledPlayer?: FilledSlotPlayer;
   // Every still-available (not drafted, not kept) player across every
   // position - BudgetTab.tsx filters getDraftValues' output once and shares
   // this same array across every row rather than each row re-deriving it.
@@ -59,12 +70,18 @@ export function SlotRow({
   onChange,
   isOverridden,
   onRevert,
-  isFilled,
+  filledPlayer,
   availablePlayers,
   eligiblePositions,
   onSelectPlayer,
 }: SlotRowProps) {
   const color = CATEGORY_COLORS[categoryForSlot(slot)];
+  const isFilled = filledPlayer !== undefined;
+  // Exact match, not "close enough" - the budgeted amount should equal what
+  // was actually spent once a slot's filled; any difference means the plan
+  // is now stale for this slot and worth fixing.
+  const mismatch =
+    filledPlayer !== undefined && filledPlayer.price !== amount;
 
   // Recomputed on every amount change (a lot cheaper than it looks - the
   // pool BudgetTab hands down is already drafted/kept-filtered, so this is
@@ -73,8 +90,12 @@ export function SlotRow({
   // themselves); the fallback tier only fills in whatever's left over if
   // primary alone can't reach CLOSEST_PLAYERS_COUNT - see SFLEX's
   // preference (QB, falling back to FLEX-eligible positions) in
-  // BudgetTab.tsx's eligiblePositionsForSlot.
+  // BudgetTab.tsx's eligiblePositionsForSlot. Skipped entirely once the
+  // slot's filled - the popover shows the assigned player instead, so
+  // there's nothing to rank.
   const closestPlayers = useMemo(() => {
+    if (isFilled) return [];
+
     const byCloseness = (a: DraftValueRow, b: DraftValueRow) =>
       Math.abs(a.dollarValue - amount) - Math.abs(b.dollarValue - amount);
 
@@ -94,7 +115,7 @@ export function SlotRow({
       .sort(byCloseness);
 
     return [...primaryPool, ...fallbackPool].slice(0, CLOSEST_PLAYERS_COUNT);
-  }, [availablePlayers, eligiblePositions, amount]);
+  }, [availablePlayers, eligiblePositions, amount, isFilled]);
 
   return (
     <Group
@@ -103,20 +124,35 @@ export function SlotRow({
       p={6}
       style={{
         borderRadius: "var(--mantine-radius-sm)",
-        backgroundColor: isFilled
-          ? "var(--mantine-color-green-light)"
-          : undefined,
+        backgroundColor: mismatch
+          ? "var(--mantine-color-orange-light)"
+          : isFilled
+            ? "var(--mantine-color-green-light)"
+            : undefined,
       }}
     >
       <Group gap={4} wrap="nowrap" w={70}>
-        {isFilled && (
-          <Tooltip label="Slot filled" withArrow>
-            <CircleCheck
+        {mismatch && filledPlayer ? (
+          <Tooltip
+            label={`Spent $${filledPlayer.price} vs. $${amount} budgeted - update the amount to match`}
+            withArrow
+          >
+            <CircleAlert
               size={14}
-              color="var(--mantine-color-green-6)"
-              aria-label="Slot filled"
+              color="var(--mantine-color-orange-6)"
+              aria-label="Budget mismatch"
             />
           </Tooltip>
+        ) : (
+          isFilled && (
+            <Tooltip label="Slot filled" withArrow>
+              <CircleCheck
+                size={14}
+                color="var(--mantine-color-green-6)"
+                aria-label="Slot filled"
+              />
+            </Tooltip>
+          )
         )}
         <Text size="sm" {...(isFilled ? { c: "dimmed" } : {})} truncate>
           {slot.label}
@@ -126,7 +162,7 @@ export function SlotRow({
         <Popover.Target>
           <Progress
             value={maxAmount > 0 ? (amount / maxAmount) * 100 : 0}
-            color={isFilled ? "green" : color}
+            color={mismatch ? "orange" : isFilled ? "green" : color}
             size="lg"
             flex={1}
             style={{ cursor: "pointer" }}
@@ -135,9 +171,34 @@ export function SlotRow({
         <Popover.Dropdown>
           <Stack gap={6}>
             <Text size="xs" fw={600} c="dimmed">
-              Closest to ${amount}
+              {filledPlayer ? "Assigned" : `Closest to $${amount}`}
             </Text>
-            {closestPlayers.length === 0 ? (
+            {filledPlayer ? (
+              <Group justify="space-between" wrap="nowrap" gap={8}>
+                <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color={POSITION_COLORS[filledPlayer.position]}
+                  >
+                    {filledPlayer.position}
+                  </Badge>
+                  <Anchor
+                    component="button"
+                    type="button"
+                    size="xs"
+                    truncate
+                    style={{ flex: 1, minWidth: 0, textAlign: "left" }}
+                    onClick={() => onSelectPlayer(filledPlayer.fpid)}
+                  >
+                    {filledPlayer.name}
+                  </Anchor>
+                </Group>
+                <Text size="xs" fw={600} style={{ whiteSpace: "nowrap" }}>
+                  ${filledPlayer.price}
+                </Text>
+              </Group>
+            ) : closestPlayers.length === 0 ? (
               <Text size="xs" c="dimmed">
                 No available players found.
               </Text>

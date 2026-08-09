@@ -26,7 +26,11 @@ import {
 } from "../constants/general";
 import { PlayerDetailModal } from "./PlayerDetailModal";
 import { GenericValuesNotice } from "./GenericValuesNotice";
-import { SlotRow, type SlotPositionPreference } from "./BudgetTab/SlotRow";
+import {
+  SlotRow,
+  type FilledSlotPlayer,
+  type SlotPositionPreference,
+} from "./BudgetTab/SlotRow";
 import { CategoryBreakdown } from "./BudgetTab/CategoryBreakdown";
 import { BudgetSidePanel } from "./BudgetTab/BudgetSidePanel";
 import { UnallocatedBar } from "./BudgetTab/UnallocatedBar";
@@ -114,6 +118,19 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
   );
   const draftValues = draftValuesResult?.values;
   const usingGenericValues = draftValuesResult?.isGeneric ?? false;
+  // Name lookup for a filled slot's assigned player (see filledSlotPlayers
+  // below) - unlike draftValues, this isn't drafted/kept-filtered, so it
+  // covers keepers too.
+  const allProjections = useQuery(api.projections.getAllProjections, {
+    week: WEEK,
+  });
+  const nameByFpid = useMemo(() => {
+    const map = new Map<number, { name: string }>();
+    for (const row of allProjections ?? []) {
+      map.set(row.fpid, row);
+    }
+    return map;
+  }, [allProjections]);
 
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
@@ -217,16 +234,24 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
   );
 
   // Which of the self team's roster slots already have a player in them
-  // (live pick or keeper) - see SlotRow's isFilled styling.
-  const filledSlotKeys = useMemo(() => {
-    if (!selfTeam) return new Set<string>();
-    return new Set(
-      (picks ?? [])
-        .filter((pick) => pick.teamId === selfTeam._id)
-        .map((pick) => pick.planSlotKey)
-        .filter((key): key is string => !!key),
-    );
-  }, [picks, selfTeam]);
+  // (live pick or keeper), and who/what was actually paid - see SlotRow's
+  // isFilled/mismatch styling (price vs. the slot's budgeted amount) and its
+  // popover, which shows this player instead of the closest-available list
+  // once a slot's filled.
+  const filledSlotPlayers = useMemo(() => {
+    if (!selfTeam) return new Map<string, FilledSlotPlayer>();
+    const map = new Map<string, FilledSlotPlayer>();
+    for (const pick of picks ?? []) {
+      if (pick.teamId !== selfTeam._id || !pick.planSlotKey) continue;
+      map.set(pick.planSlotKey, {
+        fpid: pick.fpid,
+        name: nameByFpid.get(pick.fpid)?.name ?? `Player ${pick.fpid}`,
+        position: pick.position,
+        price: pick.price,
+      });
+    }
+    return map;
+  }, [picks, selfTeam, nameByFpid]);
 
   // Every drafted-value row not already off the board - keepers are already
   // excluded by getDraftValues itself (see the query comment above), so this
@@ -533,7 +558,9 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
                 amount={amounts[slot.key] ?? 0}
                 maxAmount={maxAmount}
                 onChange={(amount) => setSlotAmount(slot.key, amount)}
-                isFilled={filledSlotKeys.has(slot.key)}
+                {...(filledSlotPlayers.has(slot.key)
+                  ? { filledPlayer: filledSlotPlayers.get(slot.key)! }
+                  : {})}
                 availablePlayers={availablePlayers}
                 eligiblePositions={eligiblePositionsForSlot(
                   slot,
