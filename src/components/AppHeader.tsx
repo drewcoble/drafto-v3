@@ -267,6 +267,7 @@ export function AppHeader() {
                   to="/board/$leagueId"
                   params={{ leagueId }}
                   target="_blank"
+                  style={{ textDecoration: "none" }}
                 >
                   <Menu.Item component="span" leftSection={<Tv size={16} />}>
                     TV Board
@@ -274,7 +275,7 @@ export function AppHeader() {
                 </Link>
               )}
               {BILLING_LINK_ENABLED && (
-                <Link to="/billing">
+                <Link to="/billing" style={{ textDecoration: "none" }}>
                   <Menu.Item
                     component="span"
                     leftSection={
@@ -290,7 +291,7 @@ export function AppHeader() {
                 </Link>
               )}
               {currentUser?.role === "super-admin" && (
-                <Link to="/admin">
+                <Link to="/admin" style={{ textDecoration: "none" }}>
                   <Menu.Item
                     component="span"
                     leftSection={<ShieldCheck size={16} />}
