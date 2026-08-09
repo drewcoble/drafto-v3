@@ -329,12 +329,14 @@ export const theme = createTheme({
     // Mantine's default primaryShade.dark) - reads too dark/saturated as
     // burlywood link text against the app's dark background (these are
     // player-name links throughout every table). Pinned to the lighter,
-    // truer-to-the-named-color shade 3 instead, independent of
+    // truer-to-the-named-color shade 3 in dark mode, independent of
     // primaryColor's shade elsewhere (BottomNav's active-tab color, etc.
-    // are untouched by this).
+    // are untouched by this) - but that same light shade 3 is nearly
+    // unreadable in light mode (light text on theme.white's light cream),
+    // so light mode gets a darker shade 7 instead via light-dark().
     Anchor: {
       defaultProps: {
-        c: "burlywood.3",
+        c: "light-dark(var(--mantine-color-burlywood-7), var(--mantine-color-burlywood-3))",
       },
     },
     // Buttons default to saddlebrown rather than primaryColor (burlywood) -
@@ -358,6 +360,19 @@ export const theme = createTheme({
     ActionIcon: {
       defaultProps: {
         size: 40,
+      },
+    },
+    // Mantine's default unfilled track (gray-2) is tuned for a plain white
+    // canvas - against theme.white's warm cream tint it's nearly invisible
+    // (e.g. MyTeamTab's $0-spent category bars, SlotRow's empty slots).
+    // Bumped to gray-4 for light mode only; dark mode's dark-4 default
+    // (already legible against the near-black body) is untouched.
+    Progress: {
+      styles: {
+        root: {
+          backgroundColor:
+            "light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-4))",
+        },
       },
     },
     // Every <Table> in the app follows this size by default now (previously

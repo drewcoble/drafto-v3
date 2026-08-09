@@ -79,7 +79,12 @@ export function barStyle(
   dollarValue: number,
   budgetAmount: number | undefined,
 ): { backgroundColor: string; opacity: number; outline: string } {
-  const backgroundColor = "var(--mantine-color-indigo-9)";
+  // indigo-9 is a near-black navy - fine against the dark-mode body (and
+  // whatever text sits on top), but it makes bars unreadable in light mode
+  // (dark fill + default dark text = both dark). Light mode gets a
+  // brighter indigo-5 instead so the default dark text stays legible on it.
+  const backgroundColor =
+    "light-dark(var(--mantine-color-indigo-5), var(--mantine-color-indigo-9))";
 
   const outline = consistencyOutline(consistency);
   const opacity = budgetOpacity(dollarValue, budgetAmount);
