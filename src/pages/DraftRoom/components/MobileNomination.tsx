@@ -119,15 +119,13 @@ export function MobileNomination({
           onClick={() => setDrawerOpen((open) => !open)}
           style={{
             boxShadow: "var(--mantine-shadow-lg)",
-            // Light burlywood, mostly transparent - a subtle rim rather
-            // than the solid body-colored cutout ring this used to be.
-            border:
-              "3px solid color-mix(in srgb, var(--mantine-color-burlywood-3) 20%, transparent)",
-            // Lighter than "filled" (shade 5 instead of 7) for more
-            // presence against the frosted bar underneath it, still
-            // translucent to match (see BottomNav.tsx).
+            border: "none",
+            // A saddlebrown gradient (lighter shade 3 to darker shade 7)
+            // instead of a flat fill, each stop still mixed with
+            // transparent at the same 65% as before so it stays translucent
+            // against the frosted bar underneath it (see BottomNav.tsx).
             background:
-              "color-mix(in srgb, var(--mantine-color-saddlebrown-5) 65%, transparent)",
+              "linear-gradient(135deg, color-mix(in srgb, var(--mantine-color-saddlebrown-3) 65%, transparent), color-mix(in srgb, var(--mantine-color-saddlebrown-7) 65%, transparent))",
             backdropFilter: "blur(16px)",
             WebkitBackdropFilter: "blur(16px)",
           }}
