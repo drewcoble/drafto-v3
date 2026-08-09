@@ -269,7 +269,15 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
     ? starterSlots.reduce((sum, slot) => sum + (amounts[slot.key] ?? 0), 0) /
       starterSlots.length
     : 0;
-  const perRosterSpot = slots.length ? effectiveSalaryCap / slots.length : 0;
+  // $ per roster spot is always just salaryCap / slots.length regardless of
+  // how the budget is actually shaped - not a useful sanity check. $ per
+  // bench player is the real comparison point against perStarter above,
+  // since it reflects the actual amounts, not just slot counts.
+  const benchSlots = slots.filter((slot) => slot.label.startsWith("BN"));
+  const perBench = benchSlots.length
+    ? benchSlots.reduce((sum, slot) => sum + (amounts[slot.key] ?? 0), 0) /
+      benchSlots.length
+    : 0;
   const topThreeTotal = [...slots]
     .map((slot) => amounts[slot.key] ?? 0)
     .sort((a, b) => b - a)
@@ -452,7 +460,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
         activePreset={activePreset}
         onApplyPreset={applyPreset}
         perStarter={perStarter}
-        perRosterSpot={perRosterSpot}
+        perBench={perBench}
         topThreePct={topThreePct}
         everySlotHasADollar={everySlotHasADollar}
         overspendBehavior={overspendBehavior}

@@ -30,7 +30,7 @@ interface BudgetSidePanelProps {
   activePreset: BudgetPreset | null;
   onApplyPreset: (preset: BudgetPreset) => void;
   perStarter: number;
-  perRosterSpot: number;
+  perBench: number;
   topThreePct: number;
   everySlotHasADollar: boolean;
   overspendBehavior: OverspendBehavior;
@@ -76,7 +76,7 @@ export function BudgetSidePanel({
   activePreset,
   onApplyPreset,
   perStarter,
-  perRosterSpot,
+  perBench,
   topThreePct,
   everySlotHasADollar,
   overspendBehavior,
@@ -152,9 +152,9 @@ export function BudgetSidePanel({
           </Group>
           <Group justify="space-between">
             <Text size="sm" c="dimmed">
-              $ per roster spot
+              $ per bench player
             </Text>
-            <Text size="sm">${perRosterSpot.toFixed(1)}</Text>
+            <Text size="sm">${perBench.toFixed(1)}</Text>
           </Group>
           <Group justify="space-between">
             <Text size="sm" c="dimmed">
