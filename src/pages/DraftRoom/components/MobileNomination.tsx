@@ -135,23 +135,26 @@ export function MobileNomination({
           onChange={setPopoverOpen}
           position="top"
           withinPortal
+          // Mantine's own dropdown background (var(--mantine-color-dark-6),
+          // the "soft surface" shade) is a touch lighter than
+          // MobileNominationBar's var(--mantine-color-body) below it - radius
+          // and shadow are already wired to real Mantine props (they map to
+          // --popover-radius/--popover-shadow), so setting them here instead
+          // of only via styles.dropdown avoids fighting the component's own
+          // CSS variables for those two.
+          radius="xl"
+          shadow="lg"
           // Same left/right: 12, maxWidth: 480, centered footprint as
           // MobileNominationBar's Box below (the "nominee" bar) - width is
           // relative to the viewport rather than a fixed px so the two
           // floating panels always match, not just at one screen size.
           width="calc(100vw - 24px)"
-          // Matches MobileNominationBar's card below - same
-          // border/radius/background/shadow, no arrow - so the two floating
-          // panels read as one consistent style instead of one looking like
-          // a default Mantine popover and the other a custom card.
           styles={{
             dropdown: {
               maxWidth: 480,
               padding: "var(--mantine-spacing-md)",
-              borderRadius: "var(--mantine-radius-xl)",
               border: "1px solid var(--mantine-color-default-border)",
-              background: "var(--mantine-color-body)",
-              boxShadow: "var(--mantine-shadow-lg)",
+              backgroundColor: "var(--mantine-color-body)",
             },
           }}
         >
