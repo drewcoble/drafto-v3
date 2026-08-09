@@ -21,13 +21,13 @@ import {
   Check,
   ChevronDown,
   CreditCard,
-  Crown,
   LogOut,
   Moon,
   MoreVertical,
   Plus,
   ShieldCheck,
   Sun,
+  Trophy,
   Tv,
 } from "lucide-react";
 import { useMemo } from "react";
@@ -281,7 +281,7 @@ export function AppHeader() {
                       entitlement?.hasProAccess ? (
                         <CreditCard size={16} />
                       ) : (
-                        <Crown size={16} />
+                        <Trophy size={16} />
                       )
                     }
                   >

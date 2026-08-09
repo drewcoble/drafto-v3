@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Crown } from "lucide-react";
+import { Trophy } from "lucide-react";
 import {
   Badge,
   Button,
@@ -463,7 +463,7 @@ export function LeagueDetails({
                   <Text size="sm" c="dimmed">
                     Use Keepers:
                   </Text>
-                  <Crown size={14} />
+                  <Trophy size={14} />
                   <Text size="sm" c="dimmed">
                     Pro only
                   </Text>

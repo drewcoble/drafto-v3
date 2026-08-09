@@ -20,13 +20,13 @@ import {
 } from "@mantine/core";
 import {
   CreditCard,
-  Crown,
   LogOut,
   Moon,
   MoreVertical,
   Plus,
   ShieldCheck,
   Sun,
+  Trophy,
 } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { APP_CONTENT_MAX_WIDTH } from "../constants/general";
@@ -139,7 +139,7 @@ function Dashboard() {
                     entitlement?.hasProAccess ? (
                       <CreditCard size={16} />
                     ) : (
-                      <Crown size={16} />
+                      <Trophy size={16} />
                     )
                   }
                 >
