@@ -116,14 +116,18 @@ export function MobileNomination({
           onChange={setPopoverOpen}
           position="top"
           withinPortal
-          width={320}
-          // Matches MobileNominationBar's card below (the "nominee" bar) -
-          // same border/radius/background/shadow, no arrow - so the two
-          // floating panels read as one consistent style instead of one
-          // looking like a default Mantine popover and the other a custom
-          // card.
+          // Same left/right: 12, maxWidth: 480, centered footprint as
+          // MobileNominationBar's Box below (the "nominee" bar) - width is
+          // relative to the viewport rather than a fixed px so the two
+          // floating panels always match, not just at one screen size.
+          width="calc(100vw - 24px)"
+          // Matches MobileNominationBar's card below - same
+          // border/radius/background/shadow, no arrow - so the two floating
+          // panels read as one consistent style instead of one looking like
+          // a default Mantine popover and the other a custom card.
           styles={{
             dropdown: {
+              maxWidth: 480,
               padding: "var(--mantine-spacing-md)",
               borderRadius: "var(--mantine-radius-xl)",
               border: "1px solid var(--mantine-color-default-border)",
@@ -161,23 +165,23 @@ export function MobileNomination({
             </ActionIcon>
           </Popover.Target>
           <Popover.Dropdown>
-            <Stack gap="sm">
+            <Stack gap={10}>
               {usingGenericValues && (
-                <Group gap={4} wrap="nowrap">
-                  <Text size="xs" c="dimmed">
+                <Group gap={6} wrap="nowrap">
+                  <Text size="sm" c="dimmed">
                     Values shown are estimates
                   </Text>
                   <GenericValueBadge />
                 </Group>
               )}
               {nominationOrderEnabled && (
-                <Group gap={6} wrap="nowrap">
-                  <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                <Group gap={8} wrap="nowrap">
+                  <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
                     {turnTeamName ? `${turnTeamName}'s turn` : "Manual turn"}
                   </Text>
                   <Select
-                    size="xs"
-                    w={140}
+                    size="sm"
+                    w={170}
                     placeholder="Set turn..."
                     data={[
                       { value: "__manual__", label: "— Manual —" },
@@ -208,6 +212,7 @@ export function MobileNomination({
                   setPopoverOpen(false);
                 }}
                 onSelectPlayer={onSelectPlayer}
+                touchFriendly
               />
             </Stack>
           </Popover.Dropdown>

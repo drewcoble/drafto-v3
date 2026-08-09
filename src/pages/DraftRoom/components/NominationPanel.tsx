@@ -365,6 +365,10 @@ export interface SearchBodyProps {
   draftValueByFpid: Map<number, { dollarValue: number }>;
   onNominate: (fpid: number) => void;
   onSelectPlayer: (fpid: number) => void;
+  // Bigger inputs/rows for MobileNomination's popover, where a finger (not
+  // a precise mouse pointer) is doing the tapping - off by default for the
+  // desktop NominationPanel card, which has more room and doesn't need it.
+  touchFriendly?: boolean;
 }
 
 export function SearchBody({
@@ -374,19 +378,20 @@ export function SearchBody({
   draftValueByFpid,
   onNominate,
   onSelectPlayer,
+  touchFriendly = false,
 }: SearchBodyProps) {
   return (
-    <Stack gap={6}>
+    <Stack gap={touchFriendly ? 10 : 6}>
       <TextInput
-        size="sm"
+        size={touchFriendly ? "md" : "sm"}
         placeholder="Search a player to nominate..."
         value={search}
         onChange={(event) => onSearchChange(event.currentTarget.value)}
       />
       {searchResults.length > 0 && (
-        <Box mah={220} style={{ overflowY: "auto" }}>
+        <Box mah={touchFriendly ? 320 : 220} style={{ overflowY: "auto" }}>
           <Table.ScrollContainer minWidth={320}>
-            <Table verticalSpacing={4}>
+            <Table verticalSpacing={touchFriendly ? 10 : 4}>
               <Table.Tbody>
                 {searchResults.map((row) => (
                   <Table.Tr key={row.fpid}>
@@ -394,7 +399,7 @@ export function SearchBody({
                       <Anchor
                         component="button"
                         type="button"
-                        size="xs"
+                        size={touchFriendly ? "sm" : "xs"}
                         onClick={() => onSelectPlayer(row.fpid)}
                       >
                         {row.name}
@@ -402,7 +407,7 @@ export function SearchBody({
                     </Table.Td>
                     <Table.Td>
                       <Badge
-                        size="xs"
+                        size={touchFriendly ? "sm" : "xs"}
                         variant="light"
                         color={POSITION_COLORS[row.position]}
                       >
@@ -410,12 +415,12 @@ export function SearchBody({
                       </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Text size="xs" c="dimmed">
+                      <Text size={touchFriendly ? "sm" : "xs"} c="dimmed">
                         {row.team ?? "—"}
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Text size="xs">
+                      <Text size={touchFriendly ? "sm" : "xs"}>
                         {draftValueByFpid.get(row.fpid)
                           ? `$${Math.round(draftValueByFpid.get(row.fpid)!.dollarValue)}`
                           : "—"}
@@ -423,7 +428,7 @@ export function SearchBody({
                     </Table.Td>
                     <Table.Td>
                       <Button
-                        size="compact-xs"
+                        size={touchFriendly ? "sm" : "compact-xs"}
                         onClick={() => onNominate(row.fpid)}
                       >
                         Nominate
