@@ -1,22 +1,48 @@
-import { ActionIcon, Anchor, Badge, Group, Table, Text, ThemeIcon, Tooltip } from "@mantine/core";
+import {
+  ActionIcon,
+  Anchor,
+  Badge,
+  Group,
+  Table,
+  Text,
+  ThemeIcon,
+  Tooltip,
+} from "@mantine/core";
 import {
   Banknote,
   BanknoteArrowDown,
+  BatteryLow,
   CircleSlash,
   Crosshair,
   HandCoins,
   Rocket,
+  ShieldCheck,
   TrendingDown,
+  TrendingUpDown,
   UserRoundPlus,
 } from "lucide-react";
 import { ICON_SIZE } from "../../../constants/playersLeft";
+import {
+  consistencyColor,
+  type ConsistencyLabel,
+} from "../../../lib/consistency";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
+
+// Matches the icon choices PlayerBar.tsx/PlayerBarDetails.tsx use for the
+// same consistency ratings - kept in sync there rather than imported, same
+// duplication convention as the other status icons in this file.
+const CONSISTENCY_ICON: Record<ConsistencyLabel, typeof ShieldCheck> = {
+  Reliable: ShieldCheck,
+  "Boom/Bust": TrendingUpDown,
+  "Low Output": BatteryLow,
+};
 
 interface PlayerTableRowProps {
   row: DraftBoardRow;
   budgetAmount: number | undefined;
   tag: PlayerTag | undefined;
   valueGap: ValueGap | undefined;
+  consistency: ConsistencyLabel | undefined;
   isNominated: boolean;
   hasActiveNomination: boolean;
   // True when this player's $ value fits under the budget for at least one
@@ -41,6 +67,7 @@ export function PlayerTableRow({
   budgetAmount,
   tag,
   valueGap,
+  consistency,
   isNominated,
   hasActiveNomination,
   budgetMatch,
@@ -52,7 +79,14 @@ export function PlayerTableRow({
   // against (budgetAmount undefined) - green/orange only once budgetMatch
   // is a real signal, not a default.
   const priceColor =
-    budgetAmount === undefined ? "inherit" : budgetMatch ? "green.6" : "orange.6";
+    budgetAmount === undefined
+      ? "inherit"
+      : budgetMatch
+        ? "green.6"
+        : "orange.6";
+  const ConsistencyIcon = consistency
+    ? CONSISTENCY_ICON[consistency]
+    : undefined;
 
   return (
     <Table.Tr
@@ -138,6 +172,17 @@ export function PlayerTableRow({
                 </ThemeIcon>
               </Tooltip>
             )
+          )}
+          {consistency && ConsistencyIcon && (
+            <Tooltip label={consistency} withArrow>
+              <ThemeIcon
+                size="sm"
+                color={`${consistencyColor(consistency)}.9`}
+                c={`${consistencyColor(consistency)}.2`}
+              >
+                <ConsistencyIcon size={ICON_SIZE} />
+              </ThemeIcon>
+            </Tooltip>
           )}
         </Group>
       </Table.Td>

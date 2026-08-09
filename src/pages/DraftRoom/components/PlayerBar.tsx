@@ -2,11 +2,14 @@ import { Box, Group, Popover, Text, ThemeIcon, Tooltip } from "@mantine/core";
 import {
   Banknote,
   BanknoteArrowDown,
+  BatteryLow,
   CircleSlash,
   Crosshair,
   HandCoins,
   Rocket,
+  ShieldCheck,
   TrendingDown,
+  TrendingUpDown,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -16,7 +19,10 @@ import {
   MIN_BAR_WIDTH,
   PX_PER_DOLLAR,
 } from "../../../constants/playersLeft";
-import { type ConsistencyLabel } from "../../../lib/consistency";
+import {
+  consistencyColor,
+  type ConsistencyLabel,
+} from "../../../lib/consistency";
 import { barStyle } from "../../../lib/draftRecommendation";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
@@ -28,6 +34,16 @@ import { PlayerBarDetails } from "./PlayerBarDetails";
 // so a barely-faded bar isn't yanked all the way to opaque while a deeply
 // faded one still gets boosted to legible.
 const HOVER_OPACITY_FLOOR = 0.85;
+
+// Matches the icon choices PlayerBarDetails.tsx's labeled Badge uses for
+// the same consistency ratings - kept in sync there rather than imported,
+// same duplication convention as the value-gap icons above (bare ThemeIcon
+// here vs. a labeled Badge there).
+const CONSISTENCY_ICON: Record<ConsistencyLabel, typeof ShieldCheck> = {
+  Reliable: ShieldCheck,
+  "Boom/Bust": TrendingUpDown,
+  "Low Output": BatteryLow,
+};
 
 interface PlayerBarProps {
   row: DraftBoardRow;
@@ -92,10 +108,13 @@ export function PlayerBar({
     const measured = measureRef.current?.offsetWidth;
     if (measured === undefined) return;
     setExpandedWidth(Math.max(width, measured));
-  }, [row.name, isNominated, valueGap, tag, width]);
+  }, [row.name, isNominated, valueGap, consistency, tag, width]);
   const fitsBudget =
     budgetAmount === undefined || row.dollarValue <= budgetAmount;
   const style = barStyle(consistency, row.dollarValue, budgetAmount);
+  const ConsistencyIcon = consistency
+    ? CONSISTENCY_ICON[consistency]
+    : undefined;
 
   // Shared between the real (visible) bar and the hidden measurement clone
   // below - `truncateName` is the only thing that differs between them: the
@@ -176,6 +195,17 @@ export function PlayerBar({
                 </ThemeIcon>
               </Tooltip>
             )
+          )}
+          {consistency && ConsistencyIcon && (
+            <Tooltip label={consistency} position="top" withArrow>
+              <ThemeIcon
+                w="content"
+                color={`${consistencyColor(consistency)}.9`}
+                c={`${consistencyColor(consistency)}.2`}
+              >
+                <ConsistencyIcon size={ICON_SIZE} />
+              </ThemeIcon>
+            </Tooltip>
           )}
           {tag && (
             <Tooltip
