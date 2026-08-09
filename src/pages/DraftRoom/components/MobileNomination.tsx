@@ -134,13 +134,12 @@ export function MobileNomination({
           onChange={setPopoverOpen}
           position="top"
           withinPortal
-          // Matches MobileNominationBar's own background below (see that
-          // component - it's dark-6, the shade Mantine's Card component
-          // uses by default, not var(--mantine-color-body)/dark-7). Radius
-          // and shadow are already wired to real Mantine props (they map to
-          // --popover-radius/--popover-shadow), so setting them here instead
-          // of only via styles.dropdown avoids fighting the component's own
-          // CSS variables for those two.
+          // Background is theme.ts's global Popover default (dark-6,
+          // matching Card/MobileNominationBar) - radius and shadow are
+          // wired to real Mantine props (they map to
+          // --popover-radius/--popover-shadow), so setting them here
+          // instead of only via styles.dropdown avoids fighting the
+          // component's own CSS variables for those two.
           radius="xl"
           shadow="lg"
           // Same left/right: 12, maxWidth: 480, centered footprint as
@@ -153,7 +152,6 @@ export function MobileNomination({
               maxWidth: 480,
               padding: "var(--mantine-spacing-md)",
               border: "1px solid var(--mantine-color-default-border)",
-              backgroundColor: "var(--mantine-color-dark-6)",
             },
           }}
         >

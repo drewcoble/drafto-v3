@@ -307,6 +307,20 @@ export const theme = createTheme({
         shadow: "sm",
       },
     },
+    // Mantine's own default dropdown background already resolves to this
+    // (var(--mantine-color-dark-6), same "soft surface" shade Card uses)
+    // in dark mode - pinned explicitly rather than left implicit, so every
+    // Popover in the app (SlotRow's closest-players list, PlayerBar's
+    // detail card, MobileNomination's nominate search) reads as the same
+    // floating-panel surface as Card, on purpose, not by accident of
+    // Mantine's current defaults.
+    Popover: {
+      styles: {
+        dropdown: {
+          backgroundColor: "var(--mantine-color-dark-6)",
+        },
+      },
+    },
     // Anchor defaults to primaryColor's "filled" shade (8 in dark mode,
     // Mantine's default primaryShade.dark) - reads too dark/saturated as
     // burlywood link text against the app's dark background (these are
