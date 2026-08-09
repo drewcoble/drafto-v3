@@ -114,7 +114,10 @@ export function SettingsForm({
         <Text size="sm" fw={500}>
           Roster Slots
         </Text>
-        <SimpleGrid cols={4} spacing="sm">
+        {/* 4 columns of CountSteppers (now STEPPER_BUTTON_SIZE-wide +/-
+            buttons each) don't fit a mobile viewport without overlapping -
+            2 up narrow, same 4 from "sm" up where there's room. */}
+        <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md" verticalSpacing="lg">
           {ROSTER_SLOT_KEYS.map((key) => (
             <Stack key={key} gap={4}>
               <Badge
