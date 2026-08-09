@@ -65,9 +65,18 @@ interface AppHeaderProps {
   // (unlike getCurrentUser/getMyEntitlement, which degrade gracefully), so
   // this also skips it entirely rather than just hiding its output.
   minimal?: boolean;
+  // Hides just the league picker + mode-switch button, keeping the
+  // overflow menu (Billing/Go Pro, Admin, theme, sign out) - for the
+  // dashboard (routes/index.tsx), which has a signed-in user but no
+  // "current league" to show either of those for (the dashboard's own
+  // league-card grid already *is* the league picker).
+  hideLeagueControls?: boolean;
 }
 
-export function AppHeader({ minimal = false }: AppHeaderProps = {}) {
+export function AppHeader({
+  minimal = false,
+  hideLeagueControls = false,
+}: AppHeaderProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { leagueId } = useParams({ strict: false });
@@ -253,23 +262,27 @@ export function AppHeader({ minimal = false }: AppHeaderProps = {}) {
             align="center"
             style={{ flexShrink: 0 }}
           >
-            <Menu position="bottom-end" withArrow offset={8} width={220}>
-              <Menu.Target>
-                <Button
-                  variant="default"
-                  size="sm"
-                  w={{ base: 130, sm: 220 }}
-                  justify="space-between"
-                  rightSection={<ChevronDown size={16} />}
-                >
-                  <Text truncate span>
-                    {selectedLeague ? selectedLeague.name : "Select league"}
-                  </Text>
-                </Button>
-              </Menu.Target>
-              <Menu.Dropdown>{leagueMenuItems}</Menu.Dropdown>
-            </Menu>
-            {modeSwitchButton}
+            {!hideLeagueControls && (
+              <>
+                <Menu position="bottom-end" withArrow offset={8} width={220}>
+                  <Menu.Target>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      w={{ base: 130, sm: 220 }}
+                      justify="space-between"
+                      rightSection={<ChevronDown size={16} />}
+                    >
+                      <Text truncate span>
+                        {selectedLeague ? selectedLeague.name : "Select league"}
+                      </Text>
+                    </Button>
+                  </Menu.Target>
+                  <Menu.Dropdown>{leagueMenuItems}</Menu.Dropdown>
+                </Menu>
+                {modeSwitchButton}
+              </>
+            )}
             <Menu position="bottom-end" withArrow offset={8}>
               <Menu.Target>
                 <ActionIcon

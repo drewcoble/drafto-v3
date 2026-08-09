@@ -1,9 +1,7 @@
 import type { ReactNode } from "react";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import {
-  ActionIcon,
   Badge,
   Button,
   Card,
@@ -11,26 +9,17 @@ import {
   Container,
   Group,
   Loader,
-  Menu,
   SimpleGrid,
   Stack,
   Text,
-  Title,
-  useMantineColorScheme,
 } from "@mantine/core";
-import {
-  CreditCard,
-  LogOut,
-  Moon,
-  MoreVertical,
-  Plus,
-  ShieldCheck,
-  Sun,
-  Trophy,
-} from "lucide-react";
+import { Plus } from "lucide-react";
 import { api } from "../../convex/_generated/api";
-import { APP_CONTENT_MAX_WIDTH } from "../constants/general";
-import { BILLING_LINK_ENABLED } from "../lib/featureFlags";
+import { AppHeader } from "../components/AppHeader";
+import {
+  APP_CONTENT_MAX_WIDTH,
+  MOBILE_HEADER_HEIGHT,
+} from "../constants/general";
 import { groupSeasonsByLeague } from "../lib/leagueGroups";
 
 export const Route = createFileRoute("/")({
@@ -103,146 +92,102 @@ function EnterLeagueLink({
 // leagueId (see groupSeasonsByLeague) so multi-year leagues surface once,
 // keyed to their most recent season.
 function Dashboard() {
-  const currentUser = useQuery(api.users.getCurrentUser);
   const seasonsList = useQuery(api.leagues.listSeasons, {});
-  const entitlement = useQuery(api.billing.queries.getMyEntitlement);
-  const { signOut } = useAuthActions();
-  const { colorScheme, setColorScheme } = useMantineColorScheme();
-  const isDark = colorScheme === "dark";
 
   const leagueGroups = groupSeasonsByLeague(seasonsList ?? []).sort((a, b) =>
     a.latest.name.localeCompare(b.latest.name),
   );
 
   return (
-    <Container size={APP_CONTENT_MAX_WIDTH} py="xl">
-      <Stack gap="lg">
-        <Group justify="space-between" align="center" wrap="nowrap">
-          <Title order={2} fz={{ base: "1.125rem", sm: "1.625rem" }}>
-            <Text component="span" inherit c="saddlebrown.6">
-              infini
-            </Text>
-            draft
-          </Title>
-          <Menu position="bottom-end" withArrow offset={8}>
-            <Menu.Target>
-              <ActionIcon variant="default" size={40} aria-label="More options">
-                <MoreVertical size={18} />
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              {BILLING_LINK_ENABLED && (
-                <Menu.Item
-                  component={Link}
-                  to="/billing"
-                  leftSection={
-                    entitlement?.hasProAccess ? (
-                      <CreditCard size={16} />
-                    ) : (
-                      <Trophy size={16} />
-                    )
-                  }
-                >
-                  {entitlement?.hasProAccess ? "Billing" : "Go Pro"}
-                </Menu.Item>
-              )}
-              {currentUser?.role === "super-admin" && (
-                <Menu.Item
-                  component={Link}
-                  to="/admin"
-                  leftSection={<ShieldCheck size={16} />}
-                >
-                  Admin
-                </Menu.Item>
-              )}
-              <Menu.Item
-                leftSection={isDark ? <Sun size={16} /> : <Moon size={16} />}
-                onClick={() => setColorScheme(isDark ? "light" : "dark")}
-              >
-                {isDark ? "Light mode" : "Dark mode"}
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<LogOut size={16} />}
-                onClick={() => signOut()}
-              >
-                Sign out
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </Group>
-
-        {seasonsList === undefined ? (
-          <Center py="xl">
-            <Loader />
-          </Center>
-        ) : leagueGroups.length === 0 ? (
-          <Stack gap="md" py="xl" align="center">
-            <Text c="dimmed">You don't have any leagues yet.</Text>
-            <Link to="/setup/$leagueId/league" params={{ leagueId: "new" }}>
-              <Button component="span" leftSection={<Plus size={16} />}>
-                New League
-              </Button>
-            </Link>
-          </Stack>
-        ) : (
-          <>
-            <Group justify="flex-end">
+    <>
+      <AppHeader hideLeagueControls />
+      <Container
+        size={APP_CONTENT_MAX_WIDTH}
+        pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }}
+        pb="xl"
+      >
+        <Stack gap="lg">
+          {seasonsList === undefined ? (
+            <Center py="xl">
+              <Loader />
+            </Center>
+          ) : leagueGroups.length === 0 ? (
+            <Stack gap="md" py="xl" align="center">
+              <Text c="dimmed">You don't have any leagues yet.</Text>
               <Link to="/setup/$leagueId/league" params={{ leagueId: "new" }}>
-                <Button
-                  component="span"
-                  variant="default"
-                  leftSection={<Plus size={16} />}
-                >
+                <Button component="span" leftSection={<Plus size={16} />}>
                   New League
                 </Button>
               </Link>
-            </Group>
-            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-              {leagueGroups.map(({ latest }) => {
-                const status = STATUS_META[latest.draftStatus];
-                return (
-                  <EnterLeagueLink
-                    key={latest.leagueId}
-                    status={latest.draftStatus}
-                    leagueId={latest._id}
+            </Stack>
+          ) : (
+            <>
+              <Group justify="flex-end">
+                <Link to="/setup/$leagueId/league" params={{ leagueId: "new" }}>
+                  <Button
+                    component="span"
+                    variant="default"
+                    leftSection={<Plus size={16} />}
                   >
-                    <Card
-                      withBorder
-                      padding="lg"
-                      style={{
-                        cursor: "pointer",
-                        textDecoration: "none",
-                        color: "inherit",
-                        height: "100%",
-                      }}
+                    New League
+                  </Button>
+                </Link>
+              </Group>
+              <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+                {leagueGroups.map(({ latest }) => {
+                  const status = STATUS_META[latest.draftStatus];
+                  return (
+                    <EnterLeagueLink
+                      key={latest.leagueId}
+                      status={latest.draftStatus}
+                      leagueId={latest._id}
                     >
-                      <Stack gap="sm" justify="space-between" h="100%">
-                        <Stack gap={4}>
-                          <Group justify="space-between" wrap="nowrap" align="flex-start">
-                            <Text fw={600} lineClamp={2}>
-                              {latest.name}
+                      <Card
+                        withBorder
+                        padding="lg"
+                        style={{
+                          cursor: "pointer",
+                          textDecoration: "none",
+                          color: "inherit",
+                          height: "100%",
+                        }}
+                      >
+                        <Stack gap="sm" justify="space-between" h="100%">
+                          <Stack gap={4}>
+                            <Group
+                              justify="space-between"
+                              wrap="nowrap"
+                              align="flex-start"
+                            >
+                              <Text fw={600} lineClamp={2}>
+                                {latest.name}
+                              </Text>
+                              <Badge
+                                color={status.color}
+                                variant="light"
+                                style={{ flexShrink: 0 }}
+                              >
+                                {status.label}
+                              </Badge>
+                            </Group>
+                            <Text size="sm" c="dimmed">
+                              {latest.year} · {latest.teamCount} teams · $
+                              {latest.salaryCap} cap · {latest.scoring}
                             </Text>
-                            <Badge color={status.color} variant="light" style={{ flexShrink: 0 }}>
-                              {status.label}
-                            </Badge>
-                          </Group>
-                          <Text size="sm" c="dimmed">
-                            {latest.year} · {latest.teamCount} teams · $
-                            {latest.salaryCap} cap · {latest.scoring}
-                          </Text>
+                          </Stack>
+                          <Button component="span" variant="light" fullWidth>
+                            {ENTER_ACTION[latest.draftStatus].label}
+                          </Button>
                         </Stack>
-                        <Button component="span" variant="light" fullWidth>
-                          {ENTER_ACTION[latest.draftStatus].label}
-                        </Button>
-                      </Stack>
-                    </Card>
-                  </EnterLeagueLink>
-                );
-              })}
-            </SimpleGrid>
-          </>
-        )}
-      </Stack>
-    </Container>
+                      </Card>
+                    </EnterLeagueLink>
+                  );
+                })}
+              </SimpleGrid>
+            </>
+          )}
+        </Stack>
+      </Container>
+    </>
   );
 }
