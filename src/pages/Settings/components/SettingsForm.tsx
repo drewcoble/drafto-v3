@@ -1,4 +1,5 @@
 import {
+  Anchor,
   Badge,
   Button,
   Chip,
@@ -10,6 +11,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { Link } from "@tanstack/react-router";
 import { CountStepper, EditableNumberStepper } from "../../../components/NumberStepper";
 import { POSITIONS, type Position, type ScoringFormat } from "../../../types";
 import {
@@ -50,6 +52,10 @@ interface SettingsFormProps {
     checked: boolean;
     onChange: (checked: boolean) => void;
     error: string | null;
+    // Locked read-only for free-plan owners - keepers is Pro-only (see
+    // convex/leagues.ts's setUseKeepers, which rejects the flip
+    // server-side too).
+    disabled?: boolean;
   };
 }
 
@@ -220,8 +226,20 @@ export function SettingsForm({
         <Stack gap={4}>
           <Switch
             label="Use Keepers"
-            description="Shows or hides the Keepers tab, where keeper rules and tiers are configured."
+            description={
+              useKeepersControl.disabled ? (
+                <>
+                  Pro only.{" "}
+                  <Anchor component={Link} to="/billing" size="xs">
+                    Upgrade to enable keepers.
+                  </Anchor>
+                </>
+              ) : (
+                "Shows or hides the Keepers tab, where keeper rules and tiers are configured."
+              )
+            }
             checked={useKeepersControl.checked}
+            disabled={useKeepersControl.disabled}
             onChange={(event) =>
               useKeepersControl.onChange(event.currentTarget.checked)
             }

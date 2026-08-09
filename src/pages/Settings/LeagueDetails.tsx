@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { Crown } from "lucide-react";
 import {
   Badge,
   Button,
@@ -348,6 +349,7 @@ export function LeagueDetails({
                 checked: settings.useKeepers ?? true,
                 onChange: handleToggleUseKeepers,
                 error: useKeepersError,
+                disabled: !entitlement?.hasProAccess,
               },
             }
           : {})}
@@ -456,9 +458,21 @@ export function LeagueDetails({
               <Text size="sm" c="dimmed">
                 SUPERFLEX eligible: {settings.superflexPositions.join(", ")}
               </Text>
-              <Text size="sm" c="dimmed">
-                Use Keepers: {(settings.useKeepers ?? true) ? "Yes" : "No"}
-              </Text>
+              {entitlement && !entitlement.hasProAccess ? (
+                <Group gap={4} wrap="nowrap">
+                  <Text size="sm" c="dimmed">
+                    Use Keepers:
+                  </Text>
+                  <Crown size={14} />
+                  <Text size="sm" c="dimmed">
+                    Pro only
+                  </Text>
+                </Group>
+              ) : (
+                <Text size="sm" c="dimmed">
+                  Use Keepers: {(settings.useKeepers ?? true) ? "Yes" : "No"}
+                </Text>
+              )}
             </Group>
           </Stack>
         </Card>

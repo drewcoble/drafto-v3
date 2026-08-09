@@ -136,6 +136,11 @@ export const createLeague = mutation({
       leagueId,
       year: thisSeason,
       ...seasonFields,
+      // Keepers is a Pro feature (see setUseKeepers) and opt-in now - new
+      // leagues start with it explicitly off rather than relying on
+      // "absent means true" (which stays true for every league created
+      // before this, so existing leagues that rely on it keep working).
+      useKeepers: false,
       ...(sleeperLeagueId ? { sleeperLeagueId } : {}),
       ...(yahooLeagueKey ? { yahooLeagueKey } : {}),
       createdAt: now,
@@ -341,13 +346,22 @@ export const importPreviousSeasonHistory = mutation({
 // the whole league settings form. Doesn't touch keeperRules itself: turning
 // keepers back on later restores whatever formula/tier config was already
 // there.
+//
+// Keepers is a Pro feature - turning it on is rejected for a free-plan
+// owner server-side too, not just disabled in the UI (src/pages/Settings/
+// LeagueDetails.tsx), since this mutation is reachable directly. Turning
+// it off is always allowed (e.g. after a downgrade, or a Pro owner just
+// changing their mind) - only the true direction is gated.
 export const setUseKeepers = mutation({
   args: {
     id: v.id("seasons"),
     useKeepers: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await requireSeasonOwner(ctx, args.id);
+    const { league } = await requireSeasonOwner(ctx, args.id);
+    if (args.useKeepers && !(await hasProAccess(ctx, league.ownerId))) {
+      throw new Error("Keepers is a Pro feature. Upgrade to enable it.");
+    }
     await ctx.db.patch(args.id, { useKeepers: args.useKeepers });
     return await ctx.db.get(args.id);
   },
