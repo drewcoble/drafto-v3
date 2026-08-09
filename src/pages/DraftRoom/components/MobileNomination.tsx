@@ -139,7 +139,14 @@ export function MobileNomination({
         onClose={() => setDrawerOpen(false)}
         position="bottom"
         title="Nominate a player"
-        size="auto"
+        // Mantine doesn't actually define a --drawer-size-auto var, so
+        // size="auto" silently fell back to height: 100% - the drawer
+        // filled the whole screen instead of fitting its content, pushing
+        // the title/search up behind the fixed AppHeader/MobileStatsRow
+        // bars. Forcing height: auto (capped so it can't ever exceed most
+        // of the viewport) instead.
+        styles={{ content: { height: "auto", maxHeight: "80vh" } }}
+        overlayProps={{ blur: 3 }}
         hiddenFrom="sm"
       >
         <Stack gap="sm">
