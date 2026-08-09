@@ -115,10 +115,22 @@ export function MobileNomination({
           opened={popoverOpen}
           onChange={setPopoverOpen}
           position="top"
-          withArrow
-          shadow="md"
           withinPortal
           width={320}
+          // Matches MobileNominationBar's card below (the "nominee" bar) -
+          // same border/radius/background/shadow, no arrow - so the two
+          // floating panels read as one consistent style instead of one
+          // looking like a default Mantine popover and the other a custom
+          // card.
+          styles={{
+            dropdown: {
+              padding: "var(--mantine-spacing-md)",
+              borderRadius: "var(--mantine-radius-xl)",
+              border: "1px solid var(--mantine-color-default-border)",
+              background: "var(--mantine-color-body)",
+              boxShadow: "var(--mantine-shadow-lg)",
+            },
+          }}
         >
           <Popover.Target>
             <ActionIcon
