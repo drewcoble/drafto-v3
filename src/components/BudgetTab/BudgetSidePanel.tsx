@@ -21,6 +21,9 @@ interface BudgetSidePanelProps {
   // in-draft reallocations the live plan already reflects, so BudgetTab.tsx
   // only sets this true in predraft mode.
   showPresets: boolean;
+  // "Superflex heavy" is meaningless without a SUPERFLEX slot to spend on -
+  // dropped from the list entirely for leagues without one.
+  hasSuperflex: boolean;
   onApplyPreset: (preset: BudgetPreset) => void;
   perStarter: number;
   perRosterSpot: number;
@@ -65,6 +68,7 @@ function CollapsibleCard({
 
 export function BudgetSidePanel({
   showPresets,
+  hasSuperflex,
   onApplyPreset,
   perStarter,
   perRosterSpot,
@@ -76,6 +80,9 @@ export function BudgetSidePanel({
   const selectedOverspend = OVERSPEND_OPTIONS.find(
     (option) => option.value === overspendBehavior,
   );
+  const presets = BUDGET_PRESETS.filter(
+    (preset) => hasSuperflex || preset.value !== "superflexHeavy",
+  );
 
   return (
     <SimpleGrid
@@ -85,7 +92,7 @@ export function BudgetSidePanel({
     >
       {showPresets && (
         <CollapsibleCard title="Start from a shape">
-          {BUDGET_PRESETS.map((preset) => (
+          {presets.map((preset) => (
             <Button
               key={preset.value}
               variant="default"

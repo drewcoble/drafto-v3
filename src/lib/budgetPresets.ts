@@ -9,12 +9,18 @@ export type BudgetPreset =
   | "starsAndScrubs"
   | "balanced"
   | "zeroRb"
+  | "heroRb"
   | "superflexHeavy";
 
+// Consumers that show these as buttons (BudgetSidePanel.tsx) drop
+// "superflexHeavy" entirely for leagues with no SUPERFLEX slot - it's the
+// one preset that's meaningless without one, unlike the others which
+// apply to every league shape.
 export const BUDGET_PRESETS: Array<{ value: BudgetPreset; label: string }> = [
   { value: "starsAndScrubs", label: "Stars & scrubs" },
   { value: "balanced", label: "Balanced" },
   { value: "zeroRb", label: "Zero RB" },
+  { value: "heroRb", label: "Hero RB" },
   { value: "superflexHeavy", label: "Superflex heavy" },
 ];
 
@@ -44,7 +50,11 @@ function baseWeightForSlot(slot: SlotDescriptor, indexWithinGroup: number) {
   return base * Math.pow(0.85, indexWithinGroup);
 }
 
-function presetMultiplier(preset: BudgetPreset, slot: SlotDescriptor) {
+function presetMultiplier(
+  preset: BudgetPreset,
+  slot: SlotDescriptor,
+  indexWithinGroup: number,
+) {
   const prefix = labelPrefix(slot.label);
   switch (preset) {
     case "starsAndScrubs":
@@ -53,6 +63,14 @@ function presetMultiplier(preset: BudgetPreset, slot: SlotDescriptor) {
       return 0.8;
     case "zeroRb":
       if (prefix === "RB") return 0.45;
+      if (prefix === "WR" || prefix === "TE" || prefix === "FLEX") return 1.3;
+      return 1;
+    case "heroRb":
+      // One big-ticket "hero" RB (the earliest RB slot) soaks up what
+      // Zero RB would've spread across WR/FLEX/TE - every RB slot after
+      // it gets Zero RB's own suppressed rate instead, since the whole
+      // point is exactly one workhorse and nothing else at the position.
+      if (prefix === "RB") return indexWithinGroup === 0 ? 2.2 : 0.45;
       if (prefix === "WR" || prefix === "TE" || prefix === "FLEX") return 1.3;
       return 1;
     case "superflexHeavy":
@@ -82,7 +100,8 @@ export function generatePresetAmounts(
     const prefix = labelPrefix(slot.label);
     const index = groupIndex.get(prefix) ?? 0;
     groupIndex.set(prefix, index + 1);
-    const weight = baseWeightForSlot(slot, index) * presetMultiplier(preset, slot);
+    const weight =
+      baseWeightForSlot(slot, index) * presetMultiplier(preset, slot, index);
     return { slot, weight };
   });
 

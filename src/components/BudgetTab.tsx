@@ -417,6 +417,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
 
       <BudgetSidePanel
         showPresets={mode === "predraft"}
+        hasSuperflex={settings.rosterSlots.SUPERFLEX > 0}
         onApplyPreset={applyPreset}
         perStarter={perStarter}
         perRosterSpot={perRosterSpot}
