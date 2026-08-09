@@ -307,17 +307,21 @@ export const theme = createTheme({
         shadow: "sm",
       },
     },
-    // Mantine's own default dropdown background already resolves to this
-    // (var(--mantine-color-dark-6), same "soft surface" shade Card uses)
-    // in dark mode - pinned explicitly rather than left implicit, so every
-    // Popover in the app (SlotRow's closest-players list, PlayerBar's
+    // Dark mode matches var(--mantine-color-dark-6) - the same "soft
+    // surface" shade Card uses, already Mantine's own default there - so
+    // every Popover in the app (SlotRow's closest-players list, PlayerBar's
     // detail card, MobileNomination's nominate search) reads as the same
     // floating-panel surface as Card, on purpose, not by accident of
-    // Mantine's current defaults.
+    // Mantine's current defaults. Light mode gets a plain light gray
+    // instead of gray-1's dark-tinted counterpart - dark-6 is a fixed shade
+    // from the dark palette (see the dark: [...] array above), not
+    // something that flips with color scheme on its own, so without this
+    // light mode would render the same dark-green surface as dark mode.
     Popover: {
       styles: {
         dropdown: {
-          backgroundColor: "var(--mantine-color-dark-6)",
+          backgroundColor:
+            "light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))",
         },
       },
     },

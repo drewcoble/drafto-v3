@@ -351,12 +351,18 @@ function MobileNominationBar({
         padding: "var(--mantine-spacing-md)",
         borderRadius: "var(--mantine-radius-xl)",
         border: "1px solid var(--mantine-color-default-border)",
-        // dark-6, the shade Mantine's Card component defaults to (see
-        // Card.css) - this used to come from an inner <Card> nested inside
-        // this Box (see the earlier commit that collapsed them into one
-        // element), which is where the "slightly lighter" look came from.
-        // var(--mantine-color-body) (dark-7) reads noticeably darker.
-        background: "var(--mantine-color-dark-6)",
+        // Same light-dark() as the global Popover default in theme.ts -
+        // this Box isn't a real Popover (just styled to match one), so it
+        // doesn't inherit that theme default and needs its own copy. Dark
+        // mode is dark-6, the shade Mantine's Card component defaults to
+        // (see Card.css) - this used to come from an inner <Card> nested
+        // inside this Box (see the earlier commit that collapsed them into
+        // one element), which is where the "slightly lighter" look came
+        // from. Light mode gets a plain light gray instead, since dark-6 is
+        // a fixed dark-palette shade that doesn't flip with color scheme on
+        // its own.
+        background:
+          "light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))",
         boxShadow: "var(--mantine-shadow-lg)",
       }}
     >
