@@ -64,12 +64,29 @@ const BASE_WEIGHT: Record<string, number> = {
   BN: 0.2,
 };
 
+// QB's 3 above assumes a real second starting slot to feed (a SUPERFLEX
+// league, where SFLEX's own 1.9 already reflects that same scarcity) - in
+// a standard single-QB league there's only ever one shot at an "elite QB"
+// premium, and everyone else converges on a cheap streamer, so the real
+// per-dollar scarcity is much closer to FLEX/TE than to RB/WR. Without
+// this, every preset overpays for QB1 relative to what the actual market
+// (even the generic-value fallback) supports for a one-QB league.
+const QB_BASE_WEIGHT_STANDARD = 1.4;
+
 function labelPrefix(label: string): string {
   return label.replace(/\d+$/, "");
 }
 
-function baseWeightForSlot(slot: SlotDescriptor, indexWithinGroup: number) {
-  const base = BASE_WEIGHT[labelPrefix(slot.label)] ?? 1;
+function baseWeightForSlot(
+  slot: SlotDescriptor,
+  indexWithinGroup: number,
+  hasSuperflex: boolean,
+) {
+  const prefix = labelPrefix(slot.label);
+  const base =
+    prefix === "QB" && !hasSuperflex
+      ? QB_BASE_WEIGHT_STANDARD
+      : BASE_WEIGHT[prefix] ?? 1;
   // Earlier slots within the same group (RB1 before RB2, etc.) are worth
   // more - a starter's dollars matter more than a second/third of the same
   // position.
@@ -121,13 +138,15 @@ export function generatePresetAmounts(
   rosterSlots: RosterSlotCounts,
   salaryCap: number,
 ): Record<string, number> {
+  const hasSuperflex = rosterSlots.SUPERFLEX > 0;
   const groupIndex = new Map<string, number>();
   const weighted = expandRosterSlots(rosterSlots).map((slot) => {
     const prefix = labelPrefix(slot.label);
     const index = groupIndex.get(prefix) ?? 0;
     groupIndex.set(prefix, index + 1);
     const weight =
-      baseWeightForSlot(slot, index) * presetMultiplier(preset, slot, index);
+      baseWeightForSlot(slot, index, hasSuperflex) *
+      presetMultiplier(preset, slot, index);
     return { slot, weight };
   });
 
