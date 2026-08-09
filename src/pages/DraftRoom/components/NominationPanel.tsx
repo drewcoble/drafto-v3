@@ -37,7 +37,6 @@ interface NominationPanelProps {
   // league has a configured nomination order to begin with.
   nominationOrderEnabled: boolean;
   turnTeamId: Id<"seasonTeams"> | null | undefined;
-  turnTeamName: string | undefined;
   onSetTurnTeam: (teamId: Id<"seasonTeams"> | null) => void;
 
   activeNomination: Doc<"draftNominations"> | undefined;
@@ -80,7 +79,6 @@ export function NominationPanel({
   teams,
   nominationOrderEnabled,
   turnTeamId,
-  turnTeamName,
   onSetTurnTeam,
   activeNomination,
   nominatedPlayer,
@@ -126,7 +124,7 @@ export function NominationPanel({
             nominationOrderEnabled && (
               <Group gap={6} wrap="nowrap">
                 <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                  {turnTeamName ? `${turnTeamName}'s turn` : "Manual turn"}
+                  Nominating team
                 </Text>
                 <Select
                   size="xs"

@@ -215,9 +215,6 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
   const totalPicks =
     expandRosterSlots(settings.rosterSlots).length * teams.length;
   const nextPickNumber = Math.min(picks.length + 1, totalPicks);
-  const turnTeam = teams.find(
-    (team) => team._id === currentNominator?.currentTeamId,
-  );
 
   // Mobile-only unification of onLogWin/onLogWinner below - the desktop
   // panel keeps its dedicated "I won" button (self team, with plan-slot
@@ -263,7 +260,6 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
           teams={teams}
           nominationOrderEnabled={!!nominationConfig?.nominationOrder}
           turnTeamId={currentNominator?.currentTeamId}
-          turnTeamName={turnTeam?.name}
           onSetTurnTeam={(teamId) =>
             runAction(() => setCurrentNominator({ seasonId, teamId }))
           }
@@ -317,7 +313,6 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
       <MobileNomination
         nominationOrderEnabled={!!nominationConfig?.nominationOrder}
         turnTeamId={currentNominator?.currentTeamId}
-        turnTeamName={turnTeam?.name}
         onSetTurnTeam={(teamId) =>
           runAction(() => setCurrentNominator({ seasonId, teamId }))
         }

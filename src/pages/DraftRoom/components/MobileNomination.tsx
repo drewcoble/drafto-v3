@@ -25,7 +25,6 @@ import { SearchBody, type SearchResult } from "./NominationPanel";
 interface MobileNominationProps {
   nominationOrderEnabled: boolean;
   turnTeamId: Id<"seasonTeams"> | null | undefined;
-  turnTeamName: string | undefined;
   onSetTurnTeam: (teamId: Id<"seasonTeams"> | null) => void;
 
   teams: Doc<"seasonTeams">[];
@@ -63,7 +62,6 @@ interface MobileNominationProps {
 export function MobileNomination({
   nominationOrderEnabled,
   turnTeamId,
-  turnTeamName,
   onSetTurnTeam,
   teams,
   selfTeamId,
@@ -177,7 +175,7 @@ export function MobileNomination({
               {nominationOrderEnabled && (
                 <Group gap={8} wrap="nowrap">
                   <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                    {turnTeamName ? `${turnTeamName}'s turn` : "Manual turn"}
+                    Nominating team
                   </Text>
                   <Select
                     size="sm"
