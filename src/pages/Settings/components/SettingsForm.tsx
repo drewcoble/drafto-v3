@@ -6,6 +6,7 @@ import {
   SegmentedControl,
   SimpleGrid,
   Stack,
+  Switch,
   Text,
   TextInput,
 } from "@mantine/core";
@@ -39,6 +40,17 @@ interface SettingsFormProps {
   // in convex/leagues.ts), so editing it here would just be rejected on
   // save.
   teamsLocked?: boolean;
+  // Only supplied by LeagueDetails.tsx's edit-an-existing-league usage -
+  // the import wizards (LeagueImportWizard/YahooLeagueImportWizard) create
+  // a brand-new league, which has no id yet to toggle useKeepers against.
+  // Saves immediately on change (the same live mutation the old read-only
+  // info card's Switch called directly), independent of this form's own
+  // Save/Cancel - not part of `form`/onSave's payload.
+  useKeepersControl?: {
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    error: string | null;
+  };
 }
 
 export function SettingsForm({
@@ -50,6 +62,7 @@ export function SettingsForm({
   onCancel,
   saveLabel = "Save",
   teamsLocked = false,
+  useKeepersControl,
 }: SettingsFormProps) {
   return (
     <Stack gap="md" py="sm" maw={500}>
@@ -201,6 +214,23 @@ export function SettingsForm({
               ))}
             </Group>
           </Chip.Group>
+        </Stack>
+      )}
+      {useKeepersControl && (
+        <Stack gap={4}>
+          <Switch
+            label="Use Keepers"
+            description="Shows or hides the Keepers tab, where keeper rules and tiers are configured."
+            checked={useKeepersControl.checked}
+            onChange={(event) =>
+              useKeepersControl.onChange(event.currentTarget.checked)
+            }
+          />
+          {useKeepersControl.error && (
+            <Text c="red" size="sm">
+              {useKeepersControl.error}
+            </Text>
+          )}
         </Stack>
       )}
       {error && (

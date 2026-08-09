@@ -11,7 +11,6 @@ import {
   Modal,
   SimpleGrid,
   Stack,
-  Switch,
   Text,
   TextInput,
   Title,
@@ -343,6 +342,15 @@ export function LeagueDetails({
           onDoneCreating();
         }}
         teamsLocked={!!draftTeams && draftTeams.length > 0}
+        {...(settings
+          ? {
+              useKeepersControl: {
+                checked: settings.useKeepers ?? true,
+                onChange: handleToggleUseKeepers,
+                error: useKeepersError,
+              },
+            }
+          : {})}
       />
     );
   }
@@ -448,20 +456,10 @@ export function LeagueDetails({
               <Text size="sm" c="dimmed">
                 SUPERFLEX eligible: {settings.superflexPositions.join(", ")}
               </Text>
-            </Group>
-            <Switch
-              label="Use Keepers"
-              description="Shows or hides the Keepers tab, where keeper rules and tiers are configured."
-              checked={settings.useKeepers ?? true}
-              onChange={(event) =>
-                handleToggleUseKeepers(event.currentTarget.checked)
-              }
-            />
-            {useKeepersError && (
-              <Text c="red" size="sm">
-                {useKeepersError}
+              <Text size="sm" c="dimmed">
+                Use Keepers: {(settings.useKeepers ?? true) ? "Yes" : "No"}
               </Text>
-            )}
+            </Group>
           </Stack>
         </Card>
 
