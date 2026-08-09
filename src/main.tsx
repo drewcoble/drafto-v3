@@ -10,7 +10,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import { routeTree } from "./routeTree.gen";
-import { theme } from "./theme";
+import { cssVariablesResolver, theme } from "./theme";
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 
@@ -56,7 +56,11 @@ ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <ConvexAuthProvider client={convex}>
       <QueryClientProvider client={queryClient}>
-        <MantineProvider theme={theme} defaultColorScheme="dark">
+        <MantineProvider
+          theme={theme}
+          defaultColorScheme="dark"
+          cssVariablesResolver={cssVariablesResolver}
+        >
           <Analytics />
           <RouterProvider router={router} />
         </MantineProvider>

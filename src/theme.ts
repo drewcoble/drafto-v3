@@ -1,4 +1,4 @@
-import { createTheme } from "@mantine/core";
+import { createTheme, type CSSVariablesResolver } from "@mantine/core";
 
 // Base color "saddlebrown" (#8b4513), pinned to shade 7 rather than the
 // darkest shade (@mantine/colors-generator's default placement, since
@@ -410,4 +410,21 @@ export const theme = createTheme({
       },
     },
   },
+});
+
+// Mantine's own light-mode body defaults to var(--mantine-color-white)
+// (theme.white, this app's warm cream) - a plain page background, no
+// distinct "surface" to pop off of. Dark mode already has that contrast
+// for free (body is dark-7, Card/Popover default to the lighter dark-6),
+// so this gives light mode the same relationship: body drops to a plain
+// gray-1, while Card/Popover's gray-0 default (see the Popover entry
+// above) reads as a distinctly lighter surface again. Only --mantine-
+// color-body changes - theme.white itself (button text contrast, etc.)
+// is untouched.
+export const cssVariablesResolver: CSSVariablesResolver = () => ({
+  variables: {},
+  light: {
+    "--mantine-color-body": "var(--mantine-color-gray-1)",
+  },
+  dark: {},
 });
