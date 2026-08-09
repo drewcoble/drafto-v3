@@ -119,7 +119,11 @@ export function MobileNomination({
           onClick={() => setDrawerOpen((open) => !open)}
           style={{
             boxShadow: "var(--mantine-shadow-lg)",
-            border: "3px solid var(--mantine-color-body)",
+            // Lightest saddlebrown shade, mostly transparent - a subtle
+            // rim rather than the solid body-colored cutout ring this used
+            // to be.
+            border:
+              "3px solid color-mix(in srgb, var(--mantine-color-saddlebrown-0) 25%, transparent)",
             // Lighter than "filled" (shade 5 instead of 7) for more
             // presence against the frosted bar underneath it, still
             // translucent to match (see BottomNav.tsx).
