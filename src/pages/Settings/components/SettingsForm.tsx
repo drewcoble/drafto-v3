@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Chip,
+  Divider,
   Group,
   SegmentedControl,
   SimpleGrid,
@@ -14,7 +15,10 @@ import {
   Title,
 } from "@mantine/core";
 import { Link } from "@tanstack/react-router";
-import { CountStepper, EditableNumberStepper } from "../../../components/NumberStepper";
+import {
+  CountStepper,
+  EditableNumberStepper,
+} from "../../../components/NumberStepper";
 import {
   POSITIONS,
   type Position,
@@ -187,10 +191,15 @@ export function SettingsForm({
             <Text size="sm" fw={500}>
               Roster Slots
             </Text>
-            {/* 4 columns of CountSteppers (now STEPPER_BUTTON_SIZE-wide +/-
+            {/* 3 columns of CountSteppers (now STEPPER_BUTTON_SIZE-wide +/-
                 buttons each) don't fit a mobile viewport without overlapping -
-                2 up narrow, same 4 from "sm" up where there's room. */}
-            <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md" verticalSpacing="lg">
+                2 up narrow, same 3 from "sm" up where there's room, to keep
+                one slot's + button from crowding the next slot's - button. */}
+            <SimpleGrid
+              cols={{ base: 2, sm: 3 }}
+              spacing="md"
+              verticalSpacing="lg"
+            >
               {ROSTER_SLOT_KEYS.map((key) => (
                 <Stack key={key} gap={4}>
                   <Badge
@@ -219,31 +228,38 @@ export function SettingsForm({
             </SimpleGrid>
           </Stack>
           {form.rosterSlots.FLEX > 0 && (
-            <Stack gap={6}>
-              <Group gap={6} wrap="nowrap">
-                <Badge size="sm" variant="light" color={positionColorOrDefault("FLEX")}>
-                  FLEX
-                </Badge>
-                <Text size="sm" fw={500}>
-                  eligible positions
-                </Text>
-              </Group>
-              <Chip.Group
-                multiple
-                value={form.flexPositions}
-                onChange={(value) =>
-                  onChange({ ...form, flexPositions: value as Position[] })
-                }
-              >
-                <Group gap="xs">
-                  {POSITIONS.map((pos) => (
-                    <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
-                      {pos}
-                    </Chip>
-                  ))}
+            <>
+              <Divider />
+              <Stack gap={6}>
+                <Group gap={6} wrap="nowrap">
+                  <Badge
+                    size="sm"
+                    variant="light"
+                    color={positionColorOrDefault("FLEX")}
+                  >
+                    FLEX
+                  </Badge>
+                  <Text size="sm" fw={500}>
+                    eligible positions
+                  </Text>
                 </Group>
-              </Chip.Group>
-            </Stack>
+                <Chip.Group
+                  multiple
+                  value={form.flexPositions}
+                  onChange={(value) =>
+                    onChange({ ...form, flexPositions: value as Position[] })
+                  }
+                >
+                  <Group gap="xs">
+                    {POSITIONS.map((pos) => (
+                      <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
+                        {pos}
+                      </Chip>
+                    ))}
+                  </Group>
+                </Chip.Group>
+              </Stack>
+            </>
           )}
           {form.rosterSlots.SUPERFLEX > 0 && (
             <Stack gap={6}>
@@ -295,7 +311,7 @@ export function SettingsForm({
                       </Anchor>
                     </>
                   ) : (
-                    "Shows or hides the Keepers tab, where keeper rules and tiers are configured."
+                    "Shows or hides the Keepers tab, where keeper rules are configured."
                   )
                 }
                 checked={useKeepersControl.checked}
