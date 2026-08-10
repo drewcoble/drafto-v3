@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation } from "../_generated/server";
 import { positionValidator } from "../positions";
-import { requireSeasonOwner } from "./auth";
+import { requireDraftNotStarted } from "./auth";
 
 const keeperFormulaValidator = v.object({
   multiplier: v.number(),
@@ -42,7 +42,7 @@ export const setKeeperRules = mutation({
     keeperRules: keeperRulesValidator,
   },
   handler: async (ctx, args) => {
-    await requireSeasonOwner(ctx, args.seasonId);
+    await requireDraftNotStarted(ctx, args.seasonId);
     await ctx.db.patch(args.seasonId, {
       keeperRules: {
         ...args.keeperRules,
@@ -72,7 +72,7 @@ export const setKeeperTierPlayers = mutation({
     fpids: v.array(v.number()),
   },
   handler: async (ctx, args) => {
-    const { season } = await requireSeasonOwner(ctx, args.seasonId);
+    const { season } = await requireDraftNotStarted(ctx, args.seasonId);
     const keeperRules = season.keeperRules;
     if (!keeperRules) {
       throw new Error("No keeper rules configured for this league.");

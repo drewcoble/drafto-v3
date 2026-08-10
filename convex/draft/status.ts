@@ -10,14 +10,20 @@ import { scoringConfigFromSeason } from "../scoring";
 // The Report Card is always evaluated at the pre-season week.
 const REPORT_CARD_WEEK = "0";
 
-// Keeps drafts.status in sync with actual pick count - called at the end of
-// every mutation that changes draftPicks row count (resolvePick, addKeeper,
-// removePick, removeKeeper, undoLastPick in convex/draft/picks.ts). Driving
-// this off every write rather than just resolvePick makes it self-healing: a
-// commissioner correction via the League tab that drops a team below a full
-// roster automatically reverts status from "complete" back to
-// "in_progress", instead of leaving a stale flag that no longer matches
-// reality. Gates convex/draft/reportCard.ts's getDraftReportCard.
+// Keeps drafts.status in sync with startedAt + actual pick count - called at
+// the end of every mutation that changes draftPicks row count (resolvePick,
+// addKeeper, removePick, removeKeeper, undoLastPick in convex/draft/
+// picks.ts) as well as convex/draft/lifecycle.ts's startDraft/reopenSetup.
+// Driving this off every pick write rather than just resolvePick makes it
+// self-healing: a commissioner correction via the League tab that drops a
+// team below a full roster automatically reverts status from "complete"
+// back to "in_progress", instead of leaving a stale flag that no longer
+// matches reality. Gates convex/draft/reportCard.ts's getDraftReportCard.
+//
+// Status is NOT derived from pick count alone - a draft with startedAt unset
+// is always "setup" regardless of how many keepers have been added (keepers
+// are just draftPicks rows with isKeeper: true, and adding one pre-draft
+// must not look like the auction has begun).
 export async function syncDraftStatus(
   ctx: MutationCtx,
   draftId: Id<"drafts">,
@@ -27,21 +33,21 @@ export async function syncDraftStatus(
   const season = await ctx.db.get(draft.seasonId);
   if (!season) return;
 
-  const picks = await ctx.db
-    .query("draftPicks")
-    .withIndex("by_draft", (q) => q.eq("draftId", draftId))
-    .collect();
-
-  const complete = isDraftComplete(
-    season.rosterSlots,
-    season.teamCount,
-    picks.length,
-  );
-  const newStatus = complete
-    ? ("complete" as const)
-    : picks.length > 0
-      ? ("in_progress" as const)
-      : ("setup" as const);
+  let newStatus: "setup" | "in_progress" | "complete";
+  if (draft.startedAt === undefined) {
+    newStatus = "setup";
+  } else {
+    const picks = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft", (q) => q.eq("draftId", draftId))
+      .collect();
+    const complete = isDraftComplete(
+      season.rosterSlots,
+      season.teamCount,
+      picks.length,
+    );
+    newStatus = complete ? "complete" : "in_progress";
+  }
 
   if (draft.status !== newStatus) {
     await ctx.db.patch(draftId, { status: newStatus });

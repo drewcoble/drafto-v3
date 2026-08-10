@@ -60,3 +60,33 @@ export async function requireDraftOwner(
   const draft = await requireRealDraft(ctx, seasonId);
   return { season, draft };
 }
+
+// Guards every mutation that edits league configuration locked once the
+// draft starts (scoring/roster slots, keeper rules, team count/league
+// salary cap, adding/removing teams) - see convex/draft/lifecycle.ts's
+// startDraft/reopenSetup for the only two mutations that flip startedAt.
+export async function requireDraftNotStarted(
+  ctx: QueryCtx | MutationCtx,
+  seasonId: Id<"seasons">,
+): Promise<{ season: Doc<"seasons">; draft: Doc<"drafts"> }> {
+  const result = await requireDraftOwner(ctx, seasonId);
+  if (result.draft.startedAt !== undefined) {
+    throw new Error(
+      "This draft has already started - reopen setup to change league settings.",
+    );
+  }
+  return result;
+}
+
+// Guards every mutation that only makes sense once the auction is live
+// (nominate, bid, resolve a pick).
+export async function requireDraftStarted(
+  ctx: QueryCtx | MutationCtx,
+  seasonId: Id<"seasons">,
+): Promise<{ season: Doc<"seasons">; draft: Doc<"drafts"> }> {
+  const result = await requireDraftOwner(ctx, seasonId);
+  if (result.draft.startedAt === undefined) {
+    throw new Error("Start the draft before nominating players.");
+  }
+  return result;
+}

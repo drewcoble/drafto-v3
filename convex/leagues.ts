@@ -1,13 +1,32 @@
 import { v } from "convex/values";
-import { mutation, query, internalQuery, type MutationCtx } from "./_generated/server";
+import {
+  mutation,
+  query,
+  internalQuery,
+  type MutationCtx,
+} from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id, Doc } from "./_generated/dataModel";
 import { positionValidator } from "./positions";
-import { scoringValidator, teScoringValidator, scoringConfigFromSeason } from "./scoring";
-import { invalidateDraftValues, refreshDraftValuesForLeague } from "./draftValues";
+import {
+  scoringValidator,
+  teScoringValidator,
+  scoringConfigFromSeason,
+} from "./scoring";
+import {
+  invalidateDraftValues,
+  refreshDraftValuesForLeague,
+} from "./draftValues";
 import { ensureValueGapsCached } from "./valueGaps";
-import { requireSeasonOwner, requireRealDraft } from "./draft/auth";
-import { hasFreeLeagueGrantForYear, hasProAccess } from "./billing/entitlements";
+import {
+  requireSeasonOwner,
+  requireRealDraft,
+  requireDraftNotStarted,
+} from "./draft/auth";
+import {
+  hasFreeLeagueGrantForYear,
+  hasProAccess,
+} from "./billing/entitlements";
 
 // Mirrors src/constants/general.ts's WEEK - the single season-long
 // draft-prep dataset every Draft Room query reads (not a real NFL week). See
@@ -202,7 +221,8 @@ export const updateSeason = mutation({
   },
   handler: async (ctx, args) => {
     const { id, name, ...fields } = args;
-    const { league } = await requireSeasonOwner(ctx, id);
+    const { season, league } = await requireSeasonOwner(ctx, id);
+    const draft = await requireRealDraft(ctx, id);
 
     // Once teams exist, teamCount can only change via convex/draft/teams.ts's
     // removeSeasonTeam (or a future add-team mutation), both of which keep
@@ -222,6 +242,30 @@ export const updateSeason = mutation({
       );
     }
 
+    // Every field here except `name` is locked once the draft has started
+    // (see requireDraftNotStarted's comment) - compared field-by-field
+    // rather than rejecting the whole call so a rename still goes through
+    // mid-draft instead of needing its own dedicated mutation.
+    if (draft.startedAt !== undefined) {
+      const configUnchanged =
+        fields.teamCount === season.teamCount &&
+        fields.salaryCap === season.salaryCap &&
+        fields.scoring === season.scoring &&
+        fields.teScoring === (season.teScoring ?? "NONE") &&
+        fields.sixPointPassTds === (season.sixPointPassTds ?? false) &&
+        JSON.stringify(fields.rosterSlots) ===
+          JSON.stringify(season.rosterSlots) &&
+        JSON.stringify(fields.flexPositions) ===
+          JSON.stringify(season.flexPositions) &&
+        JSON.stringify(fields.superflexPositions) ===
+          JSON.stringify(season.superflexPositions);
+      if (!configUnchanged) {
+        throw new Error(
+          "This draft has already started - reopen setup to change league settings.",
+        );
+      }
+    }
+
     await ctx.db.patch(id, fields);
     if (league.name !== name) {
       await ctx.db.patch(league._id, { name });
@@ -229,7 +273,6 @@ export const updateSeason = mutation({
     // Every field here (teamCount, salaryCap, scoring, rosterSlots,
     // flex/superflexPositions) feeds getDraftValues' $ engine - see
     // convex/draftValues.ts.
-    const draft = await requireRealDraft(ctx, id);
     await invalidateDraftValues(ctx, draft._id);
     return await ctx.db.get(id);
   },
@@ -304,7 +347,9 @@ export const importPreviousSeasonHistory = mutation({
       rosterSlots: newSeason.rosterSlots,
       flexPositions: newSeason.flexPositions,
       superflexPositions: newSeason.superflexPositions,
-      ...(args.sleeperLeagueId ? { sleeperLeagueId: args.sleeperLeagueId } : {}),
+      ...(args.sleeperLeagueId
+        ? { sleeperLeagueId: args.sleeperLeagueId }
+        : {}),
       ...(args.yahooLeagueKey ? { yahooLeagueKey: args.yahooLeagueKey } : {}),
       createdAt: now,
     });
@@ -321,7 +366,8 @@ export const importPreviousSeasonHistory = mutation({
       const teamId = await ctx.db.insert("seasonTeams", {
         seasonId: historySeasonId,
         name: team.teamName,
-        isSelf: args.selfOwnerId !== undefined && team.ownerId === args.selfOwnerId,
+        isSelf:
+          args.selfOwnerId !== undefined && team.ownerId === args.selfOwnerId,
         order: index,
         createdAt: now,
       });
@@ -368,7 +414,11 @@ export const setUseKeepers = mutation({
     useKeepers: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const { league } = await requireSeasonOwner(ctx, args.id);
+    const { season } = await requireDraftNotStarted(ctx, args.id);
+    const league = await ctx.db.get(season.leagueId);
+    if (!league) {
+      throw new Error("League not found.");
+    }
     if (args.useKeepers && !(await hasProAccess(ctx, league.ownerId))) {
       throw new Error("Keepers is a Pro feature. Upgrade to enable it.");
     }

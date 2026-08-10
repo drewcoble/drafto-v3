@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { requireDraftOwner, requireSeasonOwner } from "./auth";
+import {
+  requireDraftOwner,
+  requireDraftNotStarted,
+  requireDraftStarted,
+  requireSeasonOwner,
+} from "./auth";
 import { nextNominator } from "./nominationOrder";
 import { expandRosterSlots, isEligibleForSlot } from "./slots";
 import { getPreviousSeason } from "./history";
@@ -40,7 +45,7 @@ export const nominate = mutation({
     openingBid: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { season, draft } = await requireDraftOwner(ctx, args.seasonId);
+    const { season, draft } = await requireDraftStarted(ctx, args.seasonId);
 
     const alreadyPicked = await ctx.db
       .query("draftPicks")
@@ -130,7 +135,7 @@ export const nominate = mutation({
 export const bumpNominationBid = mutation({
   args: { seasonId: v.id("seasons"), delta: v.number() },
   handler: async (ctx, args) => {
-    const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    const { draft } = await requireDraftStarted(ctx, args.seasonId);
     const nomination = await ctx.db
       .query("draftNominations")
       .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
@@ -150,7 +155,7 @@ export const bumpNominationBid = mutation({
 export const setNominationBid = mutation({
   args: { seasonId: v.id("seasons"), amount: v.number() },
   handler: async (ctx, args) => {
-    const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    const { draft } = await requireDraftStarted(ctx, args.seasonId);
     const nomination = await ctx.db
       .query("draftNominations")
       .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
@@ -167,7 +172,7 @@ export const setNominationBid = mutation({
 export const passNomination = mutation({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
-    const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    const { draft } = await requireDraftStarted(ctx, args.seasonId);
     const nomination = await ctx.db
       .query("draftNominations")
       .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
@@ -191,7 +196,7 @@ export const resolvePick = mutation({
     planSlotKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    const { draft } = await requireDraftStarted(ctx, args.seasonId);
 
     const nomination = await ctx.db
       .query("draftNominations")
@@ -359,7 +364,7 @@ export const addKeeper = mutation({
     planSlotKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { season, draft } = await requireDraftOwner(ctx, args.seasonId);
+    const { season, draft } = await requireDraftNotStarted(ctx, args.seasonId);
 
     const team = await ctx.db.get(args.teamId);
     if (!team || team.seasonId !== args.seasonId) {
@@ -456,9 +461,14 @@ export const removeKeeper = mutation({
     if (!pick) {
       throw new Error("Pick not found.");
     }
-    await requireSeasonForPick(ctx, pick);
+    const draft = await requireSeasonForPick(ctx, pick);
     if (!pick.isKeeper) {
       throw new Error("This pick isn't a keeper.");
+    }
+    if (draft.startedAt !== undefined) {
+      throw new Error(
+        "This draft has already started - reopen setup to change league settings.",
+      );
     }
     await ctx.db.delete(args.pickId);
     await invalidateDraftValues(ctx, pick.draftId);
@@ -480,9 +490,14 @@ export const setKeeperStreak = mutation({
     if (!pick) {
       throw new Error("Pick not found.");
     }
-    await requireSeasonForPick(ctx, pick);
+    const draft = await requireSeasonForPick(ctx, pick);
     if (!pick.isKeeper) {
       throw new Error("This pick isn't a keeper.");
+    }
+    if (draft.startedAt !== undefined) {
+      throw new Error(
+        "This draft has already started - reopen setup to change league settings.",
+      );
     }
     await ctx.db.patch(args.pickId, {
       keeperStreak: Math.max(Math.round(args.streak), 1),
@@ -504,7 +519,17 @@ export const removePick = mutation({
     if (!pick) {
       throw new Error("Pick not found.");
     }
-    await requireSeasonForPick(ctx, pick);
+    const draft = await requireSeasonForPick(ctx, pick);
+    // Only keepers are locked once the draft starts - this is the one path
+    // (besides removeKeeper) that can delete a keeper row, and without this
+    // check it would silently bypass that lock. A real auction pick can
+    // still be removed any time (that's this mutation's whole purpose for
+    // the Draft Room's roster-correction views).
+    if (pick.isKeeper && draft.startedAt !== undefined) {
+      throw new Error(
+        "This draft has already started - reopen setup to change league settings.",
+      );
+    }
     await ctx.db.delete(args.pickId);
     // Dropping a keeper (this can remove any pick, keeper or not - see
     // comment above) shifts getDraftValues' $ engine the same way

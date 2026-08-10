@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { internalQuery, mutation, query } from "../_generated/server";
-import { requireSeasonOwner, requireRealDraft } from "./auth";
+import {
+  requireSeasonOwner,
+  requireRealDraft,
+  requireDraftNotStarted,
+} from "./auth";
 import { invalidateDraftValues } from "../draftValues";
 
 export const listSeasonTeams = query({
@@ -64,12 +68,10 @@ export const initializeSeasonTeams = mutation({
     // string, since Yahoo has no separate roster/owner id split the way
     // Sleeper's link does (see seasonTeams.yahooTeamKey's schema comment).
     selfYahooTeamKey: v.optional(v.string()),
-    opponentYahooTeamKeys: v.optional(
-      v.array(v.union(v.string(), v.null())),
-    ),
+    opponentYahooTeamKeys: v.optional(v.array(v.union(v.string(), v.null()))),
   },
   handler: async (ctx, args) => {
-    const { season } = await requireSeasonOwner(ctx, args.seasonId);
+    const { season, draft } = await requireDraftNotStarted(ctx, args.seasonId);
 
     const existing = await ctx.db
       .query("seasonTeams")
@@ -114,7 +116,6 @@ export const initializeSeasonTeams = mutation({
       );
     }
 
-    const draft = await requireRealDraft(ctx, args.seasonId);
     await ctx.db.patch(draft._id, {
       nominationOrder: teamIds,
       nominationOrderMode: "linear",
@@ -147,8 +148,7 @@ export const removeSeasonTeam = mutation({
     if (team.isSelf) {
       throw new Error("Can't remove your own team.");
     }
-    const { season } = await requireSeasonOwner(ctx, team.seasonId);
-    const draft = await requireRealDraft(ctx, team.seasonId);
+    const { season, draft } = await requireDraftNotStarted(ctx, team.seasonId);
 
     const teams = await ctx.db
       .query("seasonTeams")
@@ -227,7 +227,10 @@ export const renameSeasonTeam = mutation({
 
 // null clears the override back to the league default (seasons.salaryCap).
 export const setTeamSalaryCap = mutation({
-  args: { teamId: v.id("seasonTeams"), salaryCap: v.union(v.number(), v.null()) },
+  args: {
+    teamId: v.id("seasonTeams"),
+    salaryCap: v.union(v.number(), v.null()),
+  },
   handler: async (ctx, args) => {
     const team = await ctx.db.get(args.teamId);
     if (!team) {
@@ -294,7 +297,10 @@ export const setTeamYahooLink = mutation({
 
 // null clears the override back to the league default (seasons.faabBudget).
 export const setTeamFaabBudget = mutation({
-  args: { teamId: v.id("seasonTeams"), faabBudget: v.union(v.number(), v.null()) },
+  args: {
+    teamId: v.id("seasonTeams"),
+    faabBudget: v.union(v.number(), v.null()),
+  },
   handler: async (ctx, args) => {
     const team = await ctx.db.get(args.teamId);
     if (!team) {

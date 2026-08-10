@@ -416,6 +416,14 @@ export default defineSchema({
       v.literal("in_progress"),
       v.literal("complete"),
     ),
+    // Set once, explicitly, by convex/draft/lifecycle.ts's startDraft (and
+    // cleared by its reopenSetup) - the actual "has this draft been
+    // deliberately started" flag. `status` above is still derived (see
+    // convex/draft/status.ts's syncDraftStatus) but now as a function of
+    // this field plus roster fullness, NOT of raw pick count - a keeper
+    // added before the draft starts must not flip status away from
+    // "setup", since keepers are just draftPicks rows with isKeeper: true.
+    startedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_season", ["seasonId"])
