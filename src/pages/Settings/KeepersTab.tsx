@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Card, Center, Loader, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Card, Center, Grid, Loader, Stack, Text } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { POSITIONS, type Position } from "../../types";
@@ -37,7 +37,11 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
-      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
+      ? {
+          seasonId,
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
       : "skip",
   );
   const draftValues = draftValuesResult?.values;
@@ -132,8 +136,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     return relevant
       .filter(
         (row) =>
-          !draftedFpids.has(row.fpid) &&
-          row.name.toLowerCase().includes(query),
+          !draftedFpids.has(row.fpid) && row.name.toLowerCase().includes(query),
       )
       .sort(
         (a, b) =>
@@ -204,9 +207,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
       });
       setKeeperSearch("");
     } catch (err) {
-      setKeeperError(
-        getErrorMessage(err, "Failed to add keeper."),
-      );
+      setKeeperError(getErrorMessage(err, "Failed to add keeper."));
     }
   };
 
@@ -215,9 +216,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     try {
       await removeKeeper({ pickId });
     } catch (err) {
-      setKeeperError(
-        getErrorMessage(err, "Failed to remove keeper."),
-      );
+      setKeeperError(getErrorMessage(err, "Failed to remove keeper."));
     }
   };
 
@@ -226,20 +225,19 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     try {
       await setKeeperStreak({ pickId, streak });
     } catch (err) {
-      setKeeperError(
-        getErrorMessage(err, "Failed to update keeper streak."),
-      );
+      setKeeperError(getErrorMessage(err, "Failed to update keeper streak."));
     }
   };
 
-  const handleMoveKeeper = async (pickId: Id<"draftPicks">, slotKey: string) => {
+  const handleMoveKeeper = async (
+    pickId: Id<"draftPicks">,
+    slotKey: string,
+  ) => {
     setKeeperError(null);
     try {
       await setPickSlot({ pickId, slotKey });
     } catch (err) {
-      setKeeperError(
-        getErrorMessage(err, "Failed to move keeper."),
-      );
+      setKeeperError(getErrorMessage(err, "Failed to move keeper."));
     }
   };
 
@@ -268,89 +266,103 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     <Stack gap="md" py="sm">
       <Text size="sm" c="dimmed">
         Assign players to teams before the draft starts. Kept players are
-        pre-loaded onto their team's roster and won't appear in the
-        nomination pool or Players Left board.
+        pre-loaded onto their team's roster and won't appear in the nomination
+        pool or Players Left board.
       </Text>
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-        <Stack gap="md">
-          <Text size="md" fw={500}>
-            Current Keepers
-          </Text>
-          {keepers.length === 0 ? (
-            <Text size="sm" c="dimmed">
-              No keepers assigned yet.
-            </Text>
-          ) : (
-            <>
-              {/* Desktop table gets its own single-level border - the mobile
-                  card list below already boxes each keeper individually
-                  (KeeperCardList), so it isn't also wrapped in a Card here
-                  (that would nest a Card inside a Card). */}
-              <Card withBorder padding="md" visibleFrom="sm">
-                <KeeperTable
-                  keepers={keepers}
-                  nameByFpid={nameByFpid}
-                  teamNameById={teamNameById}
-                  slots={slots}
-                  flexPositions={settings.flexPositions}
-                  superflexPositions={settings.superflexPositions}
-                  onRemove={handleRemoveKeeper}
-                  onSetStreak={handleSetStreak}
-                  onMove={handleMoveKeeper}
-                  onSelectPlayer={setSelectedFpid}
-                  showStreakInput={settings.keeperRules?.trackConsecutiveYears ?? true}
-                />
-              </Card>
-              <KeeperCardList
-                keepers={keepers}
-                nameByFpid={nameByFpid}
-                teamNameById={teamNameById}
-                slots={slots}
-                flexPositions={settings.flexPositions}
-                superflexPositions={settings.superflexPositions}
-                onRemove={handleRemoveKeeper}
-                onSetStreak={handleSetStreak}
-                onMove={handleMoveKeeper}
+      {/* 6/6 split from "md" up - keeper rules on the left, add-a-keeper
+          stacked on top of current keepers on the right. Single stacked
+          column below that where there isn't room. */}
+      <Grid gutter="md" align="start">
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          {/* No outer Card - KeeperRulesPanel already organizes itself into
+              its own Cards (default formula, limits, per tier), so wrapping
+              it here would nest a Card inside a Card. */}
+          <KeeperRulesPanel settings={settings} />
+        </Grid.Col>
+
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <Stack gap="md">
+            <Stack gap="md">
+              <Text size="md" fw={500}>
+                Add a Keeper
+              </Text>
+              {usingGenericValues && <GenericValuesNotice />}
+              {/* No outer Card here - KeeperSearchForm already boxes the
+                  selected-candidate summary in its own Card once a player is
+                  picked, so wrapping this whole section would nest one Card
+                  inside another. */}
+              <KeeperSearchForm
+                keeperSearch={keeperSearch}
+                onKeeperSearchChange={setKeeperSearch}
+                draftTeams={draftTeams}
+                keeperTeamId={keeperTeamId}
+                onKeeperTeamIdChange={setKeeperTeamId}
+                keeperPrice={keeperPrice}
+                onKeeperPriceChange={setKeeperPrice}
+                keeperError={keeperError}
+                keeperSearchResults={keeperSearchResults}
+                draftValueByFpid={draftValueByFpid}
+                priceHistory={priceHistory}
+                keeperRules={settings.keeperRules}
+                atTeamKeeperCap={atTeamKeeperCap}
+                onAddKeeper={handleAddKeeper}
                 onSelectPlayer={setSelectedFpid}
-                showStreakInput={settings.keeperRules?.trackConsecutiveYears ?? true}
               />
-            </>
-          )}
-        </Stack>
+            </Stack>
 
-        <Stack gap="md">
-          <Text size="md" fw={500}>
-            Add a Keeper
-          </Text>
-          {usingGenericValues && <GenericValuesNotice />}
-          {/* No outer Card here - KeeperSearchForm already boxes the
-              selected-candidate summary in its own Card once a player is
-              picked, so wrapping this whole section would nest one Card
-              inside another. */}
-          <KeeperSearchForm
-            keeperSearch={keeperSearch}
-            onKeeperSearchChange={setKeeperSearch}
-            draftTeams={draftTeams}
-            keeperTeamId={keeperTeamId}
-            onKeeperTeamIdChange={setKeeperTeamId}
-            keeperPrice={keeperPrice}
-            onKeeperPriceChange={setKeeperPrice}
-            keeperError={keeperError}
-            keeperSearchResults={keeperSearchResults}
-            draftValueByFpid={draftValueByFpid}
-            priceHistory={priceHistory}
-            keeperRules={settings.keeperRules}
-            atTeamKeeperCap={atTeamKeeperCap}
-            onAddKeeper={handleAddKeeper}
-            onSelectPlayer={setSelectedFpid}
-          />
-        </Stack>
-      </SimpleGrid>
-
-      {/* No outer Card - KeeperRulesPanel already organizes itself into its
-          own Cards (default formula, limits, per tier), so wrapping it here
-          would nest a Card inside a Card. */}
-      <KeeperRulesPanel settings={settings} />
+            <Stack gap="md">
+              <Text size="md" fw={500}>
+                Current Keepers
+              </Text>
+              {keepers.length === 0 ? (
+                <Text size="sm" c="dimmed">
+                  No keepers assigned yet.
+                </Text>
+              ) : (
+                <>
+                  {/* Desktop table gets its own single-level border - the
+                      mobile card list below already boxes each keeper
+                      individually (KeeperCardList), so it isn't also wrapped
+                      in a Card here (that would nest a Card inside a
+                      Card). */}
+                  <Card withBorder padding="md" visibleFrom="sm">
+                    <KeeperTable
+                      keepers={keepers}
+                      nameByFpid={nameByFpid}
+                      teamNameById={teamNameById}
+                      slots={slots}
+                      flexPositions={settings.flexPositions}
+                      superflexPositions={settings.superflexPositions}
+                      onRemove={handleRemoveKeeper}
+                      onSetStreak={handleSetStreak}
+                      onMove={handleMoveKeeper}
+                      onSelectPlayer={setSelectedFpid}
+                      showStreakInput={
+                        settings.keeperRules?.maxConsecutiveYears !== undefined
+                      }
+                    />
+                  </Card>
+                  <KeeperCardList
+                    keepers={keepers}
+                    nameByFpid={nameByFpid}
+                    teamNameById={teamNameById}
+                    slots={slots}
+                    flexPositions={settings.flexPositions}
+                    superflexPositions={settings.superflexPositions}
+                    onRemove={handleRemoveKeeper}
+                    onSetStreak={handleSetStreak}
+                    onMove={handleMoveKeeper}
+                    onSelectPlayer={setSelectedFpid}
+                    showStreakInput={
+                      settings.keeperRules?.maxConsecutiveYears !== undefined
+                    }
+                  />
+                </>
+              )}
+            </Stack>
+          </Stack>
+        </Grid.Col>
+      </Grid>
 
       <PlayerDetailModal
         fpid={selectedFpid}
