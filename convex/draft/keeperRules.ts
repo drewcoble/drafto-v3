@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation } from "../_generated/server";
+import { positionValidator } from "../positions";
 import { requireSeasonOwner } from "./auth";
 
 const keeperFormulaValidator = v.object({
@@ -14,6 +15,7 @@ const keeperTierValidator = v.object({
   maxSize: v.optional(v.number()),
   formula: keeperFormulaValidator,
   fpids: v.array(v.number()),
+  positions: v.optional(v.array(positionValidator)),
 });
 
 const keeperRulesValidator = v.object({
@@ -26,7 +28,6 @@ const keeperRulesValidator = v.object({
   tiers: v.array(keeperTierValidator),
   maxKeepersPerTeam: v.optional(v.number()),
   maxConsecutiveYears: v.optional(v.number()),
-  trackConsecutiveYears: v.optional(v.boolean()),
 });
 
 // Full replace of the season's keeper cost/eligibility config - called by
@@ -43,7 +44,15 @@ export const setKeeperRules = mutation({
   handler: async (ctx, args) => {
     await requireSeasonOwner(ctx, args.seasonId);
     await ctx.db.patch(args.seasonId, {
-      keeperRules: args.keeperRules,
+      keeperRules: {
+        ...args.keeperRules,
+        // Derived, not client-set - see schema.ts's trackConsecutiveYears
+        // comment. Computed here (not trusted from the client) so it's
+        // always in sync with maxConsecutiveYears regardless of what any
+        // particular client build sends.
+        trackConsecutiveYears:
+          args.keeperRules.maxConsecutiveYears !== undefined,
+      },
     });
     return null;
   },
@@ -73,9 +82,7 @@ export const setKeeperTierPlayers = mutation({
       throw new Error("Keeper tier not found.");
     }
     if (tier.maxSize !== undefined && args.fpids.length > tier.maxSize) {
-      throw new Error(
-        `"${tier.name}" allows at most ${tier.maxSize} players.`,
-      );
+      throw new Error(`"${tier.name}" allows at most ${tier.maxSize} players.`);
     }
     const newFpidSet = new Set(args.fpids);
     const overlap = keeperRules.tiers.some(

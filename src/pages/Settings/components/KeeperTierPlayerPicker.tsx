@@ -1,5 +1,12 @@
 import { useMemo, useState } from "react";
-import { ActionIcon, Badge, Group, Stack, Text, TextInput } from "@mantine/core";
+import {
+  ActionIcon,
+  Badge,
+  Group,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { X } from "lucide-react";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import type { Position } from "../../../types";
@@ -81,7 +88,7 @@ export function KeeperTierPlayerPicker({
         size="xs"
         placeholder={
           atCapacity
-            ? `Tier full (${fpids.length}/${maxSize})`
+            ? `Rule full (${fpids.length}/${maxSize})`
             : "Search a player to add..."
         }
         disabled={atCapacity}
@@ -115,7 +122,7 @@ export function KeeperTierPlayerPicker({
                   disabled={inOtherTier || atCapacity}
                   title={
                     inOtherTier
-                      ? "Already designated in another tier"
+                      ? "Already designated in another rule"
                       : undefined
                   }
                   onClick={() => {

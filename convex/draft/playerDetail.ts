@@ -22,15 +22,16 @@ export const getPlayerDetail = query({
     // injuries.getInjuries today), so this still works with no league
     // selected (e.g. the pre-draft Players tab before any league exists).
     let draftId = null;
-    // Absent means true - see schema.ts's trackConsecutiveYears comment.
-    // Only matters when a pick/keeper is actually returned below, but
-    // computed alongside draftId (same season lookup) rather than a second
-    // round trip.
-    let trackConsecutiveYears = true;
+    // A maxConsecutiveYears cap is what drives showing the Yr N badge below -
+    // no cap set (unlimited) means the league doesn't track streaks. Only
+    // matters when a pick/keeper is actually returned below, but computed
+    // alongside draftId (same season lookup) rather than a second round trip.
+    let trackConsecutiveYears = false;
     if (args.seasonId) {
       const { season, draft } = await requireDraftOwner(ctx, args.seasonId);
       draftId = draft._id;
-      trackConsecutiveYears = season.keeperRules?.trackConsecutiveYears ?? true;
+      trackConsecutiveYears =
+        season.keeperRules?.maxConsecutiveYears !== undefined;
     }
 
     const player = await ctx.db
@@ -85,6 +86,14 @@ export const getPlayerDetail = query({
       tag = tagRow?.tag ?? null;
     }
 
-    return { player, projection, ranking, injury, pick, tag, trackConsecutiveYears };
+    return {
+      player,
+      projection,
+      ranking,
+      injury,
+      pick,
+      tag,
+      trackConsecutiveYears,
+    };
   },
 });

@@ -1,5 +1,14 @@
 import { useMemo } from "react";
-import { ActionIcon, Anchor, Badge, Card, Group, Menu, Stack, Text } from "@mantine/core";
+import {
+  ActionIcon,
+  Anchor,
+  Badge,
+  Card,
+  Group,
+  Menu,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { MoreVertical } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { Position } from "../../../types";
@@ -19,8 +28,9 @@ interface KeeperCardListProps {
   onSetStreak: (pickId: Id<"draftPicks">, streak: number) => void;
   onMove: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer: (fpid: number) => void;
-  // Gates the "Yrs kept" editor below - see KeeperRulesPanel.tsx's
-  // trackConsecutiveYears toggle.
+  // Gates the "Yrs kept" editor below - true when the league has a
+  // maxConsecutiveYears cap set (see schema.ts's trackConsecutiveYears
+  // comment).
   showStreakInput: boolean;
 }
 

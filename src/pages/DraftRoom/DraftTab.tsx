@@ -43,7 +43,11 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
   const draftBoardResult = useQuery(
     api.draft.board.getDraftBoard,
     settings
-      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
+      ? {
+          seasonId,
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
       : "skip",
   ) as { isGeneric: boolean; rows: DraftTierRow[] } | undefined;
   const tieredValues = draftBoardResult?.rows;
@@ -121,9 +125,7 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
     try {
       await action();
     } catch (err) {
-      setActionError(
-        getErrorMessage(err, "That action failed."),
-      );
+      setActionError(getErrorMessage(err, "That action failed."));
     }
   };
 
@@ -150,7 +152,9 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
           teamNameById={teamNameById}
           onRemove={(pickId) => runAction(() => removePick({ pickId }))}
           onSelectPlayer={setSelectedFpid}
-          trackConsecutiveYears={settings?.keeperRules?.trackConsecutiveYears ?? true}
+          trackConsecutiveYears={
+            settings?.keeperRules?.maxConsecutiveYears !== undefined
+          }
         />
         <TargetsTable
           rows={shortlist}

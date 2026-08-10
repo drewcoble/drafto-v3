@@ -33,11 +33,7 @@ interface LeagueTabProps {
   selfTeamId: Id<"seasonTeams">;
 }
 
-export function LeagueTab({
-  seasonId,
-  teams,
-  selfTeamId,
-}: LeagueTabProps) {
+export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
   const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
@@ -57,9 +53,7 @@ export function LeagueTab({
     try {
       await removePick({ pickId });
     } catch (err) {
-      setRemoveError(
-        getErrorMessage(err, "Failed to remove pick."),
-      );
+      setRemoveError(getErrorMessage(err, "Failed to remove pick."));
     }
   };
 
@@ -68,9 +62,7 @@ export function LeagueTab({
     try {
       await setPickSlot({ pickId, slotKey });
     } catch (err) {
-      setRemoveError(
-        getErrorMessage(err, "Failed to move pick."),
-      );
+      setRemoveError(getErrorMessage(err, "Failed to move pick."));
     }
   };
 
@@ -113,7 +105,16 @@ export function LeagueTab({
       // const fillPct = slots.length
       //   ? ((slots.length - needs.length) / slots.length) * 100
       //   : 0;
-      return { team, teamPicks, stats, slots, bySlot, needs, neededGroups, fillPct };
+      return {
+        team,
+        teamPicks,
+        stats,
+        slots,
+        bySlot,
+        needs,
+        neededGroups,
+        fillPct,
+      };
     });
   }, [teams, settings, picks]);
 
@@ -179,7 +180,15 @@ export function LeagueTab({
       )}
       <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
         {sortedSummaries.map(
-          ({ team, stats, neededGroups, fillPct, teamPicks, slots, bySlot }) => (
+          ({
+            team,
+            stats,
+            neededGroups,
+            fillPct,
+            teamPicks,
+            slots,
+            bySlot,
+          }) => (
             <Card
               key={team._id}
               withBorder
@@ -238,7 +247,7 @@ export function LeagueTab({
                     onMove={handleMove}
                     onSelectPlayer={setSelectedFpid}
                     trackConsecutiveYears={
-                      settings.keeperRules?.trackConsecutiveYears ?? true
+                      settings.keeperRules?.maxConsecutiveYears !== undefined
                     }
                   />
                 )}

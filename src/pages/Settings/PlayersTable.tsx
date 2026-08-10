@@ -65,8 +65,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
         : { scoring, teScoring: "NONE", sixPointPassTds: false },
     [selectedSettings, scoring],
   );
-  const thisSeason =
-    selectedSettings?.year ?? String(new Date().getFullYear());
+  const thisSeason = selectedSettings?.year ?? String(new Date().getFullYear());
   const lastSeason = String(Number(thisSeason) - 1);
   const valueGaps = useQuery(api.valueGaps.getAllValueGaps, {
     week,
@@ -119,7 +118,8 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     api.draft.picks.listDraftPicks,
     seasonId ? { seasonId } : "skip",
   );
-  const showKeeperYear = selectedSettings?.keeperRules?.trackConsecutiveYears ?? true;
+  const showKeeperYear =
+    selectedSettings?.keeperRules?.maxConsecutiveYears !== undefined;
   const keeperInfoByFpid = useMemo(() => {
     const map = new Map<number, KeeperInfo>();
     for (const pick of picks ?? []) {
@@ -289,14 +289,17 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
       );
     }
     return rows;
-  }, [visibleRows, draftValues, draftValueByFpid, adpByFpid, scoring, scoringConfig]);
+  }, [
+    visibleRows,
+    draftValues,
+    draftValueByFpid,
+    adpByFpid,
+    scoring,
+    scoringConfig,
+  ]);
 
   return (
-    <Stack
-      gap="md"
-      py="sm"
-      pt={{ base: POSITION_FILTER_BAR_HEIGHT, sm: "sm" }}
-    >
+    <Stack gap="md" py="sm" pt={{ base: POSITION_FILTER_BAR_HEIGHT, sm: "sm" }}>
       <Group justify="space-between" align="center" wrap="wrap">
         <PositionFilterBar
           positions={activePositions}
@@ -322,74 +325,75 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
       {draftValuesResult?.isGeneric && <GenericValuesNotice />}
 
       <Card withBorder padding={0}>
-      {allProjections === undefined || isInitialValuesLoad ? (
-        <Center py="xl">
-          <Loader />
-        </Center>
-      ) : visibleRows.length === 0 ? (
-        <Text c="dimmed" p="md">
-          No projections yet for the selected position(s) - fetch data first.
-        </Text>
-      ) : (
-        <Table.ScrollContainer minWidth={900}>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Rank</Table.Th>
-                {/* Action (target/avoid toggle) then flags (value-gap/
+        {allProjections === undefined || isInitialValuesLoad ? (
+          <Center py="xl">
+            <Loader />
+          </Center>
+        ) : visibleRows.length === 0 ? (
+          <Text c="dimmed" p="md">
+            No projections yet for the selected position(s) - fetch data first.
+          </Text>
+        ) : (
+          <Table.ScrollContainer minWidth={900}>
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Rank</Table.Th>
+                  {/* Action (target/avoid toggle) then flags (value-gap/
                     consistency) - unlabeled columns right next to Player,
                     same placement every icon-flag table in the app uses. */}
-                <Table.Th></Table.Th>
-                <Table.Th></Table.Th>
-                <Table.Th miw={220}>Player</Table.Th>
-                <Table.Th miw={70}>Pos</Table.Th>
-                <Table.Th>Team</Table.Th>
-                <Table.Th>FPTS</Table.Th>
-                {draftValues && (
-                  <Table.Th>{draftValuesResult?.isGeneric ? "$ (est.)" : "$"}</Table.Th>
-                )}
-                {selectedSettings && <Table.Th>Keeper</Table.Th>}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {sortedRows.map((row, index) => (
-                <PlayerRow
-                  key={row._id}
-                  row={row}
-                  index={index}
-                  scoringConfig={scoringConfig}
-                  injury={injuriesByFpid.get(row.fpid)}
-                  latestNews={latestNewsByFpid.get(row.fpid)}
-                  draftValue={draftValueByFpid.get(row.fpid)}
-                  valueGap={valueGapByFpid.get(row.fpid)}
-                  showValueColumn={!!draftValues}
-                  tag={tagByFpid.get(row.fpid)}
-                  onCycleTag={
-                    seasonId
-                      ? () =>
-                          cyclePlayerTag({ seasonId, fpid: row.fpid })
-                      : undefined
-                  }
-                  onSelectPlayer={setSelectedFpid}
-                  consistency={
-                    selectedSettings
-                      ? consistencyByFpid.get(row.fpid)
-                      : undefined
-                  }
-                  showConsistencyColumn={!!selectedSettings}
-                  keeperInfo={
-                    selectedSettings
-                      ? keeperInfoByFpid.get(row.fpid)
-                      : undefined
-                  }
-                  showKeeperColumn={!!selectedSettings}
-                  showKeeperYear={showKeeperYear}
-                />
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      )}
+                  <Table.Th></Table.Th>
+                  <Table.Th></Table.Th>
+                  <Table.Th miw={220}>Player</Table.Th>
+                  <Table.Th miw={70}>Pos</Table.Th>
+                  <Table.Th>Team</Table.Th>
+                  <Table.Th>FPTS</Table.Th>
+                  {draftValues && (
+                    <Table.Th>
+                      {draftValuesResult?.isGeneric ? "$ (est.)" : "$"}
+                    </Table.Th>
+                  )}
+                  {selectedSettings && <Table.Th>Keeper</Table.Th>}
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {sortedRows.map((row, index) => (
+                  <PlayerRow
+                    key={row._id}
+                    row={row}
+                    index={index}
+                    scoringConfig={scoringConfig}
+                    injury={injuriesByFpid.get(row.fpid)}
+                    latestNews={latestNewsByFpid.get(row.fpid)}
+                    draftValue={draftValueByFpid.get(row.fpid)}
+                    valueGap={valueGapByFpid.get(row.fpid)}
+                    showValueColumn={!!draftValues}
+                    tag={tagByFpid.get(row.fpid)}
+                    onCycleTag={
+                      seasonId
+                        ? () => cyclePlayerTag({ seasonId, fpid: row.fpid })
+                        : undefined
+                    }
+                    onSelectPlayer={setSelectedFpid}
+                    consistency={
+                      selectedSettings
+                        ? consistencyByFpid.get(row.fpid)
+                        : undefined
+                    }
+                    showConsistencyColumn={!!selectedSettings}
+                    keeperInfo={
+                      selectedSettings
+                        ? keeperInfoByFpid.get(row.fpid)
+                        : undefined
+                    }
+                    showKeeperColumn={!!selectedSettings}
+                    showKeeperYear={showKeeperYear}
+                  />
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
       </Card>
 
       <PlayerDetailModal

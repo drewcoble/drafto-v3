@@ -8,8 +8,9 @@ interface RecentPicksTableProps {
   teamNameById: Map<string, string>;
   onRemove: (pickId: Id<"draftPicks">) => void;
   onSelectPlayer: (fpid: number) => void;
-  // Gates the "· Yr X" suffix on the Keeper badge below - see
-  // KeeperRulesPanel.tsx's trackConsecutiveYears toggle.
+  // Gates the "· Yr X" suffix on the Keeper badge below - true when the
+  // league has a maxConsecutiveYears cap set (see schema.ts's
+  // trackConsecutiveYears comment).
   trackConsecutiveYears: boolean;
 }
 

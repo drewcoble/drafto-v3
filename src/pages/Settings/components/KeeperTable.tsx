@@ -28,8 +28,9 @@ interface KeeperTableProps {
   onSetStreak: (pickId: Id<"draftPicks">, streak: number) => void;
   onMove: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer: (fpid: number) => void;
-  // Gates the "Yrs kept" column below - see KeeperRulesPanel.tsx's
-  // trackConsecutiveYears toggle.
+  // Gates the "Yrs kept" column below - true when the league has a
+  // maxConsecutiveYears cap set (see schema.ts's trackConsecutiveYears
+  // comment).
   showStreakInput: boolean;
 }
 

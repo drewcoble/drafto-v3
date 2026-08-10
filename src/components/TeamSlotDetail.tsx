@@ -1,4 +1,12 @@
-import { ActionIcon, Anchor, Badge, Group, Menu, Stack, Text } from "@mantine/core";
+import {
+  ActionIcon,
+  Anchor,
+  Badge,
+  Group,
+  Menu,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { MoreVertical } from "lucide-react";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import type { Position } from "../types";
@@ -15,8 +23,9 @@ interface TeamSlotDetailProps {
   onRemove?: (pickId: Id<"draftPicks">) => void;
   onMove?: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer?: (fpid: number) => void;
-  // Gates the ", yr X" suffix on a keeper's inline label below - see
-  // KeeperRulesPanel.tsx's trackConsecutiveYears toggle.
+  // Gates the ", yr X" suffix on a keeper's inline label below - true when
+  // the league has a maxConsecutiveYears cap set (see schema.ts's
+  // trackConsecutiveYears comment).
   trackConsecutiveYears: boolean;
 }
 
@@ -127,10 +136,7 @@ export function TeamSlotDetail({
                     <Menu.Divider />
                   )}
                   {pick && onRemove && (
-                    <Menu.Item
-                      color="red"
-                      onClick={() => onRemove(pick._id)}
-                    >
+                    <Menu.Item color="red" onClick={() => onRemove(pick._id)}>
                       Remove
                     </Menu.Item>
                   )}

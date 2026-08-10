@@ -45,9 +45,7 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
     try {
       await removePick({ pickId });
     } catch (err) {
-      setRemoveError(
-        getErrorMessage(err, "Failed to remove pick."),
-      );
+      setRemoveError(getErrorMessage(err, "Failed to remove pick."));
     }
   };
 
@@ -56,9 +54,7 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
     try {
       await setPickSlot({ pickId, slotKey });
     } catch (err) {
-      setRemoveError(
-        getErrorMessage(err, "Failed to move pick."),
-      );
+      setRemoveError(getErrorMessage(err, "Failed to move pick."));
     }
   };
 
@@ -147,7 +143,9 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
         onRemove={handleRemove}
         onMove={handleMove}
         onSelectPlayer={setSelectedFpid}
-        trackConsecutiveYears={settings?.keeperRules?.trackConsecutiveYears ?? true}
+        trackConsecutiveYears={
+          settings?.keeperRules?.maxConsecutiveYears !== undefined
+        }
       />
 
       {unassignedPicks.length > 0 && (
@@ -170,7 +168,7 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
               </Text>
               {pick.isKeeper && (
                 <Badge variant="light" color="gray" size="sm">
-                  {settings?.keeperRules?.trackConsecutiveYears ?? true
+                  {settings?.keeperRules?.maxConsecutiveYears !== undefined
                     ? `Keeper · Yr ${pick.keeperStreak ?? 1}`
                     : "Keeper"}
                 </Badge>
@@ -198,7 +196,9 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
               {group}
             </Text>
             <Progress
-              value={planTotal > 0 ? Math.min((actual / planTotal) * 100, 100) : 0}
+              value={
+                planTotal > 0 ? Math.min((actual / planTotal) * 100, 100) : 0
+              }
               color={positionColorOrDefault(group)}
               flex={1}
             />

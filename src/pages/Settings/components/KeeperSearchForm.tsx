@@ -94,7 +94,7 @@ export function KeeperSearchForm({
     const lastSeason = priceHistory?.[candidate.fpid];
     const suggestedCost = keeperRules
       ? computeKeeperCost(
-          formulaForFpid(keeperRules, candidate.fpid),
+          formulaForFpid(keeperRules, candidate.fpid, candidate.position),
           lastSeason?.price,
         )
       : null;
@@ -110,7 +110,11 @@ export function KeeperSearchForm({
   const suggestedCost =
     selectedCandidate && keeperRules
       ? computeKeeperCost(
-          formulaForFpid(keeperRules, selectedCandidate.fpid),
+          formulaForFpid(
+            keeperRules,
+            selectedCandidate.fpid,
+            selectedCandidate.position,
+          ),
           lastSeason?.price,
         )
       : null;
@@ -175,8 +179,15 @@ export function KeeperSearchForm({
                       )}
                     </Group>
                     {draftValueByFpid.get(row.fpid) && (
-                      <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                        ~${Math.round(draftValueByFpid.get(row.fpid)!.dollarValue)}
+                      <Text
+                        size="xs"
+                        c="dimmed"
+                        style={{ whiteSpace: "nowrap" }}
+                      >
+                        ~$
+                        {Math.round(
+                          draftValueByFpid.get(row.fpid)!.dollarValue,
+                        )}
                       </Text>
                     )}
                   </Group>

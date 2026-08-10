@@ -45,7 +45,14 @@ function KeepersRoute() {
         replace: true,
       });
     }
-  }, [leagueId, settingsList, entitlement, hasProAccess, keepersEnabled, navigate]);
+  }, [
+    leagueId,
+    settingsList,
+    entitlement,
+    hasProAccess,
+    keepersEnabled,
+    navigate,
+  ]);
 
   if (leagueId === "new") {
     return (
@@ -83,7 +90,7 @@ function KeepersRoute() {
       >
         <UpgradePrompt
           title="Keepers is a Pro feature"
-          message="Upgrade to Pro to set up keeper rules and tiers for this league."
+          message="Upgrade to Pro to set up keeper rules for this league."
         />
       </Modal>
     );

@@ -79,8 +79,8 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
   return (
     <Stack gap="sm">
       <Text size="sm" c="dimmed">
-        {settings.name} · {settings.year} - ${settings.salaryCap}{" "}
-        cap, {settings.teamCount} teams
+        {settings.name} · {settings.year} - ${settings.salaryCap} cap,{" "}
+        {settings.teamCount} teams
       </Text>
       <SimpleGrid cols={3} spacing="md">
         {teamSummaries.map(({ team, stats, teamPicks, slots, bySlot }) => {
@@ -114,7 +114,7 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
                     nameByFpid={nameByFpid}
                     onSelectPlayer={setSelectedFpid}
                     trackConsecutiveYears={
-                      settings.keeperRules?.trackConsecutiveYears ?? true
+                      settings.keeperRules?.maxConsecutiveYears !== undefined
                     }
                   />
                 )}

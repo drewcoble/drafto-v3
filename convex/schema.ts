@@ -36,18 +36,22 @@ const keeperRulesValidator = v.object({
         minimumCost: v.optional(v.number()),
       }),
       fpids: v.array(v.number()),
+      // Whole positions this rule also applies to, in addition to fpids -
+      // optional so existing tiers written before this field existed still
+      // validate; treat an absent value as "no positions" (see
+      // formulaForFpid in src/lib/keeperCost.ts).
+      positions: v.optional(v.array(positionValidator)),
     }),
   ),
   maxKeepersPerTeam: v.optional(v.number()),
   maxConsecutiveYears: v.optional(v.number()),
-  // Whether the Keepers tab shows the manual "years kept" streak editor at
-  // all - absent means true (leagues that already relied on it shouldn't
-  // lose it by default, same "absent means enabled" convention as
-  // seasons.useKeepers). Purely a UI toggle: computeKeeperStreak (convex/
-  // draft/picks.ts) still auto-computes and stores keeperStreak on every
-  // keeper pick either way, and maxConsecutiveYears above still enforces
-  // against it - turning this off only hides the manual override control
-  // for leagues that don't care to fine-tune it.
+  // No longer independently user-set - convex/draft/keeperRules.ts's
+  // setKeeperRules derives and overwrites this on every save from whether
+  // maxConsecutiveYears above is defined (an undefined/unlimited max means
+  // the same thing this toggle being off used to mean), rather than trusting
+  // whatever a client sends. Readers can keep using this field directly
+  // (kept in sync on every save) or derive the same thing themselves from
+  // maxConsecutiveYears.
   trackConsecutiveYears: v.optional(v.boolean()),
 });
 

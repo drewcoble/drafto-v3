@@ -1,4 +1,5 @@
 import type { Doc } from "../../convex/_generated/dataModel";
+import type { Position } from "../types";
 
 export type KeeperRules = NonNullable<Doc<"seasons">["keeperRules"]>;
 export type KeeperFormula = KeeperRules["defaultFormula"];
@@ -17,15 +18,20 @@ export interface KeeperPriceHistoryEntry {
 }
 
 // The formula that applies to a given player: the first tier whose fpids
-// contains them, else the league's default formula. Tiers are checked in
-// array order - the panel that edits keeperRules is responsible for keeping
-// a player out of more than one tier (see setKeeperTierPlayers), so order
-// only matters as a tiebreak if that invariant is ever violated.
+// contains them, or (failing that) whose positions includes theirs, else the
+// league's default formula. Tiers are checked in array order - the panel
+// that edits keeperRules is responsible for keeping a player's fpid out of
+// more than one tier (see setKeeperTierPlayers), but a player can still fall
+// under more than one tier's position list, so order matters as a tiebreak
+// there too.
 export function formulaForFpid(
   keeperRules: KeeperRules,
   fpid: number,
+  position: Position,
 ): KeeperFormula {
-  const tier = keeperRules.tiers.find((t) => t.fpids.includes(fpid));
+  const tier = keeperRules.tiers.find(
+    (t) => t.fpids.includes(fpid) || t.positions?.includes(position),
+  );
   return tier ? tier.formula : keeperRules.defaultFormula;
 }
 

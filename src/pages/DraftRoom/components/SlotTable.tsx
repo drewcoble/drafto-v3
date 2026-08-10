@@ -1,4 +1,12 @@
-import { ActionIcon, Anchor, Badge, Group, Menu, Table, Text } from "@mantine/core";
+import {
+  ActionIcon,
+  Anchor,
+  Badge,
+  Group,
+  Menu,
+  Table,
+  Text,
+} from "@mantine/core";
 import { MoreVertical } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { Position } from "../../../types";
@@ -16,8 +24,9 @@ interface SlotTableProps {
   onRemove: (pickId: Id<"draftPicks">) => void;
   onMove: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer: (fpid: number) => void;
-  // Gates the "· Yr X" suffix on the Keeper badge below - see
-  // KeeperRulesPanel.tsx's trackConsecutiveYears toggle.
+  // Gates the "· Yr X" suffix on the Keeper badge below - true when the
+  // league has a maxConsecutiveYears cap set (see schema.ts's
+  // trackConsecutiveYears comment).
   trackConsecutiveYears: boolean;
 }
 
@@ -63,7 +72,10 @@ export function SlotTable({
             return (
               <Table.Tr key={slot.key}>
                 <Table.Td>
-                  <Badge variant="light" color={positionColorOrGray(slot.position)}>
+                  <Badge
+                    variant="light"
+                    color={positionColorOrGray(slot.position)}
+                  >
                     {slot.label}
                   </Badge>
                 </Table.Td>
@@ -127,7 +139,9 @@ export function SlotTable({
                                 onClick={() => onMove(pick._id, target.key)}
                               >
                                 Move to {target.label}
-                                {occupantName ? ` (swap w/ ${occupantName})` : ""}
+                                {occupantName
+                                  ? ` (swap w/ ${occupantName})`
+                                  : ""}
                               </Menu.Item>
                             );
                           })}

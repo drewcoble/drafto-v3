@@ -5,18 +5,22 @@ import {
   Badge,
   Button,
   Card,
+  Chip,
   Group,
   NumberInput,
   Stack,
-  Switch,
   Text,
   TextInput,
 } from "@mantine/core";
 import { Plus, Trash2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
-import { CountStepper, EditableNumberStepper } from "../../../components/NumberStepper";
+import {
+  CountStepper,
+  EditableNumberStepper,
+} from "../../../components/NumberStepper";
 import { POSITIONS, type Position } from "../../../types";
+import { POSITION_COLORS } from "../../../lib/positionColors";
 import {
   filterRelevantPlayers,
   pointsForScoringConfig,
@@ -52,6 +56,9 @@ interface TierDraft {
   name: string;
   maxSize: number | undefined;
   formula: FormulaDraft;
+  // Whole positions this rule also applies to, on top of the explicit
+  // fpids list edited via KeeperTierPlayerPicker - see formulaForFpid.
+  positions: Position[];
 }
 
 // crypto.randomUUID() only exists in secure contexts (HTTPS or localhost) -
@@ -61,7 +68,10 @@ interface TierDraft {
 // tiers list, not cryptographically random, so fall back to a
 // timestamp+random string instead of failing tier creation outright.
 function generateTierId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -77,14 +87,19 @@ function toTierDrafts(tiers: KeeperRules["tiers"]): TierDraft[] {
       flatAdd: t.formula.flatAdd,
       minimumCost: t.formula.minimumCost,
     },
+    positions: t.positions ?? [],
   }));
 }
 
-function buildFormula(draft: FormulaDraft): KeeperRules["tiers"][number]["formula"] {
+function buildFormula(
+  draft: FormulaDraft,
+): KeeperRules["tiers"][number]["formula"] {
   return {
     multiplier: draft.multiplier,
     flatAdd: draft.flatAdd,
-    ...(draft.minimumCost !== undefined ? { minimumCost: draft.minimumCost } : {}),
+    ...(draft.minimumCost !== undefined
+      ? { minimumCost: draft.minimumCost }
+      : {}),
   };
 }
 
@@ -109,7 +124,6 @@ function definitionSignature(rules: {
   defaultFormula: DefaultFormulaDraft;
   maxKeepersPerTeam: number | undefined;
   maxConsecutiveYears: number | undefined;
-  trackConsecutiveYears: boolean;
   tiers: TierDraft[];
 }): string {
   return JSON.stringify(rules);
@@ -142,10 +156,6 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
   const [maxConsecutiveYears, setMaxConsecutiveYears] = useState<
     number | undefined
   >(keeperRules.maxConsecutiveYears);
-  // Absent means true - see schema.ts's trackConsecutiveYears comment.
-  const [trackConsecutiveYears, setTrackConsecutiveYears] = useState<boolean>(
-    keeperRules.trackConsecutiveYears ?? true,
-  );
   const [tierDrafts, setTierDrafts] = useState<TierDraft[]>(
     toTierDrafts(keeperRules.tiers),
   );
@@ -157,7 +167,6 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     defaultFormula: toDefaultFormulaDraft(keeperRules.defaultFormula),
     maxKeepersPerTeam: keeperRules.maxKeepersPerTeam,
     maxConsecutiveYears: keeperRules.maxConsecutiveYears,
-    trackConsecutiveYears: keeperRules.trackConsecutiveYears ?? true,
     tiers: toTierDrafts(keeperRules.tiers),
   });
 
@@ -165,7 +174,6 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     setDefaultFormula(toDefaultFormulaDraft(keeperRules.defaultFormula));
     setMaxKeepersPerTeam(keeperRules.maxKeepersPerTeam);
     setMaxConsecutiveYears(keeperRules.maxConsecutiveYears);
-    setTrackConsecutiveYears(keeperRules.trackConsecutiveYears ?? true);
     setTierDrafts(toTierDrafts(keeperRules.tiers));
     // Only the definition signature (not the whole keeperRules object, which
     // also changes on every fpids-only picker click) should trigger a
@@ -177,7 +185,6 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     defaultFormula,
     maxKeepersPerTeam,
     maxConsecutiveYears,
-    trackConsecutiveYears,
     tiers: tierDrafts,
   });
   const isDirty = localSignature !== committedSignature;
@@ -247,7 +254,13 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
       adpByFpid,
       (row) => pointsForScoringConfig(row, scoringConfig),
     );
-  }, [allProjections, activePositions, settings.scoring, scoringConfig, adpByFpid]);
+  }, [
+    allProjections,
+    activePositions,
+    settings.scoring,
+    scoringConfig,
+    adpByFpid,
+  ]);
 
   const searchResultsForTier = (tierId: string) => {
     const query = (tierSearch[tierId] ?? "").trim().toLowerCase();
@@ -286,9 +299,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
         fpids: nextFpids,
       });
     } catch (err) {
-      setError(
-        getErrorMessage(err, "Failed to update tier players."),
-      );
+      setError(getErrorMessage(err, "Failed to update rule players."));
     }
   };
 
@@ -297,9 +308,10 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
       ...current,
       {
         id: generateTierId(),
-        name: `Tier ${current.length + 1}`,
+        name: `Rule ${current.length + 1}`,
         maxSize: undefined,
         formula: { multiplier: 1, flatAdd: 0, minimumCost: undefined },
+        positions: [],
       },
     ]);
   };
@@ -323,10 +335,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
         keeperRules: {
           defaultFormula: buildDefaultFormula(defaultFormula),
           ...(maxKeepersPerTeam !== undefined ? { maxKeepersPerTeam } : {}),
-          ...(maxConsecutiveYears !== undefined
-            ? { maxConsecutiveYears }
-            : {}),
-          trackConsecutiveYears,
+          ...(maxConsecutiveYears !== undefined ? { maxConsecutiveYears } : {}),
           tiers: tierDrafts.map((draft) => ({
             id: draft.id,
             name: draft.name,
@@ -337,13 +346,12 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
             // whatever this draft happened to be seeded with.
             fpids:
               keeperRules.tiers.find((t) => t.id === draft.id)?.fpids ?? [],
+            positions: draft.positions,
           })),
         },
       });
     } catch (err) {
-      setError(
-        getErrorMessage(err, "Failed to save keeper rules."),
-      );
+      setError(getErrorMessage(err, "Failed to save keeper rules."));
     } finally {
       setIsSaving(false);
     }
@@ -355,19 +363,53 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
         Keeper Rules
       </Text>
       <Text size="xs" c="dimmed">
-        Configures the suggested cost when adding a keeper on the Keepers
-        tab, plus optional league-wide limits. Leaving a max blank means
-        unlimited.
+        Configures the suggested cost when adding a keeper on the Keepers tab,
+        plus optional league-wide limits. Leaving a max blank means unlimited.
       </Text>
+
+      <Card withBorder padding="sm">
+        <Group gap="sm" wrap="wrap">
+          <Stack gap={4}>
+            <Text size="sm" fw={500}>
+              Max keepers per team
+            </Text>
+            <CountStepper
+              label="Max keepers per team"
+              min={0}
+              placeholder="Unlimited"
+              nullable
+              value={maxKeepersPerTeam}
+              onChange={setMaxKeepersPerTeam}
+            />
+          </Stack>
+          <Stack gap={4}>
+            <Text size="sm" fw={500}>
+              Max consecutive years kept
+            </Text>
+            <CountStepper
+              label="Max consecutive years kept"
+              min={1}
+              placeholder="Unlimited"
+              nullable
+              value={maxConsecutiveYears}
+              onChange={setMaxConsecutiveYears}
+            />
+            <Text size="xs" c="dimmed">
+              Also controls the Yrs Kept field on the Keepers tab - leave
+              unlimited to hide it.
+            </Text>
+          </Stack>
+        </Group>
+      </Card>
 
       <Card withBorder padding="sm">
         <Stack gap="xs">
           <Text size="md" fw={500}>
-            Default formula
+            Default rule
           </Text>
           <Text size="xs" c="dimmed">
-            Cost = multiplier × last season's price + flat add, floored at
-            the minimum if set. Applies to any player not in a tier below.
+            Cost = multiplier × last season's price + flat add, floored at the
+            minimum if set. Applies to any player not in another rule below.
           </Text>
           <Group gap="sm" wrap="wrap">
             <NumberInput
@@ -433,50 +475,10 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
         </Stack>
       </Card>
 
-      <Card withBorder padding="sm">
-        <Switch
-          label="Track consecutive years kept"
-          description="Shows a Yrs Kept field on the Keepers tab for reviewing/correcting each keeper's streak. Turn off if your league doesn't track this."
-          checked={trackConsecutiveYears}
-          onChange={(e) => setTrackConsecutiveYears(e.currentTarget.checked)}
-        />
-      </Card>
-
-      <Card withBorder padding="sm">
-        <Group gap="sm" wrap="wrap">
-          <Stack gap={4}>
-            <Text size="sm" fw={500}>
-              Max keepers per team
-            </Text>
-            <CountStepper
-              label="Max keepers per team"
-              min={0}
-              placeholder="Unlimited"
-              nullable
-              value={maxKeepersPerTeam}
-              onChange={setMaxKeepersPerTeam}
-            />
-          </Stack>
-          <Stack gap={4}>
-            <Text size="sm" fw={500}>
-              Max consecutive years kept
-            </Text>
-            <CountStepper
-              label="Max consecutive years kept"
-              min={1}
-              placeholder="Unlimited"
-              nullable
-              value={maxConsecutiveYears}
-              onChange={setMaxConsecutiveYears}
-            />
-          </Stack>
-        </Group>
-      </Card>
-
       <Stack gap="xs">
         <Group justify="space-between">
           <Text size="md" fw={500}>
-            Tiers (exempt lists)
+            Other rules
           </Text>
           <Button
             size="xs"
@@ -484,12 +486,12 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
             leftSection={<Plus size={14} />}
             onClick={addTier}
           >
-            Add tier
+            Add rule
           </Button>
         </Group>
         {tierDrafts.length === 0 ? (
           <Text size="xs" c="dimmed">
-            No tiers - every player uses the default formula above.
+            No other rules - every player uses the default rule above.
           </Text>
         ) : (
           tierDrafts.map((tier) => {
@@ -500,7 +502,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
                 <Stack gap="xs">
                   <Group gap="sm" wrap="wrap" align="flex-end">
                     <TextInput
-                      label="Tier name"
+                      label="Rule name"
                       size="sm"
                       w={200}
                       value={tier.name}
@@ -584,6 +586,30 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
                       <Trash2 size={14} />
                     </ActionIcon>
                   </Group>
+                  <Stack gap={4}>
+                    <Text size="sm" fw={500}>
+                      Positions
+                    </Text>
+                    <Chip.Group
+                      multiple
+                      value={tier.positions}
+                      onChange={(value) =>
+                        updateTier(tier.id, { positions: value as Position[] })
+                      }
+                    >
+                      <Group gap="xs">
+                        {POSITIONS.map((pos) => (
+                          <Chip
+                            key={pos}
+                            value={pos}
+                            color={POSITION_COLORS[pos]}
+                          >
+                            {pos}
+                          </Chip>
+                        ))}
+                      </Group>
+                    </Chip.Group>
+                  </Stack>
                   <Text size="xs" c="dimmed">
                     Players ({liveFpids.length}
                     {tier.maxSize !== undefined ? `/${tier.maxSize}` : ""})
