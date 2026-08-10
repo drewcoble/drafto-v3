@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Badge, Box, Button, Card, Group, Stack, Text } from "@mantine/core";
+import {
+  Badge,
+  Box,
+  Button,
+  Card,
+  Grid,
+  Group,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { POSITIONS, type OverspendBehavior, type Position } from "../types";
@@ -113,7 +122,11 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
   const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
-      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
+      ? {
+          seasonId,
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
       : "skip",
   );
   const draftValues = draftValuesResult?.values;
@@ -158,9 +171,8 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
   // activePreset below, which derives that reactively by comparing amounts
   // against this preset's own generated shape, rather than this flag being
   // cleared explicitly on every edit.
-  const [lastAppliedPreset, setLastAppliedPreset] = useState<BudgetPreset | null>(
-    null,
-  );
+  const [lastAppliedPreset, setLastAppliedPreset] =
+    useState<BudgetPreset | null>(null);
 
   // Seed the form once, after which further refetches (e.g. from another
   // tab, or a live-mirrored pre-draft edit) shouldn't clobber whatever the
@@ -319,7 +331,10 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
   // Compares by value rather than key insertion order, since amounts read
   // back from the database won't necessarily list keys in the same order
   // they were written in.
-  const amountsEqual = (a: Record<string, number>, b: Record<string, number>) => {
+  const amountsEqual = (
+    a: Record<string, number>,
+    b: Record<string, number>,
+  ) => {
     const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
     for (const key of keys) {
       if ((a[key] ?? 0) !== (b[key] ?? 0)) return false;
@@ -456,129 +471,150 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
           document flow - mobile only, matching UnallocatedBar's own
           hiddenFrom="sm". */}
       <Box hiddenFrom="sm" h={BUDGET_UNALLOCATED_BAR_HEIGHT} />
-      <Group justify="space-between" align="center">
-        <Stack gap={2}>
-          <Text fw={700} size="lg">
-            {mode === "live" ? "Live Budget" : "Allocate the cap"}
-          </Text>
-          {mode === "live" && (
-            <Text size="xs" c="dimmed">
-              Slots you haven't touched keep following your pre-draft plan.
-              Only the ones you adjust here get saved as overrides.
-            </Text>
-          )}
-        </Stack>
-        {/* Mobile's copy lives in the fixed UnallocatedBar instead - see
-            above. */}
-        <Badge
-          variant="light"
-          color={unallocatedBadgeColor(unallocated)}
-          size="lg"
-          visibleFrom="sm"
-        >
-          {unallocatedBadgeLabel(unallocated)}
-        </Badge>
-      </Group>
-
-      <BudgetSidePanel
-        showPresets={mode === "predraft"}
-        hasSuperflex={settings.rosterSlots.SUPERFLEX > 0}
-        activePreset={activePreset}
-        onApplyPreset={applyPreset}
-        perStarter={perStarter}
-        perBench={perBench}
-        topThreePct={topThreePct}
-        everySlotHasADollar={everySlotHasADollar}
-        overspendBehavior={overspendBehavior}
-        onOverspendChange={setOverspendBehavior}
-      />
-
-      {error && (
-        <Text c="red" size="sm">
-          {error}
+      <Stack gap={2}>
+        <Text fw={700} size="lg">
+          {mode === "live" ? "Live Budget" : "Allocate the cap"}
         </Text>
-      )}
-      {/* Stacked full-width below "sm", inline fit-content buttons above it -
-          same responsive split used elsewhere (e.g. KeeperSearchForm.tsx). */}
-      <Stack gap="xs" hiddenFrom="sm">
-        <Button onClick={handleSave} loading={isSaving} disabled={!isDirty} fullWidth>
-          {mode === "live" ? "Save live plan" : "Save pre-draft plan"}
-        </Button>
         {mode === "live" && (
-          <Button
-            variant="default"
-            color="orange"
-            onClick={handleReset}
-            loading={isResetting}
-            fullWidth
-          >
-            Reset to pre-draft plan
-          </Button>
+          <Text size="xs" c="dimmed">
+            Slots you haven't touched keep following your pre-draft plan. Only
+            the ones you adjust here get saved as overrides.
+          </Text>
         )}
-        {/* Mobile's dirty-state badge lives in the fixed UnallocatedBar
-            instead, both modes - see above. */}
       </Stack>
-      <Group gap="xs" visibleFrom="sm">
-        <Button
-          onClick={handleSave}
-          loading={isSaving}
-          disabled={!isDirty}
-          w="fit-content"
-        >
-          {mode === "live" ? "Save live plan" : "Save pre-draft plan"}
-        </Button>
-        {mode === "live" && (
-          <Button
-            variant="default"
-            color="orange"
-            onClick={handleReset}
-            loading={isResetting}
-            w="fit-content"
-          >
-            Reset to pre-draft plan
-          </Button>
-        )}
-        <Badge variant="light" color={isDirty ? "yellow" : "teal"}>
-          {isDirty ? "Unsaved changes" : "All changes saved"}
-        </Badge>
-      </Group>
-      {usingGenericValues && <GenericValuesNotice />}
 
-      <Card withBorder padding="md">
-        <Stack gap="md">
-          <CategoryBreakdown
-            categoryTotals={categoryTotals}
-            salaryCap={effectiveSalaryCap}
+      {/* Two columns from "md" up - side panel (presets/overspend/sanity
+          checks) on the left, save controls + breakdown + slot list on the
+          right, weighted 4/8 so the right side gets more room. Single
+          stacked column below that where there isn't room. */}
+      <Grid gutter="md" align="start">
+        <Grid.Col span={{ base: 12, md: 4 }}>
+          <BudgetSidePanel
+            showPresets={mode === "predraft"}
+            hasSuperflex={settings.rosterSlots.SUPERFLEX > 0}
+            activePreset={activePreset}
+            onApplyPreset={applyPreset}
+            perStarter={perStarter}
+            perBench={perBench}
+            topThreePct={topThreePct}
+            everySlotHasADollar={everySlotHasADollar}
+            overspendBehavior={overspendBehavior}
+            onOverspendChange={setOverspendBehavior}
           />
-          <Stack gap={6}>
-            {slots.map((slot) => (
-              <SlotRow
-                key={slot.key}
-                slot={slot}
-                amount={amounts[slot.key] ?? 0}
-                maxAmount={maxAmount}
-                onChange={(amount) => setSlotAmount(slot.key, amount)}
-                {...(filledSlotPlayers.has(slot.key)
-                  ? { filledPlayer: filledSlotPlayers.get(slot.key)! }
-                  : {})}
-                availablePlayers={availablePlayers}
-                eligiblePositions={eligiblePositionsForSlot(
-                  slot,
-                  settings.flexPositions,
-                  settings.superflexPositions,
+        </Grid.Col>
+
+        <Grid.Col span={{ base: 12, md: 8 }}>
+          <Stack gap="md">
+            {error && (
+              <Text c="red" size="sm">
+                {error}
+              </Text>
+            )}
+            {/* Stacked full-width below "sm", inline fit-content buttons above
+              it - same responsive split used elsewhere (e.g.
+              KeeperSearchForm.tsx). */}
+            <Stack gap="xs" hiddenFrom="sm">
+              <Button
+                onClick={handleSave}
+                loading={isSaving}
+                disabled={!isDirty}
+                fullWidth
+              >
+                {mode === "live" ? "Save live plan" : "Save pre-draft plan"}
+              </Button>
+              {mode === "live" && (
+                <Button
+                  variant="default"
+                  color="orange"
+                  onClick={handleReset}
+                  loading={isResetting}
+                  fullWidth
+                >
+                  Reset to pre-draft plan
+                </Button>
+              )}
+              {/* Mobile's dirty-state badge lives in the fixed UnallocatedBar
+                instead, both modes - see above. */}
+            </Stack>
+            <Group justify="space-between" visibleFrom="sm">
+              <Group gap="xs">
+                <Button
+                  onClick={handleSave}
+                  loading={isSaving}
+                  disabled={!isDirty}
+                  w="fit-content"
+                >
+                  {mode === "live" ? "Save live plan" : "Save pre-draft plan"}
+                </Button>
+                {mode === "live" && (
+                  <Button
+                    variant="default"
+                    color="orange"
+                    onClick={handleReset}
+                    loading={isResetting}
+                    w="fit-content"
+                  >
+                    Reset to pre-draft plan
+                  </Button>
                 )}
-                onSelectPlayer={setSelectedFpid}
-                {...(mode === "live"
-                  ? {
-                      isOverridden: touchedKeys.has(slot.key),
-                      onRevert: () => revertSlot(slot.key),
-                    }
-                  : {})}
-              />
-            ))}
+                <Badge
+                  variant="light"
+                  color={isDirty ? "yellow" : "teal"}
+                  size="lg"
+                >
+                  {isDirty ? "Unsaved changes" : "All changes saved"}
+                </Badge>
+              </Group>
+              {/* Mobile's copy lives in the fixed UnallocatedBar instead -
+                  this row is already visibleFrom="sm". */}
+              <Badge
+                variant="light"
+                color={unallocatedBadgeColor(unallocated)}
+                size="lg"
+              >
+                {unallocatedBadgeLabel(unallocated)}
+              </Badge>
+            </Group>
+            {usingGenericValues && <GenericValuesNotice />}
+
+            <Card withBorder padding="md">
+              <Stack gap="md">
+                <CategoryBreakdown
+                  categoryTotals={categoryTotals}
+                  salaryCap={effectiveSalaryCap}
+                />
+                <Stack gap={6}>
+                  {slots.map((slot) => (
+                    <SlotRow
+                      key={slot.key}
+                      slot={slot}
+                      amount={amounts[slot.key] ?? 0}
+                      maxAmount={maxAmount}
+                      onChange={(amount) => setSlotAmount(slot.key, amount)}
+                      {...(filledSlotPlayers.has(slot.key)
+                        ? { filledPlayer: filledSlotPlayers.get(slot.key)! }
+                        : {})}
+                      availablePlayers={availablePlayers}
+                      eligiblePositions={eligiblePositionsForSlot(
+                        slot,
+                        settings.flexPositions,
+                        settings.superflexPositions,
+                      )}
+                      onSelectPlayer={setSelectedFpid}
+                      {...(mode === "live"
+                        ? {
+                            isOverridden: touchedKeys.has(slot.key),
+                            onRevert: () => revertSlot(slot.key),
+                          }
+                        : {})}
+                    />
+                  ))}
+                </Stack>
+              </Stack>
+            </Card>
           </Stack>
-        </Stack>
-      </Card>
+        </Grid.Col>
+      </Grid>
 
       <PlayerDetailModal
         fpid={selectedFpid}

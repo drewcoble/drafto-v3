@@ -4,7 +4,6 @@ import {
   Button,
   Collapse,
   Group,
-  SimpleGrid,
   Stack,
   Text,
   UnstyledButton,
@@ -37,12 +36,10 @@ interface BudgetSidePanelProps {
   onOverspendChange: (behavior: OverspendBehavior) => void;
 }
 
-// "Starter Budgets" and "When I'm off plan" collapse (default closed) so
+// "Starter Budgets" and "Auto Adjustments" collapse (default closed) so
 // they don't eat vertical space once a preset/overspend choice is already
 // made - "Sanity checks" stays always-expanded (it's read-only feedback,
-// not a one-time setup choice you'd want to tuck away). Grid row alignment
-// is "start" below so those two collapsed cards don't get stretched tall to
-// match Sanity checks' full height on the same row.
+// not a one-time setup choice you'd want to tuck away).
 function CollapsibleCard({
   title,
   children,
@@ -96,11 +93,7 @@ export function BudgetSidePanel({
   );
 
   return (
-    <SimpleGrid
-      cols={{ base: 1, sm: showPresets ? 3 : 2 }}
-      spacing="md"
-      style={{ alignItems: "start" }}
-    >
+    <Stack gap="md">
       {showPresets && (
         <CollapsibleCard title="Starter Budgets">
           {presets.map((preset) => (
@@ -121,7 +114,7 @@ export function BudgetSidePanel({
         </CollapsibleCard>
       )}
 
-      <CollapsibleCard title="When I'm off plan">
+      <CollapsibleCard title="Auto Adjustments">
         {OVERSPEND_OPTIONS.map((option) => (
           <Button
             key={option.value}
@@ -170,6 +163,6 @@ export function BudgetSidePanel({
           </Group>
         </Stack>
       </Card>
-    </SimpleGrid>
+    </Stack>
   );
 }
