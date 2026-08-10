@@ -39,7 +39,7 @@ import { BILLING_LINK_ENABLED } from "../lib/featureFlags";
 import logo from "../infinidraft_v1_noBg.png";
 import { groupSeasonsByLeague } from "../lib/leagueGroups";
 import { setStoredLeagueId } from "../lib/leagueStorage";
-import { isDraftComplete } from "../lib/rosterSlots";
+import { useDraftPhase } from "../hooks/useDraftPhase";
 
 const NEW_LEAGUE_VALUE = "new";
 
@@ -87,7 +87,7 @@ export function AppHeader({
   const entitlement = useQuery(api.billing.queries.getMyEntitlement);
   const { colorScheme, setColorScheme } = useMantineColorScheme();
 
-  const inDraftRoom = location.pathname.startsWith("/draft");
+  const inLeagueView = location.pathname.startsWith("/league");
   const inSeason = location.pathname.startsWith("/season");
   const hasRealLeague = !!leagueId && leagueId !== NEW_LEAGUE_VALUE;
   const isDark = colorScheme === "dark";
@@ -100,28 +100,21 @@ export function AppHeader({
     () => groupSeasonsByLeague(seasonsList ?? []),
     [seasonsList],
   );
-  // "Enter Season" only ever makes sense once every roster slot, league-wide,
-  // has been filled - see isDraftComplete's comment. Skipped entirely
-  // (rather than shown disabled) while not viewing a real league, so this
-  // query doesn't fire for the "new league" placeholder route.
-  const picks = useQuery(
-    api.draft.picks.listDraftPicks,
-    hasRealLeague ? { seasonId: leagueId as Id<"seasons"> } : "skip",
+  // Single source of truth for phase (see useDraftPhase) - replaces the old
+  // client-side isDraftComplete recomputation, which read raw pick count
+  // and so double-counted keepers the same way the pre-refactor
+  // drafts.status derivation did.
+  const phase = useDraftPhase(
+    hasRealLeague ? (leagueId as Id<"seasons">) : undefined,
   );
-  const draftComplete =
-    !!selectedLeague &&
-    !!picks &&
-    isDraftComplete(
-      selectedLeague.rosterSlots,
-      selectedLeague.teamCount,
-      picks.length,
-    );
+  const isStarted = phase?.isStarted ?? false;
+  const draftComplete = phase?.isComplete ?? false;
 
   const handleLeagueChange = (value: string | null) => {
     if (!value) return;
     if (value === NEW_LEAGUE_VALUE) {
       void navigate({
-        to: "/setup/$leagueId/league",
+        to: "/league/$leagueId/league",
         params: { leagueId: NEW_LEAGUE_VALUE },
       });
       return;
@@ -158,63 +151,36 @@ export function AppHeader({
     </>
   );
 
-  const modeSwitchButton =
-    inDraftRoom || inSeason ? (
-      <Link
-        to="/setup/$leagueId/league"
-        params={{ leagueId: leagueId ?? NEW_LEAGUE_VALUE }}
-      >
-        <Button component="span" variant="light" size="sm" color="burlywood">
-          <Text hiddenFrom="sm" component="span" inherit>
-            Setup
-          </Text>
-          <Text visibleFrom="sm" component="span" inherit>
-            Back to Setup
-          </Text>
-        </Button>
-      </Link>
-    ) : (
-      <Group gap="xs" wrap="nowrap">
-        {leagueId && leagueId !== NEW_LEAGUE_VALUE ? (
-          <Link to="/draft/$leagueId/draft" params={{ leagueId }}>
-            <Button
-              component="span"
-              variant="filled"
-              size="sm"
-              color="saddlebrown.8"
-            >
-              <Text hiddenFrom="sm" component="span" inherit>
-                Draft
-              </Text>
-              <Text visibleFrom="sm" component="span" inherit>
-                Enter Draft Room
-              </Text>
-            </Button>
-          </Link>
-        ) : (
-          <Button variant="filled" size="sm" disabled>
-            <Text hiddenFrom="sm" component="span" inherit>
-              Draft
-            </Text>
-            <Text visibleFrom="sm" component="span" inherit>
-              Enter Draft Room
-            </Text>
-          </Button>
-        )}
-        {draftComplete && leagueId && (
-          <Link to="/season/$leagueId/freeAgents" params={{ leagueId }}>
-            <Button component="span" variant="filled" size="sm" color="green.8">
-              <Text hiddenFrom="sm" component="span" inherit>
-                Season
-              </Text>
-              <Text visibleFrom="sm" component="span" inherit>
-                Enter Season
-              </Text>
-            </Button>
-          </Link>
-        )}
-      </Group>
-    );
+  // No more Setup<->Draft Room switch now that both live in one /league view
+  // - this only ever needs to get someone back from the post-draft Season
+  // view, or forward into it once the draft's complete. Renders nothing
+  // otherwise (e.g. already on the League view, or no real league selected).
+  const modeSwitchButton = inSeason ? (
+    <Link
+      to="/league/$leagueId/league"
+      params={{ leagueId: leagueId ?? NEW_LEAGUE_VALUE }}
+    >
+      <Button component="span" variant="light" size="sm" color="burlywood">
+        <Text hiddenFrom="sm" component="span" inherit>
+          League
+        </Text>
+        <Text visibleFrom="sm" component="span" inherit>
+          Back to League
+        </Text>
+      </Button>
+    </Link>
+  ) : draftComplete && leagueId ? (
+    <Link to="/season/$leagueId/freeAgents" params={{ leagueId }}>
+      <Button component="span" variant="filled" size="sm" color="green.8">
+        <Text hiddenFrom="sm" component="span" inherit>
+          Season
+        </Text>
+        <Text visibleFrom="sm" component="span" inherit>
+          Enter Season
+        </Text>
+      </Button>
+    </Link>
+  ) : null;
 
   return (
     <Box
@@ -303,7 +269,7 @@ export function AppHeader({
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
-                {inDraftRoom && hasRealLeague && (
+                {inLeagueView && hasRealLeague && isStarted && (
                   <Link
                     to="/board/$leagueId"
                     params={{ leagueId }}

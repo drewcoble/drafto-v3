@@ -15,6 +15,8 @@ import {
   Title,
 } from "@mantine/core";
 import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { LockedNotice } from "../../../components/LockedNotice";
 import {
   CountStepper,
   EditableNumberStepper,
@@ -55,6 +57,12 @@ interface SettingsFormProps {
   // in convex/leagues.ts), so editing it here would just be rejected on
   // save.
   teamsLocked?: boolean;
+  // True once the draft has started - see convex/leagues.ts's updateSeason,
+  // which now rejects a save that changes any of the fields disabled below
+  // (everything except name). Only `name` stays editable in the form itself;
+  // team names/salary cap overrides/nomination order live in TeamsPanel, not
+  // here, and stay editable regardless (see LeagueDetails.tsx).
+  configLocked?: boolean;
   // Only supplied by LeagueDetails.tsx's edit-an-existing-league usage -
   // the import wizards (LeagueImportWizard/YahooLeagueImportWizard) create
   // a brand-new league, which has no id yet to toggle useKeepers against.
@@ -65,10 +73,12 @@ interface SettingsFormProps {
     checked: boolean;
     onChange: (checked: boolean) => void;
     error: string | null;
-    // Locked read-only for free-plan owners - keepers is Pro-only (see
-    // convex/leagues.ts's setUseKeepers, which rejects the flip
-    // server-side too).
+    // Locked read-only - either free-plan (Pro-only, see convex/leagues.ts's
+    // setUseKeepers) or configLocked (draft started). lockedMessage picks
+    // which explanation to show; defaults to the Pro-upgrade copy if
+    // disabled is true and no message is given.
     disabled?: boolean;
+    lockedMessage?: ReactNode;
   };
 }
 
@@ -81,10 +91,17 @@ export function SettingsForm({
   onCancel,
   saveLabel = "Save",
   teamsLocked = false,
+  configLocked = false,
   useKeepersControl,
 }: SettingsFormProps) {
   return (
     <Stack gap="md" py="sm" maw={500}>
+      {configLocked && (
+        <LockedNotice>
+          This draft has started - scoring, roster, and keeper rules are locked.
+          Reopen setup (League tab) to change them.
+        </LockedNotice>
+      )}
       <Card withBorder padding="md">
         <Stack gap="md">
           <Title order={5}>League Basics</Title>
@@ -127,6 +144,7 @@ export function SettingsForm({
                 onChange={(value) =>
                   onChange({ ...form, salaryCap: value ?? form.salaryCap })
                 }
+                disabled={configLocked}
               />
             </Stack>
           </Group>
@@ -149,6 +167,7 @@ export function SettingsForm({
                 label,
                 value,
               }))}
+              disabled={configLocked}
             />
           </Stack>
           <Stack gap={6}>
@@ -164,6 +183,7 @@ export function SettingsForm({
                 label,
                 value,
               }))}
+              disabled={configLocked}
             />
           </Stack>
           <Stack gap={6}>
@@ -179,6 +199,7 @@ export function SettingsForm({
                 label,
                 value,
               }))}
+              disabled={configLocked}
             />
           </Stack>
         </Stack>
@@ -222,6 +243,7 @@ export function SettingsForm({
                         },
                       })
                     }
+                    disabled={configLocked}
                   />
                 </Stack>
               ))}
@@ -252,7 +274,12 @@ export function SettingsForm({
                 >
                   <Group gap="xs">
                     {POSITIONS.map((pos) => (
-                      <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
+                      <Chip
+                        key={pos}
+                        value={pos}
+                        color={POSITION_COLORS[pos]}
+                        disabled={configLocked}
+                      >
                         {pos}
                       </Chip>
                     ))}
@@ -284,7 +311,12 @@ export function SettingsForm({
               >
                 <Group gap="xs">
                   {POSITIONS.map((pos) => (
-                    <Chip key={pos} value={pos} color={POSITION_COLORS[pos]}>
+                    <Chip
+                      key={pos}
+                      value={pos}
+                      color={POSITION_COLORS[pos]}
+                      disabled={configLocked}
+                    >
                       {pos}
                     </Chip>
                   ))}
@@ -303,16 +335,16 @@ export function SettingsForm({
               <Switch
                 label="Use Keepers"
                 description={
-                  useKeepersControl.disabled ? (
-                    <>
-                      Pro only.{" "}
-                      <Anchor component={Link} to="/billing" size="xs">
-                        Upgrade to enable keepers.
-                      </Anchor>
-                    </>
-                  ) : (
-                    "Shows or hides the Keepers tab, where keeper rules are configured."
-                  )
+                  useKeepersControl.disabled
+                    ? (useKeepersControl.lockedMessage ?? (
+                        <>
+                          Pro only.{" "}
+                          <Anchor component={Link} to="/billing" size="xs">
+                            Upgrade to enable keepers.
+                          </Anchor>
+                        </>
+                      ))
+                    : "Shows or hides the Keepers tab, where keeper rules are configured."
                 }
                 checked={useKeepersControl.checked}
                 disabled={useKeepersControl.disabled}

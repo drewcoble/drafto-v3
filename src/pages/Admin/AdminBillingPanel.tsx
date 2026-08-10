@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   Center,
-  Container,
   Group,
   Loader,
   Stack,
@@ -18,7 +17,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { AppHeader } from "../../components/AppHeader";
-import { MOBILE_HEADER_HEIGHT } from "../../constants/general";
+import { PageContainer } from "../../components/PageContainer";
 import { getErrorMessage } from "../../lib/errors";
 
 // Super-admin-only tool for granting a user Pro access without collecting
@@ -40,31 +39,30 @@ export function AdminBillingPanel() {
 
   if (currentUser === undefined) {
     return (
-      <>
-        <AppHeader />
-        <Center pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }} pb="xl">
-          <Loader />
-        </Center>
-      </>
+      <PageContainer>
+        <Stack gap="lg">
+          <AppHeader />
+          <Center>
+            <Loader />
+          </Center>
+        </Stack>
+      </PageContainer>
     );
   }
 
   if (currentUser?.role !== "super-admin") {
     return (
-      <>
-        <AppHeader />
-        <Stack
-          gap="md"
-          pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }}
-          pb="xl"
-          align="center"
-        >
-          <Text c="dimmed">You don't have access to this page.</Text>
-          <Button component={Link} to="/" variant="default">
-            Back to dashboard
-          </Button>
+      <PageContainer>
+        <Stack gap="lg">
+          <AppHeader />
+          <Stack gap="md" align="center">
+            <Text c="dimmed">You don't have access to this page.</Text>
+            <Button component={Link} to="/" variant="default">
+              Back to dashboard
+            </Button>
+          </Stack>
         </Stack>
-      </>
+      </PageContainer>
     );
   }
 
@@ -86,14 +84,10 @@ export function AdminBillingPanel() {
   };
 
   return (
-    <>
-      <AppHeader />
-      <Container
-        size="sm"
-        pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }}
-        pb="xl"
-      >
-        <Stack gap="lg">
+    <PageContainer>
+      <Stack gap="lg">
+        <AppHeader />
+        <Stack gap="lg" maw={480} mx="auto">
           <Group gap="xs">
             <ActionIcon
               component={Link}
@@ -180,7 +174,7 @@ export function AdminBillingPanel() {
             </Stack>
           </Card>
         </Stack>
-      </Container>
-    </>
+      </Stack>
+    </PageContainer>
   );
 }

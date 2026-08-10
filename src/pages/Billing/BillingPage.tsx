@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   Center,
-  Container,
   Group,
   List,
   Loader,
@@ -18,8 +17,8 @@ import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { AppHeader } from "../../components/AppHeader";
+import { PageContainer } from "../../components/PageContainer";
 import { PRO_FEATURES } from "../../constants/proFeatures";
-import { MOBILE_HEADER_HEIGHT } from "../../constants/general";
 import { useProPricing } from "../../hooks/useProPricing";
 import { formatProPrice } from "../../lib/formatPrice";
 import { getErrorMessage } from "../../lib/errors";
@@ -95,12 +94,14 @@ export function BillingPage() {
 
   if (subscription === undefined || isReconciling) {
     return (
-      <>
-        <AppHeader />
-        <Center pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }} pb="xl">
-          <Loader />
-        </Center>
-      </>
+      <PageContainer>
+        <Stack gap="lg">
+          <AppHeader />
+          <Center>
+            <Loader />
+          </Center>
+        </Stack>
+      </PageContainer>
     );
   }
 
@@ -110,14 +111,10 @@ export function BillingPage() {
     subscription?.status === "past_due";
 
   return (
-    <>
-      <AppHeader />
-      <Container
-        size="sm"
-        pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }}
-        pb="xl"
-      >
-        <Stack gap="lg">
+    <PageContainer>
+      <Stack gap="lg">
+        <AppHeader />
+        <Stack gap="lg" maw={480} mx="auto">
           <Group gap="xs">
             <ActionIcon
               component={Link}
@@ -208,7 +205,7 @@ export function BillingPage() {
             </Text>
           )}
         </Stack>
-      </Container>
-    </>
+      </Stack>
+    </PageContainer>
   );
 }

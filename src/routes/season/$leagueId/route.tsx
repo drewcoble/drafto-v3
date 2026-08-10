@@ -1,15 +1,17 @@
-import { Box, Button, Center, Container, Loader, Stack, Tabs, Text } from "@mantine/core";
-import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
+import { Box, Button, Center, Loader, Stack, Tabs, Text } from "@mantine/core";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useLocation,
+} from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { GraduationCap, Settings2, UserSearch } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { AppHeader } from "../../../components/AppHeader";
 import { BottomNav } from "../../../components/BottomNav";
-import {
-  APP_CONTENT_MAX_WIDTH,
-  MOBILE_HEADER_HEIGHT,
-} from "../../../constants/general";
+import { PageContainer } from "../../../components/PageContainer";
 import { useSelfTeam } from "../../../hooks/useSelfTeam";
 
 export const Route = createFileRoute("/season/$leagueId")({
@@ -37,9 +39,9 @@ const TABS = [
   },
 ] as const;
 
-// Mirrors src/routes/draft/$leagueId/route.tsx's layout - same
+// Mirrors src/routes/league/$leagueId/route.tsx's layout - same
 // AppHeader/tabs/BottomNav shell, just for the post-draft "Season" mode
-// (see AppHeader.tsx's Enter Season button, gated on isDraftComplete).
+// (see AppHeader.tsx's Enter Season button, gated on useDraftPhase).
 function SeasonLayout() {
   const { leagueId } = Route.useParams();
   const location = useLocation();
@@ -51,35 +53,39 @@ function SeasonLayout() {
 
   if (settingsList === undefined || selfTeamResult === undefined) {
     return (
-      <Center py="xl">
-        <Loader />
-      </Center>
+      <>
+        <AppHeader />
+        <PageContainer>
+          <Center>
+            <Loader />
+          </Center>
+        </PageContainer>
+      </>
     );
   }
 
   if (!settings) {
     return (
-      <Container size="lg" py="xl">
-        <Stack gap="md" py="xl" align="center">
-          <Text c="dimmed">League not found.</Text>
-          <Link to="/">
-            <Button component="span" variant="default">
-              Back to settings
-            </Button>
-          </Link>
-        </Stack>
-      </Container>
+      <>
+        <AppHeader />
+        <PageContainer>
+          <Stack gap="md" py="xl" align="center">
+            <Text c="dimmed">League not found.</Text>
+            <Link to="/">
+              <Button component="span" variant="default">
+                Back to settings
+              </Button>
+            </Link>
+          </Stack>
+        </PageContainer>
+      </>
     );
   }
 
   const { selfTeam } = selfTeamResult;
 
   return (
-    <Container
-      size={APP_CONTENT_MAX_WIDTH}
-      pt={{ base: MOBILE_HEADER_HEIGHT + 16, sm: "xl" }}
-      pb={{ base: 100, sm: "xl" }}
-    >
+    <PageContainer pb={{ base: 100, sm: "xl" }}>
       <Stack gap="md">
         <AppHeader />
         <Box visibleFrom="sm">
@@ -108,6 +114,6 @@ function SeasonLayout() {
           </Text>
         )}
       </Stack>
-    </Container>
+    </PageContainer>
   );
 }

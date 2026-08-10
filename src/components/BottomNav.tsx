@@ -24,13 +24,14 @@ type BottomNavProps = {
   more?: BottomNavMore;
   leagueId: string;
   // Reserves the center notch for the nominate FAB (see MobileNomination) -
-  // only the Draft Room layout has one; Setup has no FAB, so it renders one
+  // only shown once a draft has started (see routes/league/$leagueId/
+  // route.tsx's isStarted); before that there's no FAB, so it renders one
   // flat evenly-spaced row instead of splitting around an empty gap.
   hasFab?: boolean;
 };
 
 // `to` is a plain `string` on BottomNavItem (items come from a shared,
-// already route-checked TABS array - see NavTabs.tsx / draft route.tsx),
+// already route-checked TABS array - see routes/league/$leagueId/route.tsx),
 // not a literal, so TanStack Router's Link can't resolve which params
 // shape applies to it at this generic call site. The route paths
 // themselves are still type-checked at their point of definition via the
@@ -48,8 +49,8 @@ const FAB_GAP_WIDTH = 72;
 // "sm" breakpoint and up, where the top Tabs take over instead). Floats
 // above the bottom edge as a rounded, elevated bar rather than sitting
 // flush with the screen. Pairs with the extra bottom padding added to the
-// page Container in the setup/draft layouts so this doesn't cover the
-// last bit of scrollable content.
+// page Container in the layout routes that use it so this doesn't cover
+// the last bit of scrollable content.
 //
 // Renders as two flex groups with an empty gap between them (rather than
 // one flat row) so the nominate FAB - fixed-positioned and horizontally
@@ -75,7 +76,12 @@ export function BottomNav({
         {...linkPropsFor(item.to, leagueId)}
         style={{ flex: 1, textDecoration: "none", color: "inherit" }}
       >
-        <Stack gap={2} align="center" py={12} c={active ? "burlywood" : "dimmed"}>
+        <Stack
+          gap={2}
+          align="center"
+          py={12}
+          c={active ? "burlywood" : "dimmed"}
+        >
           <Icon size={20} strokeWidth={active ? 2.5 : 2} />
           <Text fz={10} fw={active ? 600 : 400} lh={1}>
             {item.label}
@@ -150,7 +156,8 @@ export function BottomNav({
         // Same dark-green body color as before, just translucent now -
         // backdropFilter blurs whatever's scrolling underneath so it reads
         // as frosted glass rather than a flat cutout.
-        background: "color-mix(in srgb, var(--mantine-color-body) 65%, transparent)",
+        background:
+          "color-mix(in srgb, var(--mantine-color-body) 65%, transparent)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         boxShadow: "var(--mantine-shadow-lg)",

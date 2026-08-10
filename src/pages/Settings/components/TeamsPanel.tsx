@@ -50,6 +50,11 @@ interface TeamsPanelProps {
   ) => void;
   onRemoveTeam: (teamId: Id<"seasonTeams">) => Promise<void> | void;
   renameError: string | null;
+  // True once the draft has started (convex/draft/teams.ts's
+  // removeSeasonTeam rejects it server-side too) - renaming, salary cap
+  // overrides, and nomination-order reordering all stay available
+  // regardless, only removal locks.
+  removeLocked?: boolean;
 }
 
 // One consolidated list for every "teams already exist" concern - renaming
@@ -71,6 +76,7 @@ export function TeamsPanel({
   onSetTeamSalaryCap,
   onRemoveTeam,
   renameError,
+  removeLocked = false,
 }: TeamsPanelProps) {
   const teamById = useMemo(() => {
     const map = new Map<string, Doc<"seasonTeams">>();
@@ -154,9 +160,7 @@ export function TeamsPanel({
         mode,
       });
     } catch (err) {
-      setOrderError(
-        getErrorMessage(err, "Failed to save order."),
-      );
+      setOrderError(getErrorMessage(err, "Failed to save order."));
     } finally {
       setIsSaving(false);
     }
@@ -167,9 +171,7 @@ export function TeamsPanel({
     try {
       await clearNominationOrder({ seasonId });
     } catch (err) {
-      setOrderError(
-        getErrorMessage(err, "Failed to clear order."),
-      );
+      setOrderError(getErrorMessage(err, "Failed to clear order."));
     }
   };
 
@@ -242,8 +244,9 @@ export function TeamsPanel({
                 leftSection={<Trash2 size={14} />}
                 rightSection={removingMode ? <Check size={14} /> : undefined}
                 onClick={() => setRemovingMode((current) => !current)}
+                disabled={removeLocked}
               >
-                Remove Teams
+                {removeLocked ? "Remove Teams (locked)" : "Remove Teams"}
               </Menu.Item>
             </Menu.Dropdown>
           </Menu>
@@ -251,8 +254,8 @@ export function TeamsPanel({
       </Group>
       <Text size="xs" c="dimmed">
         Rename teams and reorder to set who the nominate form suggests next
-        during the live draft - always overridable in the moment, so it's
-        fine if the room deviates.
+        during the live draft - always overridable in the moment, so it's fine
+        if the room deviates.
       </Text>
       {renameError && (
         <Text c="red" size="sm">
@@ -264,7 +267,10 @@ export function TeamsPanel({
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={localOrder} strategy={verticalListSortingStrategy}>
+        <SortableContext
+          items={localOrder}
+          strategy={verticalListSortingStrategy}
+        >
           <Stack gap={4}>
             {localOrder.map((teamId, index) => {
               const team = teamById.get(teamId);
@@ -324,14 +330,18 @@ export function TeamsPanel({
         <Stack gap="md">
           <Text size="sm">
             Remove {teamById.get(pendingRemoveId ?? "")?.name ?? "this team"}{" "}
-            from this league? This can't be undone, and only works while it
-            has no draft picks yet.
+            from this league? This can't be undone, and only works while it has
+            no draft picks yet.
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setPendingRemoveId(null)}>
               Cancel
             </Button>
-            <Button color="red" loading={isRemoving} onClick={handleConfirmRemove}>
+            <Button
+              color="red"
+              loading={isRemoving}
+              onClick={handleConfirmRemove}
+            >
               Remove Team
             </Button>
           </Group>

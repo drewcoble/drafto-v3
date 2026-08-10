@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "@tanstack/react-router";
-import { Trophy } from "lucide-react";
+import { Play, Trophy, Undo2 } from "lucide-react";
 import {
   Anchor,
   Badge,
@@ -17,6 +17,7 @@ import {
   Text,
   TextInput,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -35,6 +36,8 @@ import { LeagueCreateChoice } from "./components/LeagueCreateChoice";
 import { LeagueImportWizard } from "./components/LeagueImportWizard";
 import { YahooLeagueImportWizard } from "./components/YahooLeagueImportWizard";
 import { UpgradePrompt } from "../../components/UpgradePrompt";
+import { LockedNotice } from "../../components/LockedNotice";
+import { useDraftPhase } from "../../hooks/useDraftPhase";
 import { getErrorMessage } from "../../lib/errors";
 
 interface LeagueDetailsProps {
@@ -68,6 +71,10 @@ export function LeagueDetails({
   const removeDraftTeam = useMutation(api.draft.teams.removeSeasonTeam);
   const setUseKeepers = useMutation(api.leagues.setUseKeepers);
   const deleteDraftSettings = useMutation(api.leagues.deleteLeague);
+  const phase = useDraftPhase(selectedLeagueId);
+  const isStarted = phase?.isStarted ?? false;
+  const startDraft = useMutation(api.draft.lifecycle.startDraft);
+  const reopenSetup = useMutation(api.draft.lifecycle.reopenSetup);
   const seasonLineage = useQuery(
     api.draft.history.listSeasonLineage,
     selectedLeagueId ? { seasonId: selectedLeagueId } : "skip",
@@ -101,6 +108,12 @@ export function LeagueDetails({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [startModalOpen, setStartModalOpen] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [isReopening, setIsReopening] = useState(false);
+  const [reopenError, setReopenError] = useState<string | null>(null);
 
   // Triggered by the "+ New League" option in the header dropdown, which can
   // fire regardless of which tab is currently active.
@@ -248,6 +261,33 @@ export function LeagueDetails({
     }
   };
 
+  const handleStartDraft = async () => {
+    if (!settings) return;
+    setIsStarting(true);
+    setStartError(null);
+    try {
+      await startDraft({ seasonId: settings._id });
+      setStartModalOpen(false);
+    } catch (err) {
+      setStartError(getErrorMessage(err, "Failed to start the draft."));
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleReopenSetup = async () => {
+    if (!settings) return;
+    setIsReopening(true);
+    setReopenError(null);
+    try {
+      await reopenSetup({ seasonId: settings._id });
+    } catch (err) {
+      setReopenError(getErrorMessage(err, "Failed to reopen setup."));
+    } finally {
+      setIsReopening(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!settings) return;
     setIsDeleting(true);
@@ -337,13 +377,20 @@ export function LeagueDetails({
           onDoneCreating();
         }}
         teamsLocked={!!draftTeams && draftTeams.length > 0}
+        configLocked={isStarted}
         {...(settings
           ? {
               useKeepersControl: {
                 checked: settings.useKeepers ?? true,
                 onChange: handleToggleUseKeepers,
                 error: useKeepersError,
-                disabled: !entitlement?.hasProAccess,
+                disabled: !entitlement?.hasProAccess || isStarted,
+                ...(isStarted
+                  ? {
+                      lockedMessage:
+                        "This draft has started - reopen setup to change it.",
+                    }
+                  : {}),
               },
             }
           : {})}
@@ -366,9 +413,78 @@ export function LeagueDetails({
     (slot) => [slot, settings.rosterSlots[slot]] as const,
   );
 
+  const hasTeams = !!draftTeams && draftTeams.length > 0;
+
   return (
     <Stack gap="lg" py="sm">
-      <Title order={4}>{settings.name}</Title>
+      <Group justify="space-between" align="center">
+        <Title order={4}>{settings.name}</Title>
+        {!isStarted && (
+          <Tooltip
+            label="Add at least one team before starting the draft"
+            disabled={hasTeams}
+          >
+            <Button
+              leftSection={<Play size={16} />}
+              onClick={() => setStartModalOpen(true)}
+              disabled={!hasTeams}
+            >
+              Start Draft
+            </Button>
+          </Tooltip>
+        )}
+        {isStarted && (
+          <Button
+            variant="default"
+            leftSection={<Undo2 size={16} />}
+            onClick={handleReopenSetup}
+            loading={isReopening}
+          >
+            Reopen Setup
+          </Button>
+        )}
+      </Group>
+      {reopenError && (
+        <Text c="red" size="sm">
+          {reopenError}
+        </Text>
+      )}
+      {isStarted && (
+        <LockedNotice>
+          This draft has started - scoring, roster, and keeper rules are locked,
+          and teams can no longer be added or removed. Team names, salary cap
+          overrides, and nomination order still stay editable.
+        </LockedNotice>
+      )}
+
+      <Modal
+        opened={startModalOpen}
+        onClose={() => setStartModalOpen(false)}
+        title="Start the draft"
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            This locks league scoring, roster slots, and keeper rules for the
+            rest of the draft, and enables nominating/bidding on players. Team
+            names, salary cap overrides, and nomination order stay editable. You
+            can reopen setup afterward, but only until the first player is
+            actually drafted.
+          </Text>
+          {startError && (
+            <Text c="red" size="sm">
+              {startError}
+            </Text>
+          )}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setStartModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button loading={isStarting} onClick={handleStartDraft}>
+              Start Draft
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       {/* No outer Card - SeasonHistoryPanel renders SeasonSummary's own
           grid of per-team Cards when a past season is selected, so wrapping
@@ -540,6 +656,7 @@ export function LeagueDetails({
               onSetTeamSalaryCap={handleSetTeamSalaryCap}
               onRemoveTeam={handleRemoveTeam}
               renameError={teamsError}
+              removeLocked={isStarted}
             />
           )}
         </Card>
