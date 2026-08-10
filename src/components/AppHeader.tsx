@@ -21,6 +21,7 @@ import {
   Check,
   ChevronDown,
   CreditCard,
+  Database,
   LogOut,
   Moon,
   MoreVertical,
@@ -331,14 +332,24 @@ export function AppHeader({
                   </Link>
                 )}
                 {currentUser?.role === "super-admin" && (
-                  <Link to="/admin" style={{ textDecoration: "none" }}>
-                    <Menu.Item
-                      component="span"
-                      leftSection={<ShieldCheck size={16} />}
-                    >
-                      Admin
-                    </Menu.Item>
-                  </Link>
+                  <>
+                    <Link to="/admin" style={{ textDecoration: "none" }}>
+                      <Menu.Item
+                        component="span"
+                        leftSection={<ShieldCheck size={16} />}
+                      >
+                        Admin
+                      </Menu.Item>
+                    </Link>
+                    <Link to="/admin-data" style={{ textDecoration: "none" }}>
+                      <Menu.Item
+                        component="span"
+                        leftSection={<Database size={16} />}
+                      >
+                        Data
+                      </Menu.Item>
+                    </Link>
+                  </>
                 )}
                 <Menu.Item
                   leftSection={isDark ? <Sun size={16} /> : <Moon size={16} />}

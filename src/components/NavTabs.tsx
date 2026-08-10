@@ -2,7 +2,6 @@ import { Box, Tabs } from "@mantine/core";
 import { Link, useLocation, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import {
-  Database,
   DollarSign,
   HeartPulse,
   Settings2,
@@ -48,16 +47,9 @@ const TABS = [
     icon: HeartPulse,
     to: "/setup/$leagueId/injuries",
   },
-  {
-    value: "data",
-    label: "Data",
-    shortLabel: "Data",
-    icon: Database,
-    to: "/setup/$leagueId/data",
-  },
 ] as const;
 
-const MORE_VALUES = new Set(["keepers", "injuries", "data"]);
+const MORE_VALUES = new Set(["keepers", "injuries"]);
 
 const toBottomNavItem = (tab: (typeof TABS)[number]) => ({
   value: tab.value,
@@ -70,8 +62,6 @@ export function NavTabs() {
   const { leagueId } = useParams({ from: "/setup/$leagueId" });
   const location = useLocation();
   const activeTab = location.pathname.split("/").pop();
-  const currentUser = useQuery(api.users.getCurrentUser);
-  const isSuperAdmin = currentUser?.role === "super-admin";
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((league) => league._id === leagueId);
   // Absent means true (see schema.ts's useKeepers comment) - don't hide the
@@ -79,13 +69,10 @@ export function NavTabs() {
   // it's off, so the tab doesn't flash away and back on every visit.
   const keepersEnabled = settings?.useKeepers !== false;
 
-  // Data fetching is a super-admin-only tool - not just gated once you're
-  // on the tab (see DataPanel), hidden from non-super-admins entirely so
-  // there's no dead-end tab or mention of a feature they can't use. Keepers
-  // works the same way when a league has turned them off (see
-  // routes/setup/$leagueId/keepers.tsx for the matching route-level guard).
+  // Keepers is hidden entirely (not just disabled) when a league has turned
+  // it off - see routes/setup/$leagueId/keepers.tsx for the matching
+  // route-level guard.
   const visibleTabs = TABS.filter((tab) => {
-    if (tab.value === "data") return isSuperAdmin;
     if (tab.value === "keepers") return keepersEnabled;
     return true;
   });
