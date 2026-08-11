@@ -56,10 +56,12 @@ function PlayerSearchAdd({
   candidates,
   excludeFpids,
   onAdd,
+  portalTarget,
 }: {
   candidates: PlayerDraft[];
   excludeFpids: Set<number>;
   onAdd: (player: PlayerDraft) => void;
+  portalTarget: HTMLDivElement | null;
 }) {
   const [search, setSearch] = useState("");
   const combobox = useCombobox({
@@ -80,11 +82,14 @@ function PlayerSearchAdd({
   return (
     <Combobox
       store={combobox}
-      // This picker lives inside a Modal, which traps focus within its own
-      // DOM subtree - the default portal-to-body dropdown falls outside
-      // that trap, so focus gets yanked back before the dropdown can stay
-      // open. Rendering in place keeps it inside the trap.
-      withinPortal={false}
+      // This picker lives inside both a Modal (which traps focus within its
+      // own DOM subtree - the default portal-to-body dropdown falls outside
+      // that trap and gets yanked closed) and a ScrollArea (whose overflow
+      // clips an un-portaled dropdown that flips above the input when the
+      // keyboard covers the space below). Portaling to a target that's a
+      // sibling of the ScrollArea, but still inside the Modal, avoids both.
+      withinPortal={!!portalTarget}
+      {...(portalTarget ? { portalProps: { target: portalTarget } } : {})}
       onOptionSubmit={(value) => {
         const player = candidates.find((row) => String(row.fpid) === value);
         combobox.closeDropdown();
@@ -154,6 +159,10 @@ export function ManualPreviousSeasonModal({
   const [teams, setTeams] = useState<TeamDraft[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Target for the player-search dropdowns below to portal into - see
+  // PlayerSearchAdd's comment for why it can't be document.body (default)
+  // or un-portaled (the two options Combobox normally offers).
+  const [portalTarget, setPortalTarget] = useState<HTMLDivElement | null>(null);
 
   const currentTeams = useQuery(api.draft.teams.listSeasonTeams, {
     seasonId,
@@ -312,6 +321,7 @@ export function ManualPreviousSeasonModal({
           onChange={(event) => setYear(event.currentTarget.value)}
           w={140}
         />
+        <div ref={setPortalTarget} />
         <ScrollArea.Autosize mah={420}>
           <Stack gap="sm">
             {teams.map((team) => (
@@ -366,6 +376,7 @@ export function ManualPreviousSeasonModal({
                     candidates={allDraftPlayers}
                     excludeFpids={usedFpids}
                     onAdd={(player) => addPlayer(team.key, player)}
+                    portalTarget={portalTarget}
                   />
                 </Stack>
               </Card>
