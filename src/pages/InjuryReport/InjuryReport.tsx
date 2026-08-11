@@ -226,11 +226,23 @@ export function InjuryReport({
                         </Table.Td>
                         <Table.Td>{player.team ?? "—"}</Table.Td>
                         <Table.Td>
+                          {/* Abbreviated (statusShort - "Q"/"O"/"D"/etc,
+                              already computed server-side, see
+                              convex/sleeper/projections.ts's
+                              INJURY_STATUS_SHORT) rather than the full word,
+                              to keep this compact/mobile-condensed column
+                              narrow - injuryColor still keys off the full
+                              `status` string, whose substring matching
+                              ("QUESTIONABLE", "OUT", etc.) wouldn't
+                              recognize the abbreviation. The full word is
+                              in the expanded row below (a hover-only
+                              tooltip wouldn't help touch/mobile users, the
+                              actual audience this table's condensed for). */}
                           <Badge
                             color={injuryColor(injury.status)}
                             variant="light"
                           >
-                            {injury.status}
+                            {injury.statusShort}
                           </Badge>
                         </Table.Td>
                         <Table.Td>
@@ -253,6 +265,12 @@ export function InjuryReport({
                         <Table.Tr>
                           <Table.Td colSpan={5}>
                             <Stack gap={4} py={4}>
+                              <Group gap={6}>
+                                <Text size="xs" fw={600} c="dimmed">
+                                  Status:
+                                </Text>
+                                <Text size="xs">{injury.status}</Text>
+                              </Group>
                               <Group gap={6}>
                                 <Text size="xs" fw={600} c="dimmed">
                                   Type:
