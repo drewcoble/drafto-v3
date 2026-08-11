@@ -32,13 +32,19 @@ interface DraftBoardProps {
 
 // Read-only, TV/projector-friendly view of every team's roster - meant to be
 // opened in its own tab on a second screen while the host runs the actual
-// draft elsewhere (see the "TV Board" link in draft/$leagueId/route.tsx), so
-// it deliberately shows only what's already public knowledge in a live
+// draft elsewhere (see the "TV Board" link in AppHeader.tsx), so it
+// deliberately shows only what's already public knowledge in a live
 // auction: drafted players, prices paid, and each team's remaining
 // budget/max bid (every bidder needs to see max bids to bid validly). It
 // never reads this app's own analysis - no $ values (draftValues.ts), ADP,
 // target/avoid tags (draftPlayerTags), or budget plans - since those are the
 // host's private prep, not something to broadcast to the room.
+//
+// Viewable any time, not just once the draft starts - a host might want it
+// up on the TV before the room's ready to go. Nomination-status badges only
+// make sense once there's actually a draft in progress, so a not-yet-started
+// draft gets a plain "Draft not started" badge instead of chasing whatever
+// stale nominatingTeam/turnTeam state happens to be sitting around.
 export function DraftBoard({ seasonId }: DraftBoardProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
@@ -157,34 +163,47 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
           </Group>
           <Title order={2}>{settings.name}</Title>
           <Group gap="xs" wrap="wrap">
-            {activeNomination && nominatingTeam && (
-              <Badge size="xl" radius="md" variant="light" color="burlywood">
-                {nominatingTeam.name} nominated
+            {settings.draftStatus === "setup" ? (
+              <Badge size="xl" radius="md" variant="light" color="gray">
+                Draft not started
               </Badge>
-            )}
-            {!activeNomination && turnTeam && (
-              <Badge
-                size="xl"
-                radius="md"
-                variant="light"
-                color="saddlebrown.6"
-              >
-                {turnTeam.name} is nominating
-              </Badge>
-            )}
-            {activeNomination && (
-              <Badge
-                size="xl"
-                radius="md"
-                variant="light"
-                color={`${POSITION_COLORS[activeNomination.position]}`}
-              >
-                On the block:{" "}
-                {playerByFpid.get(activeNomination.fpid)?.name ??
-                  `#${activeNomination.fpid}`}{" "}
-                ({activeNomination.position}) -{" "}
-                {playerByFpid.get(activeNomination.fpid)?.team}
-              </Badge>
+            ) : (
+              <>
+                {activeNomination && nominatingTeam && (
+                  <Badge
+                    size="xl"
+                    radius="md"
+                    variant="light"
+                    color="burlywood"
+                  >
+                    {nominatingTeam.name} nominated
+                  </Badge>
+                )}
+                {!activeNomination && turnTeam && (
+                  <Badge
+                    size="xl"
+                    radius="md"
+                    variant="light"
+                    color="saddlebrown.6"
+                  >
+                    {turnTeam.name} is nominating
+                  </Badge>
+                )}
+                {activeNomination && (
+                  <Badge
+                    size="xl"
+                    radius="md"
+                    variant="light"
+                    color={`${POSITION_COLORS[activeNomination.position]}`}
+                  >
+                    On the block:{" "}
+                    {playerByFpid.get(activeNomination.fpid)?.name ??
+                      `#${activeNomination.fpid}`}{" "}
+                    ({activeNomination.position}) -{" "}
+                    {playerByFpid.get(activeNomination.fpid)?.team}
+                  </Badge>
+                )}
+              </>
             )}
           </Group>
         </Group>

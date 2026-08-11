@@ -48,7 +48,8 @@ const NEW_LEAGUE_VALUE = "new";
 // (+ New League), the Setup/Draft Room mode switch, and sign out. Reads
 // which league/section is current from the URL rather than local state.
 //
-// TV Board (draft room only)/theme toggle/sign out all collapse into one
+// TV Board (any real league, any draft phase - see DraftBoard.tsx)/theme
+// toggle/sign out all collapse into one
 // overflow menu at every breakpoint, rather than spreading across inline
 // buttons on desktop - keeps the bar from getting crowded as more
 // draft-room-only actions get added. The league picker is the same
@@ -115,7 +116,6 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
   const phase = useDraftPhase(
     hasRealLeague ? (leagueId as Id<"seasons">) : undefined,
   );
-  const isStarted = phase?.isStarted ?? false;
   const draftComplete = phase?.isComplete ?? false;
 
   const handleLeagueChange = (value: string | null) => {
@@ -250,7 +250,7 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              {inLeagueView && hasRealLeague && isStarted && (
+              {inLeagueView && hasRealLeague && (
                 <Link
                   to="/board/$leagueId"
                   params={{ leagueId }}
