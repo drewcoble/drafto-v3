@@ -1,4 +1,4 @@
-import { useAuthActions } from "@convex-dev/auth/react";
+import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import {
   ActionIcon,
   Box,
@@ -82,8 +82,18 @@ export function AppHeader({
   const location = useLocation();
   const { leagueId } = useParams({ strict: false });
   const { signOut } = useAuthActions();
+  const { isAuthenticated } = useConvexAuth();
   const currentUser = useQuery(api.users.getCurrentUser);
-  const seasonsList = useQuery(api.leagues.listSeasons, minimal ? "skip" : {});
+  // Also gated on isAuthenticated, not just `minimal` - __root.tsx only
+  // renders this component at all once it believes the user is
+  // authenticated, but listSeasons throws (rather than degrading
+  // gracefully like getCurrentUser/getMyEntitlement above) if that belief
+  // turns out to be premature, so this is a second line of defense against
+  // the exact "must be signed in" crash minimal already exists to dodge.
+  const seasonsList = useQuery(
+    api.leagues.listSeasons,
+    minimal || !isAuthenticated ? "skip" : {},
+  );
   const entitlement = useQuery(api.billing.queries.getMyEntitlement);
   const { colorScheme, setColorScheme } = useMantineColorScheme();
 

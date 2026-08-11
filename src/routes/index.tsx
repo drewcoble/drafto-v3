@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useConvexAuth } from "@convex-dev/auth/react";
 import { useQuery } from "convex/react";
 import {
   Badge,
@@ -84,7 +85,16 @@ function EnterLeagueLink({
 // leagueId (see groupSeasonsByLeague) so multi-year leagues surface once,
 // keyed to their most recent season.
 function Dashboard() {
-  const seasonsList = useQuery(api.leagues.listSeasons, {});
+  const { isAuthenticated } = useConvexAuth();
+  // __root.tsx only renders this route at all once it believes the user is
+  // authenticated, but listSeasons throws (rather than degrading
+  // gracefully) if that belief turns out to be premature - see
+  // AppHeader.tsx's copy of this same guard for why isAuthenticated is
+  // checked here directly instead of trusting the outer gate alone.
+  const seasonsList = useQuery(
+    api.leagues.listSeasons,
+    isAuthenticated ? {} : "skip",
+  );
 
   const leagueGroups = groupSeasonsByLeague(seasonsList ?? []).sort((a, b) =>
     a.latest.name.localeCompare(b.latest.name),
