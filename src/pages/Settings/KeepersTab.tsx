@@ -18,6 +18,7 @@ import { KeeperTable } from "./components/KeeperTable";
 import { KeeperCardList } from "./components/KeeperCardList";
 import { KeeperSearchForm } from "./components/KeeperSearchForm";
 import { KeeperRulesPanel } from "./components/KeeperRulesPanel";
+import { RecommendedKeepers } from "./components/RecommendedKeepers";
 import { getErrorMessage } from "../../lib/errors";
 
 interface KeepersTabProps {
@@ -287,6 +288,16 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 Add a Keeper
               </Text>
               {usingGenericValues && <GenericValuesNotice />}
+              <RecommendedKeepers
+                priceHistory={priceHistory}
+                keeperRules={settings.keeperRules}
+                draftValueByFpid={draftValueByFpid}
+                allProjections={allProjections}
+                activePositions={activePositions}
+                draftedFpids={draftedFpids}
+                onAddToSearch={setKeeperSearch}
+                onSelectPlayer={setSelectedFpid}
+              />
               {/* No outer Card here - KeeperSearchForm already boxes the
                   selected-candidate summary in its own Card once a player is
                   picked, so wrapping this whole section would nest one Card
