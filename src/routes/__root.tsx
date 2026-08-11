@@ -1,8 +1,15 @@
 import { useEffect, useMemo } from "react";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { Center, Loader, Stack, Text } from "@mantine/core";
-import { useConvexAuth } from "@convex-dev/auth/react";
-import { useMutation } from "convex/react";
+// convex/react's useConvexAuth, NOT @convex-dev/auth/react's - the latter's
+// isAuthenticated only means "we have some token value in local state"
+// (tokenState !== null), true the instant a token is read from storage or a
+// sign-in call returns, with no guarantee the server has actually accepted
+// it yet. This one is explicitly documented as "the server has confirmed
+// the current token" (see node_modules/convex/dist/esm-types/react/
+// ConvexAuthState.d.ts) - the reliable signal for "is it safe to run an
+// authenticated query," which is exactly what gates <Outlet/> below.
+import { useConvexAuth, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { AppHeader } from "../components/AppHeader";
 import { AuthPanel } from "../components/AuthPanel";

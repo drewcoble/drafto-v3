@@ -1,4 +1,4 @@
-import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import {
   ActionIcon,
   Box,
@@ -16,7 +16,10 @@ import {
   useNavigate,
   useParams,
 } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
+// useConvexAuth from convex/react, not @convex-dev/auth/react - see
+// __root.tsx's comment on the same import for why (the latter's
+// isAuthenticated doesn't wait for server confirmation).
+import { useConvexAuth, useQuery } from "convex/react";
 import {
   Check,
   ChevronDown,

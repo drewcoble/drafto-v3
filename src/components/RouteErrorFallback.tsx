@@ -1,6 +1,10 @@
-import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { Button, Center, Group, Stack, Text, Title } from "@mantine/core";
 import { Link, type ErrorComponentProps } from "@tanstack/react-router";
+// useConvexAuth from convex/react, not @convex-dev/auth/react - see
+// __root.tsx's comment on the same import for why (the latter's
+// isAuthenticated doesn't wait for server confirmation).
+import { useConvexAuth } from "convex/react";
 import { getErrorMessage } from "../lib/errors";
 
 // @convex-dev/auth's React client stores its JWT/refresh token/etc in
