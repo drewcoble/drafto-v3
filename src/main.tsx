@@ -54,7 +54,18 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <ConvexAuthProvider client={convex}>
+    {/* shouldHandleCode={false}: by default @convex-dev/auth's client
+        automatically tries to consume a `?code=` URL query param as one of
+        its own OAuth/magic-link sign-in codes on every mount - this app
+        only configures the Password provider (see convex/auth.ts), so
+        there's no legitimate flow that ever puts a real one there. Left at
+        the default, an unrelated `code` param from anywhere else (e.g. a
+        redirect back from this domain's Vercel deployment-protection SSO
+        wall) gets misread as a bogus sign-in attempt on every fresh load,
+        with no credentials ever entered - this is what was actually
+        causing the "must be signed in" crash loop on develop.infinidraft.com,
+        not anything about stale stored tokens. */}
+    <ConvexAuthProvider client={convex} shouldHandleCode={false}>
       <QueryClientProvider client={queryClient}>
         <MantineProvider
           theme={theme}
