@@ -414,6 +414,16 @@ export const theme = createTheme({
     Anchor: {
       defaultProps: {
         c: "light-dark(var(--mantine-color-burlywood-7), var(--mantine-color-burlywood-3))",
+        // These same player-name links are almost always `component="button"`
+        // (a real <button>, needed for onClick-to-open-detail rather than
+        // navigation) - browsers default a <button>'s text to
+        // text-align: center, invisibly so for a single-line name, but
+        // clearly wrong the moment a long one wraps to two lines (e.g. in
+        // a narrow table column): both lines center within the button's
+        // own box instead of staying flush left like every other row.
+        // Left is also just correct for the plain <a> case Anchor
+        // otherwise renders, so this is safe as a blanket default.
+        ta: "left",
       },
     },
     // Buttons default to saddlebrown rather than primaryColor (burlywood) -
