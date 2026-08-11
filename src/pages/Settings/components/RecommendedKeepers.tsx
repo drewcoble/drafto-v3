@@ -1,5 +1,14 @@
 import { useMemo } from "react";
-import { Anchor, Badge, Card, Group, Stack, Table, Text } from "@mantine/core";
+import {
+  Anchor,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Stack,
+  Table,
+  Text,
+} from "@mantine/core";
 import type { Position } from "../../../types";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import {
@@ -26,6 +35,7 @@ interface RecommendedKeepersProps {
   draftedFpids: Set<number>;
   onAddToSearch: (name: string) => void;
   onSelectPlayer: (fpid: number) => void;
+  onOpenManualEntry: () => void;
 }
 
 const MAX_RECOMMENDATIONS = 10;
@@ -48,6 +58,7 @@ export function RecommendedKeepers({
   draftedFpids,
   onAddToSearch,
   onSelectPlayer,
+  onOpenManualEntry,
 }: RecommendedKeepersProps) {
   const recommendations = useMemo(() => {
     if (!priceHistory || !keeperRules || !allProjections) return [];
@@ -78,7 +89,13 @@ export function RecommendedKeepers({
         const savings = fairValue - keeperCost;
         if (savings <= 0) return null;
 
-        return { player, keeperCost, fairValue, savings };
+        return {
+          player,
+          keeperCost,
+          fairValue,
+          savings,
+          teamName: entry.teamName,
+        };
       })
       .filter((row): row is NonNullable<typeof row> => row !== null)
       .sort((a, b) => b.savings - a.savings)
@@ -94,18 +111,52 @@ export function RecommendedKeepers({
     draftValueByFpid,
   ]);
 
-  // Nothing to show at all when there's no prior-season price data to base
-  // a suggestion on - not even a placeholder message, per the ask.
+  // No prior-season price data at all (no import, no manual entry) - prompt
+  // for manual entry instead of a bare table with nothing to show, since
+  // there's a concrete action available (unlike "no strong keeper values
+  // found" below, which just means the data exists but nothing cleared the
+  // savings bar).
   if (!priceHistory || Object.keys(priceHistory).length === 0) {
-    return null;
+    return (
+      <Card withBorder padding="md">
+        <Stack gap="sm">
+          <Text size="sm" fw={500}>
+            Recommended Keepers
+          </Text>
+          <Text size="xs" c="dimmed">
+            No previous season data on file yet, so there's nothing to base a
+            keeper suggestion on. Enter last season's results by hand to get
+            started.
+          </Text>
+          <Button
+            variant="light"
+            size="xs"
+            onClick={onOpenManualEntry}
+            style={{ alignSelf: "flex-start" }}
+          >
+            Add last season's results
+          </Button>
+        </Stack>
+      </Card>
+    );
   }
 
   return (
     <Card withBorder padding="md">
       <Stack gap="sm">
-        <Text size="sm" fw={500}>
-          Recommended Keepers
-        </Text>
+        <Group justify="space-between" wrap="nowrap">
+          <Text size="sm" fw={500}>
+            Recommended Keepers
+          </Text>
+          <Anchor
+            component="button"
+            type="button"
+            size="xs"
+            onClick={onOpenManualEntry}
+          >
+            Edit last season's results
+          </Anchor>
+        </Group>
         {!keeperRules ? (
           <Text size="xs" c="dimmed">
             Configure keeper rules to see recommended keepers.
@@ -133,7 +184,7 @@ export function RecommendedKeepers({
                 </Table.Thead>
                 <Table.Tbody>
                   {recommendations.map(
-                    ({ player, keeperCost, fairValue, savings }) => (
+                    ({ player, keeperCost, fairValue, savings, teamName }) => (
                       <Table.Tr key={player.fpid}>
                         <Table.Td>
                           <Group gap={6} wrap="nowrap">
@@ -158,6 +209,11 @@ export function RecommendedKeepers({
                               </Text>
                             )}
                           </Group>
+                          {teamName && (
+                            <Text size="xs" c="dimmed">
+                              Likely on: {teamName}
+                            </Text>
+                          )}
                         </Table.Td>
                         <Table.Td ta="right">${keeperCost}</Table.Td>
                         <Table.Td ta="right">${Math.round(fairValue)}</Table.Td>

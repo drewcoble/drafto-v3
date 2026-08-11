@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { mutation, query, type QueryCtx, type MutationCtx } from "../_generated/server";
+import {
+  mutation,
+  query,
+  type QueryCtx,
+  type MutationCtx,
+} from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import { requireSeasonOwner, requireRealDraft } from "./auth";
 import { refreshDraftValuesForLeague } from "../draftValues";
@@ -22,7 +27,9 @@ export async function getSeasonLineage(
     .query("seasons")
     .withIndex("by_league", (q) => q.eq("leagueId", current.leagueId))
     .collect();
-  seasons.sort((a, b) => a.year.localeCompare(b.year) || a.createdAt - b.createdAt);
+  seasons.sort(
+    (a, b) => a.year.localeCompare(b.year) || a.createdAt - b.createdAt,
+  );
   return seasons;
 }
 
@@ -78,6 +85,7 @@ export const getPlayerPriceHistory = query({
         isKeeper: boolean;
         keeperStreak: number | undefined;
         fromImmediateParent: boolean;
+        teamName: string | undefined;
       }
     > = {};
     for (const season of ancestors) {
@@ -92,14 +100,29 @@ export const getPlayerPriceHistory = query({
         .query("draftPicks")
         .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
         .collect();
+      // Only fetched (and only once per season, not per pick) when at least
+      // one pick actually needs a confirmed team name resolved below.
+      let teamNameById: Map<string, string> | null = null;
       for (const pick of picks) {
         if (priceByFpid[pick.fpid] !== undefined) continue;
+        let teamName: string | undefined;
+        if (pick.teamAssignmentConfirmed) {
+          if (!teamNameById) {
+            const teams = await ctx.db
+              .query("seasonTeams")
+              .withIndex("by_season", (q) => q.eq("seasonId", season._id))
+              .collect();
+            teamNameById = new Map(teams.map((t) => [t._id, t.name]));
+          }
+          teamName = teamNameById.get(pick.teamId);
+        }
         priceByFpid[pick.fpid] = {
           price: pick.price,
           season: season.year,
           isKeeper: pick.isKeeper ?? false,
           keeperStreak: pick.keeperStreak,
           fromImmediateParent: season._id === immediateParentId,
+          teamName,
         };
       }
     }
@@ -149,7 +172,9 @@ export const createNextSeason = mutation({
       flexPositions: source.flexPositions,
       superflexPositions: source.superflexPositions,
       createdAt: now,
-      ...(source.teScoring !== undefined ? { teScoring: source.teScoring } : {}),
+      ...(source.teScoring !== undefined
+        ? { teScoring: source.teScoring }
+        : {}),
       ...(source.sixPointPassTds !== undefined
         ? { sixPointPassTds: source.sixPointPassTds }
         : {}),

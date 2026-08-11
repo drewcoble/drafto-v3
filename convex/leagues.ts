@@ -358,6 +358,10 @@ export const importPreviousSeasonHistory = mutation({
       kind: "real",
       name: `${league.name} (Imported ${args.season})`,
       status: "complete",
+      // Draft-day snapshot, not a confirmed end-of-season roster - see
+      // schema.ts's historySource/teamAssignmentConfirmed comments and
+      // convex/draft/manualHistory.ts.
+      historySource: args.sleeperLeagueId ? "sleeper" : "yahoo",
       createdAt: now,
     });
 

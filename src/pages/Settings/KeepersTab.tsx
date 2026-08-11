@@ -19,6 +19,7 @@ import { KeeperCardList } from "./components/KeeperCardList";
 import { KeeperSearchForm } from "./components/KeeperSearchForm";
 import { KeeperRulesPanel } from "./components/KeeperRulesPanel";
 import { RecommendedKeepers } from "./components/RecommendedKeepers";
+import { ManualPreviousSeasonModal } from "./components/ManualPreviousSeasonModal";
 import { getErrorMessage } from "../../lib/errors";
 
 interface KeepersTabProps {
@@ -63,6 +64,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   const [keeperPrice, setKeeperPrice] = useState<number>(1);
   const [keeperError, setKeeperError] = useState<string | null>(null);
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
+  const [manualEntryOpened, setManualEntryOpened] = useState(false);
 
   // Default the keeper team picker to the self team once teams exist,
   // mirroring DraftTab's nominatingTeamId default.
@@ -297,6 +299,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 draftedFpids={draftedFpids}
                 onAddToSearch={setKeeperSearch}
                 onSelectPlayer={setSelectedFpid}
+                onOpenManualEntry={() => setManualEntryOpened(true)}
               />
               {/* No outer Card here - KeeperSearchForm already boxes the
                   selected-candidate summary in its own Card once a player is
@@ -382,6 +385,13 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
         scoringConfig={scoringConfigFromSeason(settings)}
         season={settings.year}
         seasonId={seasonId}
+      />
+
+      <ManualPreviousSeasonModal
+        seasonId={seasonId}
+        currentYear={settings.year}
+        opened={manualEntryOpened}
+        onClose={() => setManualEntryOpened(false)}
       />
     </Stack>
   );

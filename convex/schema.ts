@@ -424,6 +424,18 @@ export default defineSchema({
     // added before the draft starts must not flip status away from
     // "setup", since keepers are just draftPicks rows with isKeeper: true.
     startedAt: v.optional(v.number()),
+    // How this draft's picks got into the database when they weren't run
+    // through this app's own live auction - absent means a real in-app
+    // draft (or a season with no history at all yet). Set by
+    // convex/leagues.ts's importPreviousSeasonHistory ("sleeper"/"yahoo")
+    // and convex/draft/manualHistory.ts's setManualPreviousSeasonResults
+    // ("manual"). Distinguishes which historical seasons the manual-entry
+    // edit UI is allowed to touch (only "manual" today - see
+    // manualHistory.ts) from a real draft's history, which should never be
+    // silently overwritten this way.
+    historySource: v.optional(
+      v.union(v.literal("sleeper"), v.literal("yahoo"), v.literal("manual")),
+    ),
     createdAt: v.number(),
   })
     .index("by_season", ["seasonId"])
@@ -541,6 +553,16 @@ export default defineSchema({
     // ends up here. Optional rather than required so existing rows need no
     // backfill; treated as 1 wherever read.
     keeperStreak: v.optional(v.number()),
+    // True when `teamId` is known to be correct as of end of season, not
+    // just wherever this player was drafted/imported to - only ever set by
+    // convex/draft/manualHistory.ts's setManualPreviousSeasonResults, where
+    // the user is directly asserting current team. A pick imported from a
+    // provider's draft-day data (see importPreviousSeasonHistory) leaves
+    // this absent, since trades/waiver moves after the draft mean the
+    // drafting team isn't reliably who ended up with the player - see
+    // convex/draft/history.ts's getPlayerPriceHistory, which only surfaces
+    // a team name to callers (e.g. Recommended Keepers) when this is true.
+    teamAssignmentConfirmed: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_draft", ["draftId"])

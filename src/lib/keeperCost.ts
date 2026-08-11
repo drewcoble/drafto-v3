@@ -15,6 +15,10 @@ export interface KeeperPriceHistoryEntry {
   isKeeper: boolean;
   keeperStreak: number | undefined;
   fromImmediateParent: boolean;
+  // Only set when the source pick was teamAssignmentConfirmed (see
+  // schema.ts) - a manually-entered end-of-season roster, not just wherever
+  // a provider import/draft-day snapshot happened to place the player.
+  teamName: string | undefined;
 }
 
 // The formula that applies to a given player: the first tier whose fpids
