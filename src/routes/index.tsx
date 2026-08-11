@@ -19,19 +19,12 @@ import { Plus } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { AppHeader } from "../components/AppHeader";
 import { PageContainer } from "../components/PageContainer";
+import { DRAFT_STATUS_META, type DraftStatus } from "../lib/draftStatus";
 import { groupSeasonsByLeague } from "../lib/leagueGroups";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
 });
-
-type DraftStatus = "setup" | "in_progress" | "complete";
-
-const STATUS_META: Record<DraftStatus, { label: string; color: string }> = {
-  setup: { label: "Setup", color: "gray" },
-  in_progress: { label: "Drafting", color: "saddlebrown.8" },
-  complete: { label: "Post-Draft", color: "green.8" },
-};
 
 // Where "enter this league" goes and what to call it, depending on how far
 // its draft has gotten - mirrors AppHeader's modeSwitchButton branching
@@ -134,7 +127,7 @@ function Dashboard() {
             </Group>
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
               {leagueGroups.map(({ latest }) => {
-                const status = STATUS_META[latest.draftStatus];
+                const status = DRAFT_STATUS_META[latest.draftStatus];
                 return (
                   <EnterLeagueLink
                     key={latest.leagueId}

@@ -1,6 +1,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import {
   ActionIcon,
+  Badge,
   Box,
   Button,
   Group,
@@ -36,6 +37,7 @@ import { useMemo } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { MOBILE_HEADER_HEIGHT } from "../constants/general";
+import { DRAFT_STATUS_META } from "../lib/draftStatus";
 import { BILLING_LINK_ENABLED } from "../lib/featureFlags";
 import { groupSeasonsByLeague } from "../lib/leagueGroups";
 import { setStoredLeagueId } from "../lib/leagueStorage";
@@ -138,17 +140,27 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
 
   const leagueMenuItems = (
     <>
-      {leagueGroups.map(({ latest, seasons }) => (
-        <Menu.Item
-          key={latest.leagueId}
-          leftSection={
-            seasons.some((s) => s._id === leagueId) ? <Check size={16} /> : null
-          }
-          onClick={() => handleLeagueChange(latest._id)}
-        >
-          {latest.name}
-        </Menu.Item>
-      ))}
+      {leagueGroups.map(({ latest, seasons }) => {
+        const statusMeta = DRAFT_STATUS_META[latest.draftStatus];
+        return (
+          <Menu.Item
+            key={latest.leagueId}
+            leftSection={
+              seasons.some((s) => s._id === leagueId) ? (
+                <Check size={16} />
+              ) : null
+            }
+            rightSection={
+              <Badge size="xs" variant="light" color={statusMeta.color}>
+                {statusMeta.label}
+              </Badge>
+            }
+            onClick={() => handleLeagueChange(latest._id)}
+          >
+            {latest.name}
+          </Menu.Item>
+        );
+      })}
       <Menu.Divider />
       <Menu.Item
         leftSection={<Plus size={16} />}
@@ -224,7 +236,7 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
         <Group gap="xs" wrap="nowrap" align="center" style={{ flexShrink: 0 }}>
           {!hideLeagueControls && (
             <>
-              <Menu position="bottom-end" withArrow offset={8} width={220}>
+              <Menu position="bottom-end" withArrow offset={8} width={260}>
                 <Menu.Target>
                   <Button
                     variant="default"
