@@ -8,6 +8,7 @@ import {
   Center,
   Group,
   Loader,
+  SimpleGrid,
   Stack,
   Table,
   Text,
@@ -264,40 +265,44 @@ export function InjuryReport({
                       {isExpanded && (
                         <Table.Tr>
                           <Table.Td colSpan={5}>
-                            <Stack gap={4} py={4}>
-                              <Group gap={6}>
-                                <Text size="xs" fw={600} c="dimmed">
-                                  Status:
-                                </Text>
-                                <Text size="xs">{injury.status}</Text>
-                              </Group>
-                              <Group gap={6}>
-                                <Text size="xs" fw={600} c="dimmed">
-                                  Type:
-                                </Text>
-                                <Text size="xs">
-                                  {injury.injuryType || "—"}
-                                </Text>
-                              </Group>
-                              <Group gap={6}>
-                                <Text size="xs" fw={600} c="dimmed">
-                                  Prob. of playing:
-                                </Text>
-                                <Text size="xs">
-                                  {injury.probabilityOfPlaying !== null
-                                    ? `${Math.round(injury.probabilityOfPlaying * 100)}%`
-                                    : "—"}
-                                </Text>
-                              </Group>
-                              <Stack gap={2}>
-                                <Text size="xs" fw={600} c="dimmed">
-                                  Comment:
-                                </Text>
-                                <Text size="xs" c="dimmed">
-                                  {injury.comment || "—"}
-                                </Text>
+                            <SimpleGrid cols={2} spacing="md" py={4}>
+                              <Stack gap={4}>
+                                <Group gap={6}>
+                                  <Text size="xs" fw={600} c="dimmed">
+                                    Status:
+                                  </Text>
+                                  <Text size="xs">{injury.status}</Text>
+                                </Group>
+                                <Group gap={6}>
+                                  <Text size="xs" fw={600} c="dimmed">
+                                    Type:
+                                  </Text>
+                                  <Text size="xs">
+                                    {injury.injuryType || "—"}
+                                  </Text>
+                                </Group>
                               </Stack>
-                            </Stack>
+                              <Stack gap={4}>
+                                <Group gap={6}>
+                                  <Text size="xs" fw={600} c="dimmed">
+                                    Prob. of playing:
+                                  </Text>
+                                  <Text size="xs">
+                                    {injury.probabilityOfPlaying !== null
+                                      ? `${Math.round(injury.probabilityOfPlaying * 100)}%`
+                                      : "—"}
+                                  </Text>
+                                </Group>
+                                <Stack gap={2}>
+                                  <Text size="xs" fw={600} c="dimmed">
+                                    Comment:
+                                  </Text>
+                                  <Text size="xs" c="dimmed">
+                                    {injury.comment || "—"}
+                                  </Text>
+                                </Stack>
+                              </Stack>
+                            </SimpleGrid>
                           </Table.Td>
                         </Table.Tr>
                       )}
