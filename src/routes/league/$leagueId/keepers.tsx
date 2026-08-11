@@ -44,7 +44,7 @@ function KeepersRoute() {
       !keepersEnabled
     ) {
       void navigate({
-        to: "/league/$leagueId/league",
+        to: "/league/$leagueId/settings",
         params: { leagueId },
         replace: true,
       });

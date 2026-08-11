@@ -124,7 +124,7 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
     if (!value) return;
     if (value === NEW_LEAGUE_VALUE) {
       void navigate({
-        to: "/league/$leagueId/league",
+        to: "/league/$leagueId/settings",
         params: { leagueId: NEW_LEAGUE_VALUE },
       });
       return;
@@ -175,9 +175,11 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
   // - this only ever needs to get someone back from the post-draft Season
   // view, or forward into it once the draft's complete. Renders nothing
   // otherwise (e.g. already on the League view, or no real league selected).
+  // Settings (not league.tsx's live roster breakdown) is the
+  // general-purpose landing tab.
   const modeSwitchButton = inSeason ? (
     <Link
-      to="/league/$leagueId/league"
+      to="/league/$leagueId/settings"
       params={{ leagueId: leagueId ?? NEW_LEAGUE_VALUE }}
     >
       <Button component="span" variant="light" size="sm" color="burlywood">

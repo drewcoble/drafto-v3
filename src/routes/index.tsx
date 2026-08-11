@@ -67,9 +67,14 @@ function EnterLeagueLink({
   }
   // "setup" and "in_progress" both land in the same unified league view now
   // (see routes/league/$leagueId) - the view itself adapts to phase, so
-  // there's no separate "in progress" destination anymore.
+  // there's no separate "in progress" destination anymore. Settings (not
+  // league.tsx's live roster breakdown) is the general-purpose landing tab.
   return (
-    <Link to="/league/$leagueId/league" params={{ leagueId }} style={linkStyle}>
+    <Link
+      to="/league/$leagueId/settings"
+      params={{ leagueId }}
+      style={linkStyle}
+    >
       {children}
     </Link>
   );
@@ -106,7 +111,7 @@ function Dashboard() {
         ) : leagueGroups.length === 0 ? (
           <Stack gap="md" py="xl" align="center">
             <Text c="dimmed">You don't have any leagues yet.</Text>
-            <Link to="/league/$leagueId/league" params={{ leagueId: "new" }}>
+            <Link to="/league/$leagueId/settings" params={{ leagueId: "new" }}>
               <Button component="span" leftSection={<Plus size={16} />}>
                 New League
               </Button>
@@ -115,7 +120,10 @@ function Dashboard() {
         ) : (
           <>
             <Group justify="flex-end">
-              <Link to="/league/$leagueId/league" params={{ leagueId: "new" }}>
+              <Link
+                to="/league/$leagueId/settings"
+                params={{ leagueId: "new" }}
+              >
                 <Button
                   component="span"
                   variant="default"

@@ -27,7 +27,7 @@ function MyTeamRouteLeaf() {
   if (!selfTeamResult.selfTeam) {
     return (
       <Text c="dimmed" size="sm">
-        Add teams on the League tab first.
+        Add teams on the Settings tab first.
       </Text>
     );
   }

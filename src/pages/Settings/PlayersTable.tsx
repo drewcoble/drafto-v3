@@ -54,9 +54,9 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     (league) => league._id === selectedLeagueId,
   );
   const seasonId = selectedSettings?._id;
-  // Scoring format now lives on the league settings (edited on the League
-  // Details tab) instead of local component state, so it's shared/persisted
-  // rather than resetting per-tab-visit.
+  // Scoring format now lives on the league settings (edited on the Settings
+  // tab) instead of local component state, so it's shared/persisted rather
+  // than resetting per-tab-visit.
   const scoring = selectedSettings?.scoring ?? "PPR";
   const scoringConfig: ScoringConfig = useMemo(
     () =>

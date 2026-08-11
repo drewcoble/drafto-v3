@@ -10,6 +10,7 @@ import {
   CircleUserRound,
   DollarSign,
   HeartPulse,
+  LayoutGrid,
   ListChecks,
   Settings2,
   UserCheck,
@@ -34,10 +35,10 @@ export const Route = createFileRoute("/league/$leagueId")({
 
 const TABS = [
   {
-    value: "league",
-    label: "League",
+    value: "settings",
+    label: "Settings",
     icon: Settings2,
-    to: "/league/$leagueId/league",
+    to: "/league/$leagueId/settings",
   },
   {
     value: "keepers",
@@ -75,12 +76,22 @@ const TABS = [
     icon: HeartPulse,
     to: "/league/$leagueId/injuries",
   },
+  // Last - the live per-team roster breakdown (see league.tsx) is a
+  // draft-in-progress reference tool, not where you land day-to-day the
+  // way Settings used to be before the split.
+  {
+    value: "league",
+    label: "League",
+    icon: LayoutGrid,
+    to: "/league/$leagueId/league",
+  },
 ] as const;
 
-// League/Budget/MyTeam/Players are the ones worth a direct bottom-nav slot -
-// Keepers/Draft/Injuries go in "More". Doesn't need to land on an even
-// count either way - BottomNav's hasFab split just ceil/floors it.
-const MORE_VALUES = new Set(["keepers", "draft", "injuries"]);
+// Settings/Budget/MyTeam/Players are the ones worth a direct bottom-nav
+// slot - Keepers/Draft/Injuries/League go in "More". Doesn't need to land
+// on an even count either way - BottomNav's hasFab split just ceil/floors
+// it.
+const MORE_VALUES = new Set(["keepers", "draft", "injuries", "league"]);
 
 const toBottomNavItem = (tab: (typeof TABS)[number]) => ({
   value: tab.value,
@@ -104,8 +115,8 @@ function LeagueLayout() {
   const settings = settingsList?.find((s) => s._id === leagueId);
   const phase = useDraftPhase(seasonId);
   // Only mounted once started (see below) - no teams/no self team pre-start
-  // is completely normal (teams are created ON the League tab, in this same
-  // layout), so there's nothing to guard against here the way the old
+  // is completely normal (teams are created on the Settings tab, in this
+  // same layout), so there's nothing to guard against here the way the old
   // Draft Room layout did.
   const selfTeamResult = useSelfTeam(seasonId);
   const isStarted = phase?.isStarted ?? false;

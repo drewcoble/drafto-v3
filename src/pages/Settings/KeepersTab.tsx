@@ -294,8 +294,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   if (draftTeams.length === 0) {
     return (
       <Text c="dimmed">
-        Set up your draft teams on the League Details tab before assigning
-        keepers.
+        Set up your draft teams on the Settings tab before assigning keepers.
       </Text>
     );
   }
