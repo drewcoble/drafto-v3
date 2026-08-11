@@ -4,6 +4,7 @@ import {
   Badge,
   Group,
   Menu,
+  Stack,
   Table,
   Text,
 } from "@mantine/core";
@@ -43,16 +44,13 @@ export function SlotTable({
   trackConsecutiveYears,
 }: SlotTableProps) {
   return (
-    <Table.ScrollContainer minWidth={500}>
+    <Table.ScrollContainer minWidth={340}>
       <Table striped highlightOnHover>
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>Slot</Table.Th>
             <Table.Th>Player</Table.Th>
-            <Table.Th>Plan</Table.Th>
-            <Table.Th>Paid</Table.Th>
-            <Table.Th>+/-</Table.Th>
-            <Table.Th></Table.Th>
+            <Table.Th>Budget</Table.Th>
+            <Table.Th />
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -71,16 +69,17 @@ export function SlotTable({
               : [];
             return (
               <Table.Tr key={slot.key}>
+                {/* Slot badge + player name + keeper badge all in one cell
+                    (was 2 separate columns) - same compaction as
+                    KeeperTable.tsx's Player column. */}
                 <Table.Td>
-                  <Badge
-                    variant="light"
-                    color={positionColorOrGray(slot.position)}
-                  >
-                    {slot.label}
-                  </Badge>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap={6} wrap="nowrap">
+                  <Group gap={6} wrap="wrap">
+                    <Badge
+                      variant="light"
+                      color={positionColorOrGray(slot.position)}
+                    >
+                      {slot.label}
+                    </Badge>
                     {player && pick ? (
                       <Anchor
                         component="button"
@@ -91,7 +90,9 @@ export function SlotTable({
                         {player.name}
                       </Anchor>
                     ) : (
-                      <Text size="sm">—</Text>
+                      <Text size="sm" c="dimmed">
+                        —
+                      </Text>
                     )}
                     {pick?.isKeeper && (
                       <Badge variant="light" color="gray" size="sm">
@@ -102,17 +103,24 @@ export function SlotTable({
                     )}
                   </Group>
                 </Table.Td>
-                <Table.Td>${planAmount}</Table.Td>
-                <Table.Td>{pick ? `$${pick.price}` : "—"}</Table.Td>
+                {/* Plan/Paid/+- collapsed into one cell (was 3 separate
+                    columns) - paid price up top, plan + the colored
+                    over/under diff as a smaller line underneath. */}
                 <Table.Td>
-                  {pick && (
-                    <Text
-                      size="sm"
-                      c={diff > 0 ? "green" : diff < 0 ? "red" : "inherit"}
-                    >
-                      {diff > 0 ? `+${diff}` : diff}
+                  <Stack gap={0}>
+                    <Text size="sm" fw={600}>
+                      {pick ? `$${pick.price}` : "—"}
                     </Text>
-                  )}
+                    <Text
+                      size="xs"
+                      c={diff > 0 ? "green" : diff < 0 ? "red" : "dimmed"}
+                    >
+                      plan ${planAmount}
+                      {pick && diff !== 0
+                        ? ` (${diff > 0 ? `+${diff}` : diff})`
+                        : ""}
+                    </Text>
+                  </Stack>
                 </Table.Td>
                 <Table.Td>
                   {pick && (

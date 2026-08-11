@@ -3,11 +3,12 @@ import {
   Anchor,
   Badge,
   Group,
+  Menu,
   Stack,
   Table,
   Text,
 } from "@mantine/core";
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, MoreVertical, Trash2 } from "lucide-react";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import type { DraftTierRow } from "../../../types";
@@ -47,43 +48,21 @@ export function TargetsTable({
           No targets yet.
         </Text>
       ) : (
-        <Table.ScrollContainer minWidth={500}>
+        <Table.ScrollContainer minWidth={360}>
           <Table striped highlightOnHover verticalSpacing="xs">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th></Table.Th>
                 <Table.Th>Player</Table.Th>
-                <Table.Th>Value</Table.Th>
-                <Table.Th>Status</Table.Th>
-                <Table.Th></Table.Th>
+                <Table.Th>Value / Status</Table.Th>
+                <Table.Th />
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {rows.map(({ tag, row, pick, draftedByTeam }, index) => (
                 <Table.Tr key={tag.fpid}>
                   <Table.Td>
-                    <Group gap={2} wrap="nowrap">
-                      <ActionIcon
-                        size={40}
-                        variant="subtle"
-                        disabled={index === 0}
-                        onClick={() => onMove(index, -1)}
-                      >
-                        <ChevronUp size={14} />
-                      </ActionIcon>
-                      <ActionIcon
-                        size={40}
-                        variant="subtle"
-                        disabled={index === rows.length - 1}
-                        onClick={() => onMove(index, 1)}
-                      >
-                        <ChevronDown size={14} />
-                      </ActionIcon>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
                     {row ? (
-                      <Group gap={6} wrap="nowrap">
+                      <Group gap={6} wrap="wrap">
                         <Anchor
                           component="button"
                           type="button"
@@ -106,37 +85,75 @@ export function TargetsTable({
                       <Text size="sm">#{tag.fpid}</Text>
                     )}
                   </Table.Td>
+                  {/* Value + Status merged (was 2 columns) - dollar
+                      value/tier on top, drafted/available badge below. */}
                   <Table.Td>
-                    {row
-                      ? `$${Math.round(row.dollarValue)} · ${row.tierLabel}`
-                      : "—"}
+                    <Stack gap={2}>
+                      <Text size="sm">
+                        {row
+                          ? `$${Math.round(row.dollarValue)} · ${row.tierLabel}`
+                          : "—"}
+                      </Text>
+                      {pick ? (
+                        <Badge
+                          variant="light"
+                          color={draftedByTeam?.isSelf ? "blue" : "gray"}
+                          style={{ alignSelf: "flex-start" }}
+                        >
+                          {draftedByTeam?.isSelf
+                            ? "You"
+                            : (draftedByTeam?.name ?? "Drafted")}{" "}
+                          - ${pick.price}
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="light"
+                          color="green"
+                          style={{ alignSelf: "flex-start" }}
+                        >
+                          Available
+                        </Badge>
+                      )}
+                    </Stack>
                   </Table.Td>
+                  {/* Reorder + remove merged into one menu (was 2 columns -
+                      2 discrete arrow buttons plus a remove button). */}
                   <Table.Td>
-                    {pick ? (
-                      <Badge
-                        variant="light"
-                        color={draftedByTeam?.isSelf ? "blue" : "gray"}
-                      >
-                        {draftedByTeam?.isSelf
-                          ? "You"
-                          : (draftedByTeam?.name ?? "Drafted")}{" "}
-                        - ${pick.price}
-                      </Badge>
-                    ) : (
-                      <Badge variant="light" color="green">
-                        Available
-                      </Badge>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      aria-label="Remove target"
-                      onClick={() => onRemove(tag.fpid)}
-                    >
-                      <Trash2 size={16} />
-                    </ActionIcon>
+                    <Menu shadow="md" width={170} position="bottom-end">
+                      <Menu.Target>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          aria-label="Target actions"
+                        >
+                          <MoreVertical size={16} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          leftSection={<ChevronUp size={14} />}
+                          disabled={index === 0}
+                          onClick={() => onMove(index, -1)}
+                        >
+                          Move up
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<ChevronDown size={14} />}
+                          disabled={index === rows.length - 1}
+                          onClick={() => onMove(index, 1)}
+                        >
+                          Move down
+                        </Menu.Item>
+                        <Menu.Divider />
+                        <Menu.Item
+                          color="red"
+                          leftSection={<Trash2 size={14} />}
+                          onClick={() => onRemove(tag.fpid)}
+                        >
+                          Remove
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
                   </Table.Td>
                 </Table.Tr>
               ))}
