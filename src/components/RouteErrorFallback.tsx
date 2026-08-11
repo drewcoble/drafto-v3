@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import { Button, Center, Group, Stack, Text, Title } from "@mantine/core";
 import { Link, type ErrorComponentProps } from "@tanstack/react-router";
@@ -25,25 +24,25 @@ export function RouteErrorFallback({ error, reset }: ErrorComponentProps) {
   // again" reruns the exact same query against the exact same bad token and
   // loops right back here - reproducing in a brand new tab too, since the
   // bad token persists across tabs until something explicitly clears it.
-  // Nothing in that failure path ever calls signOut(), so the token never
-  // gets cleared - do that here instead of a normal retry.
   const looksLikeStaleAuth = !isAuthenticated;
 
-  // Self-heals automatically rather than making the user notice and click
-  // "Back to sign in" themselves - most people seeing an error screen right
-  // after opening the app have no reason to think a button on it will fix
-  // anything. The button below still exists as a manual fallback (e.g. if
-  // this effect runs before isAuthenticated has settled).
-  useEffect(() => {
-    if (!looksLikeStaleAuth) return;
+  // Deliberately not an automatic useEffect - an earlier version tried
+  // signOut() + reset() (an in-place re-render) as soon as this mounted,
+  // but reset() can fire before isAuthenticated has actually finished
+  // settling, so the same query fails again immediately, remounting this
+  // component and re-triggering the effect - a visible flash loop between
+  // this screen and the sign-in form instead of settling on either. A hard
+  // reload sidesteps that entirely: it throws away the whole in-memory
+  // auth/Convex client state and starts completely fresh against whatever
+  // is actually in storage after signOut() clears it, so there's no
+  // in-place render to race. Manual (one click) rather than automatic also
+  // means it can only ever happen once, never loop on its own.
+  const handleBackToSignIn = () => {
     void (async () => {
       await signOut();
-      reset();
+      window.location.href = "/";
     })();
-    // Only want this once per mount - see looksLikeStaleAuth's comment for
-    // why a stale token specifically needs signOut(), not just a retry.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
 
   return (
     <Center py="xl">
@@ -54,15 +53,7 @@ export function RouteErrorFallback({ error, reset }: ErrorComponentProps) {
         </Text>
         <Group>
           {looksLikeStaleAuth ? (
-            <Button
-              variant="light"
-              onClick={() => {
-                void (async () => {
-                  await signOut();
-                  reset();
-                })();
-              }}
-            >
+            <Button variant="light" onClick={handleBackToSignIn}>
               Back to sign in
             </Button>
           ) : (
