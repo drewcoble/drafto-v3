@@ -466,9 +466,15 @@ export const theme = createTheme({
     // still opt back into a lower zIndex (e.g. routes/league/$leagueId/
     // keepers.tsx's Pro-upgrade prompt deliberately sits at 190, below the
     // header, on purpose).
+    //
+    // centered: true - Mantine's own default aligns a Modal near the top of
+    // the viewport, which reads as "off" once every dialog in the app sits
+    // well above the fixed header (see zIndex above) with nothing visually
+    // anchoring it up there anymore.
     Modal: {
       defaultProps: {
         zIndex: 400,
+        centered: true,
       },
     },
   },
