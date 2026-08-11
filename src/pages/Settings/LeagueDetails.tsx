@@ -419,30 +419,39 @@ export function LeagueDetails({
     <Stack gap="lg" py="sm">
       <Group justify="space-between" align="center">
         <Title order={4}>{settings.name}</Title>
-        {!isStarted && (
-          <Tooltip
-            label="Add at least one team before starting the draft"
-            disabled={hasTeams}
-          >
-            <Button
-              leftSection={<Play size={16} />}
-              onClick={() => setStartModalOpen(true)}
-              disabled={!hasTeams}
+        <Group gap="xs">
+          {!isStarted && (
+            <Tooltip
+              label="Add at least one team before starting the draft"
+              disabled={hasTeams}
             >
-              Start Draft
+              <Button
+                leftSection={<Play size={16} />}
+                onClick={() => setStartModalOpen(true)}
+                disabled={!hasTeams}
+              >
+                Start Draft
+              </Button>
+            </Tooltip>
+          )}
+          {isStarted && (
+            <Button
+              variant="default"
+              leftSection={<Undo2 size={16} />}
+              onClick={handleReopenSetup}
+              loading={isReopening}
+            >
+              Reopen Setup
             </Button>
-          </Tooltip>
-        )}
-        {isStarted && (
+          )}
           <Button
-            variant="default"
-            leftSection={<Undo2 size={16} />}
-            onClick={handleReopenSetup}
-            loading={isReopening}
+            color="red"
+            variant="outline"
+            onClick={() => setDeleteModalOpen(true)}
           >
-            Reopen Setup
+            Delete League
           </Button>
-        )}
+        </Group>
       </Group>
       {reopenError && (
         <Text c="red" size="sm">
@@ -661,16 +670,6 @@ export function LeagueDetails({
           )}
         </Card>
       </SimpleGrid>
-
-      <Group justify="flex-end">
-        <Button
-          color="red"
-          variant="outline"
-          onClick={() => setDeleteModalOpen(true)}
-        >
-          Delete League
-        </Button>
-      </Group>
 
       <Modal
         opened={deleteModalOpen}
