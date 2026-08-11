@@ -10,12 +10,12 @@ import {
   scoringConfigFromSeason,
 } from "../../lib/relevantPlayers";
 import { assignSlotForPick } from "../../lib/slotAssignment";
-import { expandRosterSlots } from "../../lib/rosterSlots";
 import { WEEK } from "../../constants/general";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
 import { KeeperTable } from "./components/KeeperTable";
 import { KeeperCardList } from "./components/KeeperCardList";
+import { KeeperEditModal } from "./components/KeeperEditModal";
 import { KeeperSearchForm } from "./components/KeeperSearchForm";
 import { KeeperRulesPanel } from "./components/KeeperRulesPanel";
 import { RecommendedKeepers } from "./components/RecommendedKeepers";
@@ -57,7 +57,6 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   const setKeeperStreak = useMutation(api.draft.picks.setKeeperStreak);
   const setKeeperPriceMutation = useMutation(api.draft.picks.setKeeperPrice);
   const setKeeperTeamMutation = useMutation(api.draft.picks.setKeeperTeam);
-  const setPickSlot = useMutation(api.draft.picks.setPickSlot);
 
   const [keeperSearch, setKeeperSearch] = useState("");
   const [keeperTeamId, setKeeperTeamId] = useState<Id<"seasonTeams"> | null>(
@@ -67,6 +66,9 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   const [keeperError, setKeeperError] = useState<string | null>(null);
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const [manualEntryOpened, setManualEntryOpened] = useState(false);
+  const [editingPickId, setEditingPickId] = useState<Id<"draftPicks"> | null>(
+    null,
+  );
 
   // Default the keeper team picker to the self team once teams exist,
   // mirroring DraftTab's nominatingTeamId default.
@@ -156,6 +158,14 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     [picks],
   );
 
+  // Resolved live from `keepers` every render (rather than storing the
+  // clicked-on pick doc directly) so the edit modal reflects each field's
+  // latest value as it's changed, instead of freezing on whatever the pick
+  // looked like at the moment it was opened.
+  const editingPick = editingPickId
+    ? (keepers.find((pick) => pick._id === editingPickId) ?? null)
+    : null;
+
   const atTeamKeeperCap = useMemo(() => {
     const maxKeepersPerTeam = settings?.keeperRules?.maxKeepersPerTeam;
     if (maxKeepersPerTeam === undefined || !keeperTeamId) return false;
@@ -164,11 +174,6 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     ).length;
     return teamKeeperCount >= maxKeepersPerTeam;
   }, [settings, keeperTeamId, keepers]);
-
-  const slots = useMemo(
-    () => (settings ? expandRosterSlots(settings.rosterSlots) : []),
-    [settings],
-  );
 
   const handleAddKeeper = async (
     fpid: number,
@@ -274,18 +279,6 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     }
   };
 
-  const handleMoveKeeper = async (
-    pickId: Id<"draftPicks">,
-    slotKey: string,
-  ) => {
-    setKeeperError(null);
-    try {
-      await setPickSlot({ pickId, slotKey });
-    } catch (err) {
-      setKeeperError(getErrorMessage(err, "Failed to move keeper."));
-    }
-  };
-
   if (settingsList === undefined || draftTeams === undefined) {
     return (
       <Center py="xl">
@@ -386,14 +379,8 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                       keepers={keepers}
                       nameByFpid={nameByFpid}
                       teams={draftTeams}
-                      slots={slots}
-                      flexPositions={settings.flexPositions}
-                      superflexPositions={settings.superflexPositions}
                       onRemove={handleRemoveKeeper}
-                      onSetStreak={handleSetStreak}
-                      onSetPrice={handleSetPrice}
-                      onSetTeam={handleSetTeam}
-                      onMove={handleMoveKeeper}
+                      onEdit={(pick) => setEditingPickId(pick._id)}
                       onSelectPlayer={setSelectedFpid}
                       showStreakInput={
                         settings.keeperRules?.maxConsecutiveYears !== undefined
@@ -404,14 +391,8 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                     keepers={keepers}
                     nameByFpid={nameByFpid}
                     teams={draftTeams}
-                    slots={slots}
-                    flexPositions={settings.flexPositions}
-                    superflexPositions={settings.superflexPositions}
                     onRemove={handleRemoveKeeper}
-                    onSetStreak={handleSetStreak}
-                    onSetPrice={handleSetPrice}
-                    onSetTeam={handleSetTeam}
-                    onMove={handleMoveKeeper}
+                    onEdit={(pick) => setEditingPickId(pick._id)}
                     onSelectPlayer={setSelectedFpid}
                     showStreakInput={
                       settings.keeperRules?.maxConsecutiveYears !== undefined
@@ -438,6 +419,24 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
         currentYear={settings.year}
         opened={manualEntryOpened}
         onClose={() => setManualEntryOpened(false)}
+      />
+
+      <KeeperEditModal
+        pick={editingPick}
+        playerName={
+          editingPick
+            ? (nameByFpid.get(editingPick.fpid)?.name ?? `#${editingPick.fpid}`)
+            : ""
+        }
+        teams={draftTeams}
+        showStreakInput={
+          settings.keeperRules?.maxConsecutiveYears !== undefined
+        }
+        onClose={() => setEditingPickId(null)}
+        onSetPrice={handleSetPrice}
+        onSetTeam={handleSetTeam}
+        onSetStreak={handleSetStreak}
+        onRemove={handleRemoveKeeper}
       />
     </Stack>
   );
