@@ -162,7 +162,10 @@ export function KeeperCardList({
               </Group>
 
               {showStreakInput && (
-                <Group gap={6} wrap="nowrap">
+                <Group gap={6} wrap="nowrap" align="center">
+                  <Text size="xs" c="dimmed">
+                    Yrs kept
+                  </Text>
                   <KeeperStreakCell pick={pick} onSetStreak={onSetStreak} />
                 </Group>
               )}

@@ -77,6 +77,17 @@ export function KeeperTable({
   return (
     <Table.ScrollContainer minWidth={500} visibleFrom="sm">
       <Table>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Player</Table.Th>
+            <Table.Th>Pos</Table.Th>
+            <Table.Th>Team</Table.Th>
+            <Table.Th>Price</Table.Th>
+            <Table.Th>Slot</Table.Th>
+            {showStreakInput && <Table.Th>Yrs kept</Table.Th>}
+            <Table.Th />
+          </Table.Tr>
+        </Table.Thead>
         <Table.Tbody>
           {keepers.map((pick) => {
             const moveTargets = eligibleSlotsForPosition(
