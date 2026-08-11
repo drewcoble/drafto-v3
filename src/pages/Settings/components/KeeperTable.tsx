@@ -4,6 +4,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
+import { STEPPER_BUTTON_SIZE } from "../../../constants/general";
 
 interface KeeperTableProps {
   keepers: Doc<"draftPicks">[];
@@ -75,6 +76,7 @@ export function KeeperTable({
               <Table.Td>
                 <Group gap={4} wrap="nowrap" justify="flex-end">
                   <ActionIcon
+                    size={STEPPER_BUTTON_SIZE}
                     variant="subtle"
                     color="gray"
                     aria-label="Edit keeper"
@@ -83,6 +85,7 @@ export function KeeperTable({
                     <Pencil size={16} />
                   </ActionIcon>
                   <ActionIcon
+                    size={STEPPER_BUTTON_SIZE}
                     variant="subtle"
                     color="red"
                     aria-label="Remove keeper"

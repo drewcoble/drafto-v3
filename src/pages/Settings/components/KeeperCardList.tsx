@@ -11,6 +11,7 @@ import {
 import { Pencil, Trash2 } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
+import { STEPPER_BUTTON_SIZE } from "../../../constants/general";
 
 interface KeeperCardListProps {
   keepers: Doc<"draftPicks">[];
@@ -70,6 +71,7 @@ export function KeeperCardList({
               </Group>
               <Group gap={4} wrap="nowrap">
                 <ActionIcon
+                  size={STEPPER_BUTTON_SIZE}
                   variant="subtle"
                   color="gray"
                   aria-label="Edit keeper"
@@ -78,6 +80,7 @@ export function KeeperCardList({
                   <Pencil size={16} />
                 </ActionIcon>
                 <ActionIcon
+                  size={STEPPER_BUTTON_SIZE}
                   variant="subtle"
                   color="red"
                   aria-label="Remove keeper"

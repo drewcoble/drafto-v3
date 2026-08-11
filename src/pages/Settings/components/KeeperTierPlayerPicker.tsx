@@ -9,6 +9,7 @@ import {
 } from "@mantine/core";
 import { X } from "lucide-react";
 import { POSITION_COLORS } from "../../../lib/positionColors";
+import { STEPPER_BUTTON_SIZE } from "../../../constants/general";
 import type { Position } from "../../../types";
 
 interface PlayerOption {
@@ -124,9 +125,10 @@ export function KeeperTierPlayerPicker({
                   {row.team ? ` (${row.team})` : ""}
                 </Text>
                 <ActionIcon
-                  size="sm"
+                  size={STEPPER_BUTTON_SIZE}
                   variant="default"
                   disabled={inOtherTier || atCapacity}
+                  aria-label={`Add ${row.name}`}
                   title={
                     inOtherTier
                       ? "Already designated in another rule"
