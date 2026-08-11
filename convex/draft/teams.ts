@@ -131,6 +131,52 @@ export const initializeSeasonTeams = mutation({
   },
 });
 
+// Adds one new non-self team - the increase-teamCount counterpart to
+// removeSeasonTeam below (see that mutation's comment for the full
+// reconciliation story; convex/leagues.ts's updateSeason rejects editing
+// teamCount directly once teams exist and points here/there instead).
+// Appends to the end of both team `order` and, when one's active, the
+// nomination order, so a newly-added team is immediately in the rotation
+// rather than needing a separate step to include it.
+export const addSeasonTeam = mutation({
+  args: { seasonId: v.id("seasons"), name: v.string() },
+  handler: async (ctx, args) => {
+    const { season, draft } = await requireDraftNotStarted(ctx, args.seasonId);
+
+    const name = args.name.trim();
+    if (!name) {
+      throw new Error("Team name can't be empty.");
+    }
+
+    const teams = await ctx.db
+      .query("seasonTeams")
+      .withIndex("by_season", (q) => q.eq("seasonId", args.seasonId))
+      .collect();
+
+    const teamId = await ctx.db.insert("seasonTeams", {
+      seasonId: args.seasonId,
+      name,
+      isSelf: false,
+      order: teams.length,
+      createdAt: Date.now(),
+    });
+
+    await ctx.db.patch(season._id, { teamCount: teams.length + 1 });
+
+    if (draft.nominationOrder) {
+      await ctx.db.patch(draft._id, {
+        nominationOrder: [...draft.nominationOrder, teamId],
+      });
+    }
+
+    // This team's cap adds to the $ value engine's total auction pool size
+    // (see convex/draftValues.ts), same invalidation removeSeasonTeam
+    // triggers for the opposite direction.
+    await invalidateDraftValues(ctx, draft._id);
+    return teamId;
+  },
+});
+
 // Removes one non-self team - lets a commissioner bring seasonTeams back in
 // sync after reducing "Teams" in League Settings, which today just patches
 // seasons.teamCount without touching the team rows at all (see updateSeason

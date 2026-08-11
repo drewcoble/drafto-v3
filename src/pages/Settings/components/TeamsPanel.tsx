@@ -10,6 +10,7 @@ import {
   SegmentedControl,
   Stack,
   Text,
+  TextInput,
 } from "@mantine/core";
 import {
   Check,
@@ -18,6 +19,7 @@ import {
   Pencil,
   Shuffle,
   Trash2,
+  UserPlus,
 } from "lucide-react";
 import {
   DndContext,
@@ -48,12 +50,14 @@ interface TeamsPanelProps {
     teamId: Id<"seasonTeams">,
     salaryCap: number | null,
   ) => void;
+  onAddTeam: (name: string) => Promise<void> | void;
   onRemoveTeam: (teamId: Id<"seasonTeams">) => Promise<void> | void;
   renameError: string | null;
   // True once the draft has started (convex/draft/teams.ts's
-  // removeSeasonTeam rejects it server-side too) - renaming, salary cap
-  // overrides, and nomination-order reordering all stay available
-  // regardless, only removal locks.
+  // addSeasonTeam/removeSeasonTeam reject it server-side too) - renaming,
+  // salary cap overrides, and nomination-order reordering all stay
+  // available regardless, only add/remove lock.
+  addLocked?: boolean;
   removeLocked?: boolean;
 }
 
@@ -74,8 +78,10 @@ export function TeamsPanel({
   salaryCap,
   onRenameTeam,
   onSetTeamSalaryCap,
+  onAddTeam,
   onRemoveTeam,
   renameError,
+  addLocked = false,
   removeLocked = false,
 }: TeamsPanelProps) {
   const teamById = useMemo(() => {
@@ -103,6 +109,10 @@ export function TeamsPanel({
   const [pendingRemoveId, setPendingRemoveId] =
     useState<Id<"seasonTeams"> | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [addingTeam, setAddingTeam] = useState(false);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
 
   // Distance constraint so tapping the grip handle to just view/scroll
   // doesn't immediately start a drag - same reasoning as elsewhere in this
@@ -186,6 +196,22 @@ export function TeamsPanel({
     }
   };
 
+  const handleConfirmAdd = async () => {
+    const name = newTeamName.trim();
+    if (!name) return;
+    setAddError(null);
+    setIsAdding(true);
+    try {
+      await onAddTeam(name);
+      setNewTeamName("");
+      setAddingTeam(false);
+    } catch (err) {
+      setAddError(getErrorMessage(err, "Failed to add team."));
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
   // No order active yet is always "dirty" - Save should be clickable even
   // when localOrder (seeded from defaultOrder) happens to already match
   // what team-creation order would produce, since clicking Save is still a
@@ -238,6 +264,13 @@ export function TeamsPanel({
                 onClick={randomize}
               >
                 Randomize
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<UserPlus size={14} />}
+                onClick={() => setAddingTeam(true)}
+                disabled={addLocked}
+              >
+                {addLocked ? "Add Team (locked)" : "Add Team"}
               </Menu.Item>
               <Menu.Item
                 color="red"
@@ -343,6 +376,50 @@ export function TeamsPanel({
               onClick={handleConfirmRemove}
             >
               Remove Team
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={addingTeam}
+        onClose={() => {
+          setAddingTeam(false);
+          setNewTeamName("");
+          setAddError(null);
+        }}
+        title="Add team"
+      >
+        <Stack gap="md">
+          <TextInput
+            label="Team name"
+            placeholder="Team name"
+            value={newTeamName}
+            onChange={(event) => setNewTeamName(event.currentTarget.value)}
+            data-autofocus
+          />
+          {addError && (
+            <Text c="red" size="sm">
+              {addError}
+            </Text>
+          )}
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={() => {
+                setAddingTeam(false);
+                setNewTeamName("");
+                setAddError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              loading={isAdding}
+              disabled={!newTeamName.trim()}
+              onClick={handleConfirmAdd}
+            >
+              Add Team
             </Button>
           </Group>
         </Stack>

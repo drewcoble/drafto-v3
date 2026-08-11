@@ -68,6 +68,7 @@ export function LeagueDetails({
   );
   const renameDraftTeam = useMutation(api.draft.teams.renameSeasonTeam);
   const setTeamSalaryCap = useMutation(api.draft.teams.setTeamSalaryCap);
+  const addDraftTeam = useMutation(api.draft.teams.addSeasonTeam);
   const removeDraftTeam = useMutation(api.draft.teams.removeSeasonTeam);
   const setUseKeepers = useMutation(api.leagues.setUseKeepers);
   const deleteDraftSettings = useMutation(api.leagues.deleteLeague);
@@ -246,6 +247,16 @@ export function LeagueDetails({
       await removeDraftTeam({ teamId });
     } catch (err) {
       setTeamsError(getErrorMessage(err, "Failed to remove team."));
+    }
+  };
+
+  const handleAddTeam = async (name: string) => {
+    if (!settings) return;
+    setTeamsError(null);
+    try {
+      await addDraftTeam({ seasonId: settings._id, name });
+    } catch (err) {
+      setTeamsError(getErrorMessage(err, "Failed to add team."));
     }
   };
 
@@ -663,8 +674,10 @@ export function LeagueDetails({
               salaryCap={settings.salaryCap}
               onRenameTeam={handleRenameTeam}
               onSetTeamSalaryCap={handleSetTeamSalaryCap}
+              onAddTeam={handleAddTeam}
               onRemoveTeam={handleRemoveTeam}
               renameError={teamsError}
+              addLocked={isStarted}
               removeLocked={isStarted}
             />
           )}
