@@ -4,10 +4,8 @@ import {
   Box,
   Button,
   Group,
-  Image,
   Menu,
   Text,
-  Title,
   useMantineColorScheme,
 } from "@mantine/core";
 import {
@@ -39,10 +37,10 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { MOBILE_HEADER_HEIGHT } from "../constants/general";
 import { BILLING_LINK_ENABLED } from "../lib/featureFlags";
-import logo from "../infinidraft_v1_noBg.png";
 import { groupSeasonsByLeague } from "../lib/leagueGroups";
 import { setStoredLeagueId } from "../lib/leagueStorage";
 import { useDraftPhase } from "../hooks/useDraftPhase";
+import { AppLogo } from "./AppLogo";
 
 const NEW_LEAGUE_VALUE = "new";
 
@@ -63,12 +61,6 @@ const NEW_LEAGUE_VALUE = "new";
 // MOBILE_HEADER_HEIGHT of top padding on mobile so page content doesn't
 // start out hidden underneath it (see setup/draft route layouts).
 interface AppHeaderProps {
-  // Logo only, no league picker/mode-switch/overflow menu - for the
-  // signed-out view (routes/__root.tsx), which has no league or user
-  // context to show any of that for. listSeasons throws when signed out
-  // (unlike getCurrentUser/getMyEntitlement, which degrade gracefully), so
-  // this also skips it entirely rather than just hiding its output.
-  minimal?: boolean;
   // Hides just the league picker + mode-switch button, keeping the
   // overflow menu (Billing/Go Pro, Admin, theme, sign out) - for the
   // dashboard (routes/index.tsx), which has a signed-in user but no
@@ -77,25 +69,28 @@ interface AppHeaderProps {
   hideLeagueControls?: boolean;
 }
 
-export function AppHeader({
-  minimal = false,
-  hideLeagueControls = false,
-}: AppHeaderProps = {}) {
+// Only ever rendered once a session is confirmed authenticated - the
+// signed-out/loading screens (routes/__root.tsx) use SignedOutHeader.tsx
+// instead, a completely query-free shell, rather than this component with
+// everything below hidden. That used to be this component's job (see its
+// git history's now-removed `minimal` prop), but even with the league/user
+// menu hidden, the queries below still ran - not worth the risk of any of
+// them firing before a session is genuinely confirmed.
+export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { leagueId } = useParams({ strict: false });
   const { signOut } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
   const currentUser = useQuery(api.users.getCurrentUser);
-  // Also gated on isAuthenticated, not just `minimal` - __root.tsx only
-  // renders this component at all once it believes the user is
+  // Still gated on isAuthenticated as a second line of defense - __root.tsx
+  // only renders this component at all once it believes the user is
   // authenticated, but listSeasons throws (rather than degrading
   // gracefully like getCurrentUser/getMyEntitlement above) if that belief
-  // turns out to be premature, so this is a second line of defense against
-  // the exact "must be signed in" crash minimal already exists to dodge.
+  // turns out to be premature.
   const seasonsList = useQuery(
     api.leagues.listSeasons,
-    minimal || !isAuthenticated ? "skip" : {},
+    isAuthenticated ? {} : "skip",
   );
   const entitlement = useQuery(api.billing.queries.getMyEntitlement);
   const { colorScheme, setColorScheme } = useMantineColorScheme();
@@ -220,150 +215,122 @@ export function AppHeader({
         style={{ flex: 1, minWidth: 0 }}
       >
         <Link to="/" style={{ flexShrink: 0, textDecoration: "none" }}>
-          <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-            <Image src={logo} alt="InfiniDraft" h={60} w="auto" />
-            <Title
-              order={2}
-              c="var(--mantine-color-text)"
-              // Same size on mobile as desktop, to match the 60px logo's
-              // visual weight - a smaller mobile size only made sense back
-              // when this was always hidden below "sm" anyway.
-              fz="1.625rem"
-              // Hidden below "sm" everywhere else - the league picker and
-              // mode-switch button need the room on mobile. Pages that hide
-              // those (hideLeagueControls, e.g. the dashboard; minimal, e.g.
-              // the signed-out screen) have room to spare, so the wordmark
-              // stays visible there instead.
-              {...(minimal || hideLeagueControls ? {} : { visibleFrom: "sm" })}
-            >
-              <Text component="span" inherit c="saddlebrown.7">
-                infini
-              </Text>
-              draft
-            </Title>
-          </Group>
+          {/* Hidden below "sm" by default - the league picker and
+              mode-switch button need the room on mobile. hideLeagueControls
+              callers (e.g. the dashboard) have room to spare, so the
+              wordmark stays visible there instead. */}
+          <AppLogo wordmarkAlwaysVisible={hideLeagueControls} />
         </Link>
-        {!minimal && (
-          <Group
-            gap="xs"
-            wrap="nowrap"
-            align="center"
-            style={{ flexShrink: 0 }}
-          >
-            {!hideLeagueControls && (
-              <>
-                <Menu position="bottom-end" withArrow offset={8} width={220}>
-                  <Menu.Target>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      w={{ base: 130, sm: 220 }}
-                      justify="space-between"
-                      rightSection={<ChevronDown size={16} />}
-                    >
-                      <Text truncate span>
-                        {selectedLeague ? selectedLeague.name : "Select league"}
-                      </Text>
-                    </Button>
-                  </Menu.Target>
-                  <Menu.Dropdown>{leagueMenuItems}</Menu.Dropdown>
-                </Menu>
-                {modeSwitchButton}
-              </>
-            )}
-            <Menu position="bottom-end" withArrow offset={8}>
-              <Menu.Target>
-                <ActionIcon
-                  variant="default"
-                  size={40}
-                  aria-label="More options"
-                >
-                  <MoreVertical size={18} />
-                </ActionIcon>
-              </Menu.Target>
-              <Menu.Dropdown>
-                {inLeagueView && hasRealLeague && isStarted && (
-                  <Link
-                    to="/board/$leagueId"
-                    params={{ leagueId }}
-                    target="_blank"
-                    style={{ textDecoration: "none" }}
+        <Group gap="xs" wrap="nowrap" align="center" style={{ flexShrink: 0 }}>
+          {!hideLeagueControls && (
+            <>
+              <Menu position="bottom-end" withArrow offset={8} width={220}>
+                <Menu.Target>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    w={{ base: 130, sm: 220 }}
+                    justify="space-between"
+                    rightSection={<ChevronDown size={16} />}
                   >
-                    <Menu.Item component="span" leftSection={<Tv size={16} />}>
-                      TV Board
-                    </Menu.Item>
-                  </Link>
-                )}
-                {BILLING_LINK_ENABLED && (
-                  <Link to="/billing" style={{ textDecoration: "none" }}>
+                    <Text truncate span>
+                      {selectedLeague ? selectedLeague.name : "Select league"}
+                    </Text>
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>{leagueMenuItems}</Menu.Dropdown>
+              </Menu>
+              {modeSwitchButton}
+            </>
+          )}
+          <Menu position="bottom-end" withArrow offset={8}>
+            <Menu.Target>
+              <ActionIcon variant="default" size={40} aria-label="More options">
+                <MoreVertical size={18} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              {inLeagueView && hasRealLeague && isStarted && (
+                <Link
+                  to="/board/$leagueId"
+                  params={{ leagueId }}
+                  target="_blank"
+                  style={{ textDecoration: "none" }}
+                >
+                  <Menu.Item component="span" leftSection={<Tv size={16} />}>
+                    TV Board
+                  </Menu.Item>
+                </Link>
+              )}
+              {BILLING_LINK_ENABLED && (
+                <Link to="/billing" style={{ textDecoration: "none" }}>
+                  <Menu.Item
+                    component="span"
+                    leftSection={
+                      entitlement?.hasProAccess ? (
+                        <CreditCard size={16} />
+                      ) : (
+                        <Trophy size={16} />
+                      )
+                    }
+                  >
+                    {entitlement?.hasProAccess ? "Billing" : "Go Pro"}
+                  </Menu.Item>
+                </Link>
+              )}
+              {currentUser?.role === "super-admin" && (
+                <>
+                  <Link to="/admin" style={{ textDecoration: "none" }}>
                     <Menu.Item
                       component="span"
-                      leftSection={
-                        entitlement?.hasProAccess ? (
-                          <CreditCard size={16} />
-                        ) : (
-                          <Trophy size={16} />
-                        )
-                      }
+                      leftSection={<ShieldCheck size={16} />}
                     >
-                      {entitlement?.hasProAccess ? "Billing" : "Go Pro"}
+                      Admin
                     </Menu.Item>
                   </Link>
-                )}
-                {currentUser?.role === "super-admin" && (
-                  <>
-                    <Link to="/admin" style={{ textDecoration: "none" }}>
-                      <Menu.Item
-                        component="span"
-                        leftSection={<ShieldCheck size={16} />}
-                      >
-                        Admin
-                      </Menu.Item>
-                    </Link>
-                    <Link to="/admin-data" style={{ textDecoration: "none" }}>
-                      <Menu.Item
-                        component="span"
-                        leftSection={<Database size={16} />}
-                      >
-                        Data
-                      </Menu.Item>
-                    </Link>
-                  </>
-                )}
-                <Menu.Item
-                  leftSection={isDark ? <Sun size={16} /> : <Moon size={16} />}
-                  onClick={() => setColorScheme(isDark ? "light" : "dark")}
-                >
-                  {isDark ? "Light mode" : "Dark mode"}
-                </Menu.Item>
-                <Menu.Item
-                  leftSection={<LogOut size={16} />}
-                  onClick={() => {
-                    // Awaited, not fire-and-forget - navigating before the
-                    // auth token actually clears left whatever
-                    // authenticated route was still mounted (e.g. a league
-                    // page's requireSeasonOwner query) racing the sign-out,
-                    // so it could get invalidated mid-flight and throw
-                    // "must be signed in" - caught by __root.tsx's error
-                    // boundary with no way back to the sign-in form short
-                    // of a hard reload.
-                    void (async () => {
-                      await signOut();
-                      // Otherwise the next sign-in (possibly a different
-                      // account on this browser) re-renders whatever league
-                      // route was still in the address bar, which fails
-                      // that owner check as "not authorized" if it
-                      // belonged to whoever was signed in before.
-                      await navigate({ to: "/", replace: true });
-                    })();
-                  }}
-                >
-                  Sign out
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-          </Group>
-        )}
+                  <Link to="/admin-data" style={{ textDecoration: "none" }}>
+                    <Menu.Item
+                      component="span"
+                      leftSection={<Database size={16} />}
+                    >
+                      Data
+                    </Menu.Item>
+                  </Link>
+                </>
+              )}
+              <Menu.Item
+                leftSection={isDark ? <Sun size={16} /> : <Moon size={16} />}
+                onClick={() => setColorScheme(isDark ? "light" : "dark")}
+              >
+                {isDark ? "Light mode" : "Dark mode"}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<LogOut size={16} />}
+                onClick={() => {
+                  // Awaited, not fire-and-forget - navigating before the
+                  // auth token actually clears left whatever
+                  // authenticated route was still mounted (e.g. a league
+                  // page's requireSeasonOwner query) racing the sign-out,
+                  // so it could get invalidated mid-flight and throw
+                  // "must be signed in" - caught by __root.tsx's error
+                  // boundary with no way back to the sign-in form short
+                  // of a hard reload.
+                  void (async () => {
+                    await signOut();
+                    // Otherwise the next sign-in (possibly a different
+                    // account on this browser) re-renders whatever league
+                    // route was still in the address bar, which fails
+                    // that owner check as "not authorized" if it
+                    // belonged to whoever was signed in before.
+                    await navigate({ to: "/", replace: true });
+                  })();
+                }}
+              >
+                Sign out
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </Group>
       </Group>
     </Box>
   );

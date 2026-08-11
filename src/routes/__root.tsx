@@ -11,10 +11,10 @@ import { Center, Loader, Stack, Text } from "@mantine/core";
 // authenticated query," which is exactly what gates <Outlet/> below.
 import { useConvexAuth, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { AppHeader } from "../components/AppHeader";
 import { AuthPanel } from "../components/AuthPanel";
 import { PageContainer } from "../components/PageContainer";
 import { RouteErrorFallback } from "../components/RouteErrorFallback";
+import { SignedOutHeader } from "../components/SignedOutHeader";
 import { getConfiguredSuperAdminEmails } from "../lib/superAdmin";
 
 export const Route = createRootRoute({
@@ -40,7 +40,7 @@ function RootComponent() {
     return (
       <PageContainer>
         <Stack gap="md">
-          <AppHeader minimal />
+          <SignedOutHeader />
           <Center>
             <Loader />
           </Center>
@@ -53,7 +53,7 @@ function RootComponent() {
     return (
       <PageContainer>
         <Stack gap="md">
-          <AppHeader minimal />
+          <SignedOutHeader />
           <Stack gap="md" maw={420} mx="auto">
             <Text c="dimmed">Sign in to view projections and draft.</Text>
             <AuthPanel />
