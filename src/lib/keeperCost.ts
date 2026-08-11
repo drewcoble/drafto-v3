@@ -41,14 +41,20 @@ export function formulaForFpid(
 
 // The suggested keeper cost for a player given their resolved formula and
 // their most recent prior-season price (undefined for a player who wasn't
-// drafted/kept last season, e.g. a rookie). Returns null when there's
-// nothing to suggest - no prior price and no undraftedCost rule configured
-// - so callers fall back to manual entry instead of showing a made-up $0.
+// drafted/kept last season, e.g. a rookie; 0 for a player manually entered
+// as an undrafted/waiver pickup - see ManualPreviousSeasonModal.tsx, which
+// allows a $0 price for exactly this case). Both route through
+// undraftedCost rather than the multiplier/flatAdd formula below - a $0
+// prior price isn't a real auction result to scale from, and letting it
+// fall through would let minimumCost inflate a free pickup into a paid
+// suggestion. Returns null when there's nothing to suggest - no prior price
+// and no undraftedCost rule configured - so callers fall back to manual
+// entry instead of showing a made-up $0.
 export function computeKeeperCost(
   formula: KeeperFormula,
   priorPrice: number | undefined,
 ): number | null {
-  if (priorPrice === undefined) {
+  if (priorPrice === undefined || priorPrice === 0) {
     return formula.undraftedCost ?? null;
   }
   const raw = formula.multiplier * priorPrice + formula.flatAdd;
