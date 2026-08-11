@@ -1,5 +1,6 @@
 import {
   Badge,
+  Box,
   Card,
   Center,
   Group,
@@ -16,6 +17,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ColorSchemeToggle } from "../../components/ColorSchemeToggle";
 import { WEEK } from "../../constants/general";
+import { useFitScale } from "../../hooks/useFitScale";
 import logo from "../../infinidraft_v1_noBg.png";
 import { POSITION_COLORS, positionColorOrGray } from "../../lib/positionColors";
 import { expandRosterSlots } from "../../lib/rosterSlots";
@@ -29,6 +31,17 @@ import BudgetStats from "./BudgetStats";
 interface DraftBoardProps {
   seasonId: Id<"seasons">;
 }
+
+// Reference width (unscaled) for one team card - boardCols * this is the
+// content's natural/designed width, which useFitScale then measures and
+// scales as a whole (fonts, padding, gaps, borders together) to fill
+// whatever screen it's actually displayed on. Pinned explicitly rather than
+// left to size intrinsically - Mantine's SimpleGrid stretches its columns
+// to fill 100% of whatever width its container is given, so without an
+// explicit reference width here there'd be nothing for the grid to size
+// itself against before useFitScale can measure a "natural" size (a
+// circular fill-to-my-own-intrinsic-size dependency).
+const REFERENCE_CARD_WIDTH = 320;
 
 // Read-only, TV/projector-friendly view of every team's roster - meant to be
 // opened in its own tab on a second screen while the host runs the actual
@@ -135,6 +148,8 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
   // matters more here than reflowing nicely on a narrow screen.
   const boardCols = Math.max(1, Math.ceil(teamSummaries.length / 2));
 
+  const { containerRef, contentRef, scale } = useFitScale();
+
   if (!settings || !teams || !picks) {
     return (
       <Center h="100vh">
@@ -144,118 +159,138 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
   }
 
   return (
-    <Stack gap="lg" p="lg">
-      <Group justify="space-between" align="center" wrap="wrap">
-        <Group align="center" wrap="wrap">
-          {/* No AppHeader on this page (see the file comment - deliberately
+    <Box
+      ref={containerRef}
+      style={{
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Box
+        ref={contentRef}
+        style={{
+          width: boardCols * REFERENCE_CARD_WIDTH,
+          transform: `scale(${scale})`,
+        }}
+      >
+        <Stack gap="lg" p="lg">
+          <Group justify="space-between" align="center" wrap="wrap">
+            <Group align="center" wrap="wrap">
+              {/* No AppHeader on this page (see the file comment - deliberately
               bare for a second-screen/TV display), so the brand mark just
               sits inline at the front of this row instead, smaller than the
               league name since that's the thing actually worth reading from
               across the room. */}
-          <Group gap={8} wrap="nowrap">
-            <Image src={logo} alt="InfiniDraft" h={36} w="auto" />
-            <Title order={4} c="var(--mantine-color-text)">
-              <Text component="span" inherit c="saddlebrown.7">
-                infini
-              </Text>
-              draft
-            </Title>
-          </Group>
-          <Title order={2}>{settings.name}</Title>
-          <Group gap="xs" wrap="wrap">
-            {settings.draftStatus === "setup" ? (
-              <Badge size="xl" radius="md" variant="light" color="gray">
-                Draft not started
-              </Badge>
-            ) : (
-              <>
-                {activeNomination && nominatingTeam && (
-                  <Badge
-                    size="xl"
-                    radius="md"
-                    variant="light"
-                    color="burlywood"
-                  >
-                    {nominatingTeam.name} nominated
+              <Group gap={8} wrap="nowrap">
+                <Image src={logo} alt="InfiniDraft" h={36} w="auto" />
+                <Title order={4} c="var(--mantine-color-text)">
+                  <Text component="span" inherit c="saddlebrown.7">
+                    infini
+                  </Text>
+                  draft
+                </Title>
+              </Group>
+              <Title order={2}>{settings.name}</Title>
+              <Group gap="xs" wrap="wrap">
+                {settings.draftStatus === "setup" ? (
+                  <Badge size="xl" radius="md" variant="light" color="gray">
+                    Draft not started
                   </Badge>
-                )}
-                {!activeNomination && turnTeam && (
-                  <Badge
-                    size="xl"
-                    radius="md"
-                    variant="light"
-                    color="saddlebrown.6"
-                  >
-                    {turnTeam.name} is nominating
-                  </Badge>
-                )}
-                {activeNomination && (
-                  <Badge
-                    size="xl"
-                    radius="md"
-                    variant="light"
-                    color={`${POSITION_COLORS[activeNomination.position]}`}
-                  >
-                    On the block:{" "}
-                    {playerByFpid.get(activeNomination.fpid)?.name ??
-                      `#${activeNomination.fpid}`}{" "}
-                    ({activeNomination.position}) -{" "}
-                    {playerByFpid.get(activeNomination.fpid)?.team}
-                  </Badge>
-                )}
-              </>
-            )}
-          </Group>
-        </Group>
-        <ColorSchemeToggle />
-      </Group>
-      <SimpleGrid cols={boardCols} spacing="md">
-        {teamSummaries.map(({ team, stats, slots, bySlot }, index) => (
-          <Card
-            key={team._id}
-            withBorder
-            padding="xs"
-            radius="lg"
-            bd={
-              team._id === highlightedTeamId
-                ? "3px solid var(--mantine-color-blue-7)"
-                : undefined
-            }
-            shadow={
-              team._id === highlightedTeamId
-                ? "0px 0px 15px 5px rgba(0, 0, 255, 0.05)"
-                : "inherit"
-            }
-          >
-            <Stack gap={6}>
-              <Text fw={700} size="lg">
-                {team.name}
-              </Text>
-              {index + 1 > boardCols && (
-                <BudgetStats stats={stats} position="top" />
-              )}
-
-              {slots.map((slot) => {
-                const pick = bySlot.get(slot.key);
-                const player = pick ? playerByFpid.get(pick.fpid) : undefined;
-                return (
+                ) : (
                   <>
-                    <Group
-                      gap={10}
-                      w="100%"
-                      wrap="nowrap"
-                      justify="space-between"
-                    >
+                    {activeNomination && nominatingTeam && (
                       <Badge
-                        size="sm"
+                        size="xl"
+                        radius="md"
                         variant="light"
-                        color={positionColorOrGray(slot.position)}
-                        w={65}
-                        style={{ flexShrink: 0 }}
+                        color="burlywood"
                       >
-                        {slot.label}
+                        {nominatingTeam.name} nominated
                       </Badge>
-                      {/* flex: 1 (not a fixed width calc'd against the
+                    )}
+                    {!activeNomination && turnTeam && (
+                      <Badge
+                        size="xl"
+                        radius="md"
+                        variant="light"
+                        color="saddlebrown.6"
+                      >
+                        {turnTeam.name} is nominating
+                      </Badge>
+                    )}
+                    {activeNomination && (
+                      <Badge
+                        size="xl"
+                        radius="md"
+                        variant="light"
+                        color={`${POSITION_COLORS[activeNomination.position]}`}
+                      >
+                        On the block:{" "}
+                        {playerByFpid.get(activeNomination.fpid)?.name ??
+                          `#${activeNomination.fpid}`}{" "}
+                        ({activeNomination.position}) -{" "}
+                        {playerByFpid.get(activeNomination.fpid)?.team}
+                      </Badge>
+                    )}
+                  </>
+                )}
+              </Group>
+            </Group>
+            <ColorSchemeToggle />
+          </Group>
+          <SimpleGrid cols={boardCols} spacing="md">
+            {teamSummaries.map(({ team, stats, slots, bySlot }, index) => (
+              <Card
+                key={team._id}
+                withBorder
+                padding="xs"
+                radius="lg"
+                bd={
+                  team._id === highlightedTeamId
+                    ? "3px solid var(--mantine-color-blue-7)"
+                    : undefined
+                }
+                shadow={
+                  team._id === highlightedTeamId
+                    ? "0px 0px 15px 5px rgba(0, 0, 255, 0.05)"
+                    : "inherit"
+                }
+              >
+                <Stack gap={6}>
+                  <Text fw={700} size="lg">
+                    {team.name}
+                  </Text>
+                  {index + 1 > boardCols && (
+                    <BudgetStats stats={stats} position="top" />
+                  )}
+
+                  {slots.map((slot) => {
+                    const pick = bySlot.get(slot.key);
+                    const player = pick
+                      ? playerByFpid.get(pick.fpid)
+                      : undefined;
+                    return (
+                      <>
+                        <Group
+                          gap={10}
+                          w="100%"
+                          wrap="nowrap"
+                          justify="space-between"
+                        >
+                          <Badge
+                            size="sm"
+                            variant="light"
+                            color={positionColorOrGray(slot.position)}
+                            w={65}
+                            style={{ flexShrink: 0 }}
+                          >
+                            {slot.label}
+                          </Badge>
+                          {/* flex: 1 (not a fixed width calc'd against the
                           other cells) so this absorbs whatever space is
                           left instead of assuming a fixed sibling total.
                           minWidth: 0 is required for a flex item to
@@ -264,54 +299,56 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                           this same cell, right after the name, rather than
                           its own column before price - name truncates
                           first if the two don't both fit. */}
-                      <Group
-                        gap={4}
-                        wrap="nowrap"
-                        style={{ flex: 1, minWidth: 0 }}
-                      >
-                        <Text
-                          truncate
-                          size="sm"
-                          ta="left"
-                          style={{ flex: 1, minWidth: 0 }}
-                        >
-                          {player?.name ?? "-"}
-                        </Text>
-                        {pick?.isKeeper && (
-                          <Badge
+                          <Group
+                            gap={4}
+                            wrap="nowrap"
+                            style={{ flex: 1, minWidth: 0 }}
+                          >
+                            <Text
+                              truncate
+                              size="sm"
+                              ta="left"
+                              style={{ flex: 1, minWidth: 0 }}
+                            >
+                              {player?.name ?? "-"}
+                            </Text>
+                            {pick?.isKeeper && (
+                              <Badge
+                                size="sm"
+                                variant="light"
+                                color="gray"
+                                style={{ flexShrink: 0 }}
+                              >
+                                {settings.keeperRules?.maxConsecutiveYears !==
+                                undefined
+                                  ? `K${pick.keeperStreak ?? 1}`
+                                  : "K"}
+                              </Badge>
+                            )}
+                          </Group>
+                          <Text
                             size="sm"
-                            variant="light"
-                            color="gray"
+                            ta="right"
+                            w={35}
+                            fw={600}
                             style={{ flexShrink: 0 }}
                           >
-                            {settings.keeperRules?.maxConsecutiveYears !==
-                            undefined
-                              ? `K${pick.keeperStreak ?? 1}`
-                              : "K"}
-                          </Badge>
-                        )}
-                      </Group>
-                      <Text
-                        size="sm"
-                        ta="right"
-                        w={35}
-                        fw={600}
-                        style={{ flexShrink: 0 }}
-                      >
-                        {pick ? `$${pick.price}` : ""}
-                      </Text>
-                    </Group>
-                  </>
-                );
-              })}
+                            {pick ? `$${pick.price}` : ""}
+                          </Text>
+                        </Group>
+                      </>
+                    );
+                  })}
 
-              {index < boardCols && (
-                <BudgetStats stats={stats} position="bottom" />
-              )}
-            </Stack>
-          </Card>
-        ))}
-      </SimpleGrid>
-    </Stack>
+                  {index < boardCols && (
+                    <BudgetStats stats={stats} position="bottom" />
+                  )}
+                </Stack>
+              </Card>
+            ))}
+          </SimpleGrid>
+        </Stack>
+      </Box>
+    </Box>
   );
 }
