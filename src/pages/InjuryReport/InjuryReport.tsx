@@ -187,14 +187,7 @@ export function InjuryReport({
                   <Table.Th miw={140}>Player</Table.Th>
                   <Table.Th miw={60}>Pos</Table.Th>
                   <Table.Th>Team</Table.Th>
-                  {/* Explicit min-width, not left to auto - Badge's own
-                      CSS (overflow: hidden on both root and label) makes a
-                      table's auto layout treat it as free to shrink well
-                      below its content's actual size, since table-layout:
-                      auto's min-content calculation doesn't count
-                      overflow-hidden text. A 1-character status ("Q") fit
-                      by accident; "PUP"/"NFI"/3-letter ones didn't. */}
-                  <Table.Th miw={70}>Status</Table.Th>
+                  <Table.Th>Status</Table.Th>
                   <Table.Th />
                 </Table.Tr>
               </Table.Thead>

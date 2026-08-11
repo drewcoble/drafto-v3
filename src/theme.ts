@@ -357,17 +357,30 @@ export const theme = createTheme({
     // etc.) are always short fixed-vocabulary text (QB, WR, K3, Drafting...)
     // that should never lose characters to an ellipsis - but Mantine's own
     // Badge CSS sets overflow: hidden + text-overflow: ellipsis on both its
-    // root and label by default, which makes it a *willing* shrink target
-    // any time it's a flex child without an explicit flexShrink: 0 on that
-    // one call site - true almost everywhere a Badge is used in this app
-    // (inside a Group). Pinning flexShrink: 0 globally here means every
-    // badge always renders at its full content width - other flex siblings
-    // (player names, etc.) shrink/truncate/wrap instead, rather than a
-    // badge quietly clipping to "Q…" on a squeezed row.
+    // root and label by default. flexShrink: 0 alone (the original fix
+    // here) only stops a badge from shrinking when it's a flex child (e.g.
+    // inside a Group) - it does nothing for a badge sitting directly in a
+    // plain block/table context, like a <Table.Td>. There, the *browser's*
+    // table auto-layout algorithm is the one doing the shrinking: its
+    // min-content calculation for a column doesn't count overflow-hidden
+    // text as contributing to that column's minimum width, so the table
+    // felt free to size a badge's column below what its text actually
+    // needs. A 1-2 character badge ("Q", "WR") fit by accident; 3+
+    // character ones ("PUP") didn't - and the fix ping-ponged between
+    // columns when patched one <Table.Th> min-width at a time (see this
+    // file's git history). Overflow: visible removes the root cause
+    // instead - every badge always renders at its full content width
+    // everywhere, flex or table, with other siblings shrinking/wrapping
+    // around it rather than the badge itself ever clipping.
     Badge: {
       styles: {
         root: {
           flexShrink: 0,
+          overflow: "visible",
+        },
+        label: {
+          overflow: "visible",
+          textOverflow: "clip",
         },
       },
     },
