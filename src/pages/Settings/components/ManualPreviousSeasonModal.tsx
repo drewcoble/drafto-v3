@@ -163,7 +163,9 @@ export function ManualPreviousSeasonModal({
   opened,
   onClose,
 }: ManualPreviousSeasonModalProps) {
-  const [year, setYear] = useState(() => String(Number(currentYear) - 1));
+  // Always the season immediately before the one being set up - there's no
+  // scenario where a host would want to backfill any other year here.
+  const year = String(Number(currentYear) - 1);
   const [teams, setTeams] = useState<TeamDraft[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -200,20 +202,19 @@ export function ManualPreviousSeasonModal({
     return map;
   }, [allProjections]);
 
-  // Re-derive the form's rows whenever the modal opens on a given year.
-  // Always start from today's current-season teams plus the fixed
-  // Unassigned bucket, then layer in whatever was previously recorded for
-  // each one (matched by name - the only stable join key available, since
-  // the mutation doesn't keep an FK back to seasonTeams). This way a team
-  // nobody entered a player for last time still shows up here instead of
-  // disappearing (a prior version of this effect trusted the saved rows
-  // alone, so a team with 0 players - which never got a seasonTeams row in
-  // the first place - vanished from the form on the next edit). Any
-  // recorded team that no longer matches a current one (renamed/removed) is
-  // kept too, just without a matching current-team row, so past entries
-  // are never silently dropped. Deliberately not dependent on `teams`
-  // itself, so typing in the form doesn't get stomped - only opening/
-  // switching years resets it.
+  // Re-derive the form's rows whenever the modal opens. Always start from
+  // today's current-season teams plus the fixed Unassigned bucket, then
+  // layer in whatever was previously recorded for each one (matched by name
+  // - the only stable join key available, since the mutation doesn't keep
+  // an FK back to seasonTeams). This way a team nobody entered a player for
+  // last time still shows up here instead of disappearing (a prior version
+  // of this effect trusted the saved rows alone, so a team with 0 players -
+  // which never got a seasonTeams row in the first place - vanished from
+  // the form on the next edit). Any recorded team that no longer matches a
+  // current one (renamed/removed) is kept too, just without a matching
+  // current-team row, so past entries are never silently dropped.
+  // Deliberately not dependent on `teams` itself, so typing in the form
+  // doesn't get stomped - only opening the modal resets it.
   useEffect(() => {
     if (!opened || currentTeams === undefined || existingEntry === undefined) {
       return;
@@ -347,19 +348,8 @@ export function ManualPreviousSeasonModal({
     >
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          Add whoever you remember from each team's roster and what they cost -
-          doesn't need to be everyone. Team assignments here are trusted as
-          accurate (unlike an imported draft, which only reflects draft day), so
-          Recommended Keepers can suggest which team a bargain likely belongs
-          to.
+          Enter {year} prices so we can recommend keepers.
         </Text>
-        <TextInput
-          label="Season"
-          description="Which year this roster is from"
-          value={year}
-          onChange={(event) => setYear(event.currentTarget.value)}
-          w={140}
-        />
         <div ref={setPortalTarget} />
         <ScrollArea.Autosize mah={420}>
           <Stack gap="sm">
@@ -438,7 +428,7 @@ export function ManualPreviousSeasonModal({
             <Button
               onClick={handleSave}
               loading={isSaving}
-              disabled={totalPlayers === 0 || !year.trim()}
+              disabled={totalPlayers === 0}
             >
               Save
             </Button>
