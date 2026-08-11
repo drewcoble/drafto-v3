@@ -351,13 +351,13 @@ export function ManualPreviousSeasonModal({
                       </Text>
                       <EditableNumberStepper
                         label={`${player.name} price`}
-                        min={1}
+                        min={0}
                         width={80}
                         size="xs"
                         prefix="$"
                         value={player.price}
                         onChange={(value) =>
-                          setPrice(team.key, player.fpid, value ?? 1)
+                          setPrice(team.key, player.fpid, value ?? 0)
                         }
                       />
                       <Button
