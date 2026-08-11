@@ -80,6 +80,11 @@ function PlayerSearchAdd({
   return (
     <Combobox
       store={combobox}
+      // This picker lives inside a Modal, which traps focus within its own
+      // DOM subtree - the default portal-to-body dropdown falls outside
+      // that trap, so focus gets yanked back before the dropdown can stay
+      // open. Rendering in place keeps it inside the trap.
+      withinPortal={false}
       onOptionSubmit={(value) => {
         const player = candidates.find((row) => String(row.fpid) === value);
         combobox.closeDropdown();
