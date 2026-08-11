@@ -33,13 +33,16 @@ function clearStoredConvexAuthTokens() {
 export function RouteErrorFallback({ error, reset }: ErrorComponentProps) {
   const message = getErrorMessage(error, "Something went wrong.");
   // Unlike `message` above (deliberately scrubbed for end users - see
-  // getErrorMessage's comment), this keeps Convex's raw wrapped error
-  // as-is: request id, "Server Error", and which function/file actually
-  // threw. Shown collapsed behind "Technical details" so it doesn't clutter
+  // getErrorMessage's comment), this keeps Convex's raw wrapped error.message
+  // as-is: request id, "Server Error", and (on this dev deployment) which
+  // convex/*.ts function/line actually threw - see errors.ts's own comment
+  // on why that's in .message, not .stack (.stack here is just where the
+  // *client* JS Error object got constructed - generic Convex-client-
+  // internal frames, not anything pointing at which query/mutation this
+  // was). Shown collapsed behind "Technical details" so it doesn't clutter
   // the normal view, but expandable for exactly this kind of "which query
   // is actually failing" debugging without needing devtools access.
-  const rawDetail =
-    error instanceof Error ? (error.stack ?? error.message) : String(error);
+  const rawDetail = error instanceof Error ? error.message : String(error);
   const { isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
 
