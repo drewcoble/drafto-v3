@@ -276,11 +276,7 @@ const variantColorResolver: VariantColorsResolver = (input) => {
   const colorTuple = parsed.isThemeColor
     ? input.theme.colors[parsed.color]
     : undefined;
-  if (
-    input.variant !== "light" ||
-    !colorTuple ||
-    parsed.shade !== undefined
-  ) {
+  if (input.variant !== "light" || !colorTuple || parsed.shade !== undefined) {
     return defaultResult;
   }
 
@@ -459,6 +455,22 @@ export const theme = createTheme({
         size: 40,
       },
     },
+    // Mantine's own Modal z-index (--mantine-z-index-modal: 200) sits BELOW
+    // this app's own fixed chrome - AppHeader (220), BottomNav (200),
+    // DraftTopBar's MobileStatsRow/MobileNomination (210/200),
+    // UnallocatedBar (210), PositionFilterBar (205) - so any Modal left at
+    // Mantine's default rendered visually underneath the header/nav instead
+    // of over them. 400 clears all of that with room to spare, and sits
+    // above Mantine's own popover default (300) too, so a Modal opened over
+    // an open Popover always wins the stacking order. A specific Modal can
+    // still opt back into a lower zIndex (e.g. routes/league/$leagueId/
+    // keepers.tsx's Pro-upgrade prompt deliberately sits at 190, below the
+    // header, on purpose).
+    Modal: {
+      defaultProps: {
+        zIndex: 400,
+      },
+    },
   },
 });
 
@@ -478,4 +490,3 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
   },
   dark: {},
 });
-
