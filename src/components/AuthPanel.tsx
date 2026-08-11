@@ -93,7 +93,9 @@ export function AuthPanel() {
       const message =
         mode === "signIn"
           ? GENERIC_SIGN_IN_FAILURE
-          : toFriendlySignUpMessage(getErrorMessage(error, GENERIC_SIGN_UP_FAILURE));
+          : toFriendlySignUpMessage(
+              getErrorMessage(error, GENERIC_SIGN_UP_FAILURE),
+            );
       setStatus({ kind: "error", message });
     }
   };
@@ -109,8 +111,13 @@ export function AuthPanel() {
         <Button
           variant="default"
           onClick={() => {
-            void signOut();
-            void navigate({ to: "/", replace: true });
+            // Awaited, not fire-and-forget - see AppHeader.tsx's sign-out
+            // handler for why racing navigate() against signOut() can leave
+            // the app stuck on an auth-error screen.
+            void (async () => {
+              await signOut();
+              await navigate({ to: "/", replace: true });
+            })();
           }}
         >
           Sign out

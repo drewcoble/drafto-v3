@@ -326,13 +326,23 @@ export function AppHeader({
                 <Menu.Item
                   leftSection={<LogOut size={16} />}
                   onClick={() => {
-                    void signOut();
-                    // Otherwise the next sign-in (possibly a different
-                    // account on this browser) re-renders whatever league
-                    // route was still in the address bar, which fails that
-                    // owner check as "not authorized" if it belonged to
-                    // whoever was signed in before.
-                    void navigate({ to: "/", replace: true });
+                    // Awaited, not fire-and-forget - navigating before the
+                    // auth token actually clears left whatever
+                    // authenticated route was still mounted (e.g. a league
+                    // page's requireSeasonOwner query) racing the sign-out,
+                    // so it could get invalidated mid-flight and throw
+                    // "must be signed in" - caught by __root.tsx's error
+                    // boundary with no way back to the sign-in form short
+                    // of a hard reload.
+                    void (async () => {
+                      await signOut();
+                      // Otherwise the next sign-in (possibly a different
+                      // account on this browser) re-renders whatever league
+                      // route was still in the address bar, which fails
+                      // that owner check as "not authorized" if it
+                      // belonged to whoever was signed in before.
+                      await navigate({ to: "/", replace: true });
+                    })();
                   }}
                 >
                   Sign out
