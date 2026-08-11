@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface UseFitScaleOptions {
   minScale?: number;
   maxScale?: number;
 }
 
-// Measures `contentRef`'s natural (unscaled) size and computes the scale
-// factor needed to fit it entirely within `containerRef`'s available size,
+// Measures contentRef's natural (unscaled) size and computes the scale
+// factor needed to fit it entirely within containerRef's available size,
 // re-measuring on any resize of either via ResizeObserver - covers both the
 // container resizing (window/display resolution change) and the content
 // resizing (e.g. DraftBoard.tsx's roster rows changing as picks come in),
@@ -21,17 +21,33 @@ interface UseFitScaleOptions {
 // affect layout-box metrics (scrollWidth/scrollHeight) or ResizeObserver's
 // reported size, so re-measuring after a scale is already applied still
 // reads the content's true unscaled size - no feedback loop.
+//
+// Callback refs backed by state, not plain useRef - a caller that renders a
+// loading state first (containerRef/contentRef unattached, both null) and
+// only mounts the real content once data loads needs the measurement
+// effect to actually re-run once that happens. A plain useRef's `.current`
+// mutating doesn't trigger anything on its own, and an effect with a fixed
+// dependency array (e.g. just [minScale, maxScale]) only ever runs once
+// with both refs still null - it never gets a second chance to see the
+// real content, so `scale` stays stuck at its initial 1 forever. Setting
+// state from the ref callback makes attaching the DOM node itself the
+// signal to (re-)run the effect.
 export function useFitScale({
   minScale = 0.4,
   maxScale = 2.5,
 }: UseFitScaleOptions = {}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const [content, setContent] = useState<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
+  const containerRef = useCallback((node: HTMLDivElement | null) => {
+    setContainer(node);
+  }, []);
+  const contentRef = useCallback((node: HTMLDivElement | null) => {
+    setContent(node);
+  }, []);
+
   useEffect(() => {
-    const container = containerRef.current;
-    const content = contentRef.current;
     if (!container || !content) return;
 
     const recompute = () => {
@@ -51,7 +67,7 @@ export function useFitScale({
     observer.observe(container);
     observer.observe(content);
     return () => observer.disconnect();
-  }, [minScale, maxScale]);
+  }, [container, content, minScale, maxScale]);
 
   return { containerRef, contentRef, scale };
 }
