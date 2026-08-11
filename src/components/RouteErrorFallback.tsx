@@ -32,6 +32,14 @@ function clearStoredConvexAuthTokens() {
 // anything that keeps failing on retry.
 export function RouteErrorFallback({ error, reset }: ErrorComponentProps) {
   const message = getErrorMessage(error, "Something went wrong.");
+  // Unlike `message` above (deliberately scrubbed for end users - see
+  // getErrorMessage's comment), this keeps Convex's raw wrapped error
+  // as-is: request id, "Server Error", and which function/file actually
+  // threw. Shown collapsed behind "Technical details" so it doesn't clutter
+  // the normal view, but expandable for exactly this kind of "which query
+  // is actually failing" debugging without needing devtools access.
+  const rawDetail =
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
   const { isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
 
@@ -96,6 +104,26 @@ export function RouteErrorFallback({ error, reset }: ErrorComponentProps) {
             </>
           )}
         </Group>
+        <details style={{ width: "100%" }}>
+          <summary
+            style={{
+              cursor: "pointer",
+              fontSize: "var(--mantine-font-size-xs)",
+              color: "var(--mantine-color-dimmed)",
+            }}
+          >
+            Technical details
+          </summary>
+          <Text
+            component="pre"
+            size="xs"
+            c="dimmed"
+            ta="left"
+            style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+          >
+            {rawDetail}
+          </Text>
+        </details>
       </Stack>
     </Center>
   );
