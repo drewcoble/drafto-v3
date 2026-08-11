@@ -192,43 +192,72 @@ export function ManualPreviousSeasonModal({
     return map;
   }, [allProjections]);
 
-  // Re-derive the form's rows whenever the modal opens on a given year -
-  // either from an existing manual entry (edit), or a fresh row per current
-  // team plus a fixed Unassigned bucket (create). Deliberately not
-  // dependent on `teams` itself, so typing in the form doesn't get
-  // stomped - only opening/switching years resets it.
+  // Re-derive the form's rows whenever the modal opens on a given year.
+  // Always start from today's current-season teams plus the fixed
+  // Unassigned bucket, then layer in whatever was previously recorded for
+  // each one (matched by name - the only stable join key available, since
+  // the mutation doesn't keep an FK back to seasonTeams). This way a team
+  // nobody entered a player for last time still shows up here instead of
+  // disappearing (a prior version of this effect trusted the saved rows
+  // alone, so a team with 0 players - which never got a seasonTeams row in
+  // the first place - vanished from the form on the next edit). Any
+  // recorded team that no longer matches a current one (renamed/removed) is
+  // kept too, just without a matching current-team row, so past entries
+  // are never silently dropped. Deliberately not dependent on `teams`
+  // itself, so typing in the form doesn't get stomped - only opening/
+  // switching years resets it.
   useEffect(() => {
     if (!opened || currentTeams === undefined || existingEntry === undefined) {
       return;
     }
-    if (existingEntry) {
-      setTeams(
-        existingEntry.teams.map((team, index) => ({
-          key: `existing-${index}`,
-          name: team.name,
-          isSelf: team.isSelf,
-          players: team.players.map((p) => {
-            const known = nameByFpid.get(p.fpid);
-            return {
-              fpid: p.fpid,
-              price: p.price,
-              name: known?.name ?? `#${p.fpid}`,
-              position: known?.position ?? "RB",
-            };
-          }),
-        })),
-      );
-    } else {
-      setTeams([
-        ...currentTeams.map((team) => ({
-          key: team._id,
-          name: team.name,
-          isSelf: team.isSelf,
-          players: [] as PlayerDraft[],
-        })),
-        { key: UNASSIGNED_KEY, name: "Unassigned", isSelf: false, players: [] },
-      ]);
+
+    const toPlayerDrafts = (players: { fpid: number; price: number }[]) =>
+      players.map((p) => {
+        const known = nameByFpid.get(p.fpid);
+        return {
+          fpid: p.fpid,
+          price: p.price,
+          name: known?.name ?? `#${p.fpid}`,
+          position: known?.position ?? "RB",
+        };
+      });
+
+    const existingByName = new Map(
+      (existingEntry?.teams ?? []).map((team) => [team.name, team]),
+    );
+
+    const merged: TeamDraft[] = currentTeams.map((team) => {
+      const existing = existingByName.get(team.name);
+      existingByName.delete(team.name);
+      return {
+        key: team._id,
+        name: team.name,
+        isSelf: team.isSelf,
+        players: existing ? toPlayerDrafts(existing.players) : [],
+      };
+    });
+
+    const existingUnassigned = existingByName.get("Unassigned");
+    existingByName.delete("Unassigned");
+    merged.push({
+      key: UNASSIGNED_KEY,
+      name: "Unassigned",
+      isSelf: false,
+      players: existingUnassigned
+        ? toPlayerDrafts(existingUnassigned.players)
+        : [],
+    });
+
+    for (const [name, team] of existingByName) {
+      merged.push({
+        key: `orphaned-${name}`,
+        name,
+        isSelf: team.isSelf,
+        players: toPlayerDrafts(team.players),
+      });
     }
+
+    setTeams(merged);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, currentTeams, existingEntry]);
 
@@ -283,13 +312,15 @@ export function ManualPreviousSeasonModal({
       await setResults({
         seasonId,
         year,
-        teams: teams
-          .filter((t) => t.players.length > 0)
-          .map((t) => ({
-            name: t.name,
-            isSelf: t.isSelf,
-            players: t.players.map((p) => ({ fpid: p.fpid, price: p.price })),
-          })),
+        // Deliberately not filtering out teams with 0 players here - doing
+        // so used to mean a team nobody had entered a keeper for yet
+        // wouldn't get a seasonTeams row at all, so it vanished from the
+        // form entirely on the next edit instead of just showing empty.
+        teams: teams.map((t) => ({
+          name: t.name,
+          isSelf: t.isSelf,
+          players: t.players.map((p) => ({ fpid: p.fpid, price: p.price })),
+        })),
       });
       onClose();
     } catch (err) {
