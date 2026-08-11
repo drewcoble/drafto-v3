@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import {
+  ActionIcon,
   Anchor,
   Badge,
   Card,
@@ -11,6 +12,7 @@ import {
   Table,
   Text,
 } from "@mantine/core";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { POSITIONS, type Position, type ScoringConfig } from "../../types";
@@ -44,6 +46,23 @@ export function InjuryReport({
     ...POSITIONS,
   ]);
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
+  // Which rows' Type/Prob. of Playing/Comment detail is showing - dropped
+  // from the main row (see the table below) to fit mobile widths,
+  // click-to-expand instead of a fixed column each.
+  const [expandedIds, setExpandedIds] = useState<Set<Id<"injuries">>>(
+    new Set(),
+  );
+  const toggleExpanded = (id: Id<"injuries">) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const injuries = useQuery(api.injuries.getInjuries, {});
   const allProjections = useQuery(api.projections.getAllProjections, {
@@ -119,7 +138,8 @@ export function InjuryReport({
       .map((injury) => ({ injury, player: projByFpid.get(injury.fpid) }))
       .filter(
         (row): row is { injury: Doc<"injuries">; player: Doc<"projections"> } =>
-          row.player !== undefined && selectedPositions.includes(row.player.position),
+          row.player !== undefined &&
+          selectedPositions.includes(row.player.position),
       )
       .sort(
         (a, b) =>
@@ -134,11 +154,7 @@ export function InjuryReport({
     allRankings === undefined;
 
   return (
-    <Stack
-      gap="md"
-      py="sm"
-      pt={{ base: POSITION_FILTER_BAR_HEIGHT, sm: "sm" }}
-    >
+    <Stack gap="md" py="sm" pt={{ base: POSITION_FILTER_BAR_HEIGHT, sm: "sm" }}>
       <Group justify="space-between" align="center" wrap="wrap">
         <PositionFilterBar
           positions={activePositions}
@@ -154,68 +170,126 @@ export function InjuryReport({
       </Group>
 
       <Card withBorder padding={0}>
-      {isLoading ? (
-        <Center py="xl">
-          <Loader />
-        </Center>
-      ) : rows.length === 0 ? (
-        <Text c="dimmed" p="md">
-          No currently-injured players for the selected position(s).
-        </Text>
-      ) : (
-        <Table.ScrollContainer minWidth={800}>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th miw={200}>Player</Table.Th>
-                <Table.Th miw={70}>Pos</Table.Th>
-                <Table.Th>Team</Table.Th>
-                <Table.Th>Status</Table.Th>
-                <Table.Th>Type</Table.Th>
-                <Table.Th>Prob. of Playing</Table.Th>
-                <Table.Th miw={240}>Comment</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {rows.map(({ injury, player }) => (
-                <Table.Tr key={injury._id}>
-                  <Table.Td>
-                    <Anchor
-                      component="button"
-                      type="button"
-                      onClick={() => setSelectedFpid(injury.fpid)}
-                    >
-                      {player.name}
-                    </Anchor>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge color={POSITION_COLORS[player.position]} variant="light">
-                      {player.position}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>{player.team ?? "—"}</Table.Td>
-                  <Table.Td>
-                    <Badge color={injuryColor(injury.status)} variant="light">
-                      {injury.status}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>{injury.injuryType || "—"}</Table.Td>
-                  <Table.Td>
-                    {injury.probabilityOfPlaying !== null
-                      ? `${Math.round(injury.probabilityOfPlaying * 100)}%`
-                      : "—"}
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" c="dimmed" lineClamp={2}>
-                      {injury.comment || "—"}
-                    </Text>
-                  </Table.Td>
+        {isLoading ? (
+          <Center py="xl">
+            <Loader />
+          </Center>
+        ) : rows.length === 0 ? (
+          <Text c="dimmed" p="md">
+            No currently-injured players for the selected position(s).
+          </Text>
+        ) : (
+          <Table.ScrollContainer minWidth={360}>
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th miw={140}>Player</Table.Th>
+                  <Table.Th miw={60}>Pos</Table.Th>
+                  <Table.Th>Team</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th />
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      )}
+              </Table.Thead>
+              <Table.Tbody>
+                {rows.map(({ injury, player }) => {
+                  const isExpanded = expandedIds.has(injury._id);
+                  return (
+                    <Fragment key={injury._id}>
+                      {/* Type/Prob. of Playing/Comment moved into an
+                        expandable detail row below instead of 3 more
+                        columns - those pushed this table well past mobile
+                        widths for info that's secondary to who's hurt and
+                        how badly. */}
+                      <Table.Tr
+                        onClick={() => toggleExpanded(injury._id)}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <Table.Td>
+                          <Anchor
+                            component="button"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedFpid(injury.fpid);
+                            }}
+                          >
+                            {player.name}
+                          </Anchor>
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge
+                            color={POSITION_COLORS[player.position]}
+                            variant="light"
+                          >
+                            {player.position}
+                          </Badge>
+                        </Table.Td>
+                        <Table.Td>{player.team ?? "—"}</Table.Td>
+                        <Table.Td>
+                          <Badge
+                            color={injuryColor(injury.status)}
+                            variant="light"
+                          >
+                            {injury.status}
+                          </Badge>
+                        </Table.Td>
+                        <Table.Td>
+                          <ActionIcon
+                            variant="subtle"
+                            color="gray"
+                            aria-label={
+                              isExpanded ? "Hide details" : "Show details"
+                            }
+                          >
+                            {isExpanded ? (
+                              <ChevronUp size={16} />
+                            ) : (
+                              <ChevronDown size={16} />
+                            )}
+                          </ActionIcon>
+                        </Table.Td>
+                      </Table.Tr>
+                      {isExpanded && (
+                        <Table.Tr>
+                          <Table.Td colSpan={5}>
+                            <Stack gap={4} py={4}>
+                              <Group gap={6}>
+                                <Text size="xs" fw={600} c="dimmed">
+                                  Type:
+                                </Text>
+                                <Text size="xs">
+                                  {injury.injuryType || "—"}
+                                </Text>
+                              </Group>
+                              <Group gap={6}>
+                                <Text size="xs" fw={600} c="dimmed">
+                                  Prob. of playing:
+                                </Text>
+                                <Text size="xs">
+                                  {injury.probabilityOfPlaying !== null
+                                    ? `${Math.round(injury.probabilityOfPlaying * 100)}%`
+                                    : "—"}
+                                </Text>
+                              </Group>
+                              <Stack gap={2}>
+                                <Text size="xs" fw={600} c="dimmed">
+                                  Comment:
+                                </Text>
+                                <Text size="xs" c="dimmed">
+                                  {injury.comment || "—"}
+                                </Text>
+                              </Stack>
+                            </Stack>
+                          </Table.Td>
+                        </Table.Tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
       </Card>
 
       <PlayerDetailModal
