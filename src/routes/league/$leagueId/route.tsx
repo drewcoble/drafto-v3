@@ -88,10 +88,8 @@ const TABS = [
 ] as const;
 
 // Settings/Budget/MyTeam/Players are the ones worth a direct bottom-nav
-// slot - Keepers/Draft/Injuries/League go in "More". Doesn't need to land
-// on an even count either way - BottomNav's hasFab split just ceil/floors
-// it.
-const MORE_VALUES = new Set(["keepers", "draft", "injuries", "league"]);
+// slot pre-draft - Keepers/Draft/Injuries/League always go in "More".
+const ALWAYS_MORE_VALUES = new Set(["keepers", "draft", "injuries", "league"]);
 
 const toBottomNavItem = (tab: (typeof TABS)[number]) => ({
   value: tab.value,
@@ -143,11 +141,19 @@ function LeagueLayout() {
     if (tab.value === "keepers") return keepersEnabled;
     return true;
   });
+  // Settings also moves into "More" once the draft has started - it locks
+  // itself at that point anyway (see LeagueDetails.tsx), and freeing up its
+  // direct slot leaves Budget/MyTeam/Players (3 buttons + the More button =
+  // 4) for a clean 2+2 split around the nominate FAB's center gap, instead
+  // of a lopsided 3+2 with a direct slot for a tab you can't edit anymore.
+  const moreValues = isStarted
+    ? new Set([...ALWAYS_MORE_VALUES, "settings"])
+    : ALWAYS_MORE_VALUES;
   const bottomNavItems = visibleTabs
-    .filter((tab) => !MORE_VALUES.has(tab.value))
+    .filter((tab) => !moreValues.has(tab.value))
     .map(toBottomNavItem);
   const bottomNavMoreItems = visibleTabs
-    .filter((tab) => MORE_VALUES.has(tab.value))
+    .filter((tab) => moreValues.has(tab.value))
     .map(toBottomNavItem);
 
   return (
