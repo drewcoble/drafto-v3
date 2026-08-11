@@ -293,14 +293,24 @@ export function InjuryReport({
                                       : "—"}
                                   </Text>
                                 </Group>
-                                <Stack gap={2}>
-                                  <Text size="xs" fw={600} c="dimmed">
+                                <Group gap={6} wrap="nowrap">
+                                  <Text
+                                    size="xs"
+                                    fw={600}
+                                    c="dimmed"
+                                    style={{ flexShrink: 0 }}
+                                  >
                                     Comment:
                                   </Text>
-                                  <Text size="xs" c="dimmed" truncate>
+                                  <Text
+                                    size="xs"
+                                    c="dimmed"
+                                    truncate
+                                    style={{ flex: 1, minWidth: 0 }}
+                                  >
                                     {injury.comment || "—"}
                                   </Text>
-                                </Stack>
+                                </Group>
                               </Stack>
                             </SimpleGrid>
                           </Table.Td>
