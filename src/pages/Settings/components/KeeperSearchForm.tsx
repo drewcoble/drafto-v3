@@ -129,6 +129,13 @@ export function KeeperSearchForm({
             label="Search a player to keep..."
             placeholder="e.g. CeeDee Lamb"
             value={keeperSearch}
+            // iOS's autocorrect/QuickType bar doesn't recognize most player
+            // surnames and pops a suggestion strip on top of the dropdown
+            // below, eating the first tap on an option - see
+            // ManualPreviousSeasonModal.tsx's copy of this same fix.
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
             onChange={(event) => {
               setSelectedCandidate(null);
               onKeeperSearchChange(event.currentTarget.value);

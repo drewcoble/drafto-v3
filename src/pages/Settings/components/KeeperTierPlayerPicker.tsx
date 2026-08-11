@@ -93,6 +93,13 @@ export function KeeperTierPlayerPicker({
         }
         disabled={atCapacity}
         value={search}
+        // iOS's autocorrect/QuickType bar doesn't recognize most player
+        // surnames and pops a suggestion strip on top of the results list
+        // below, eating the first tap on an option - see
+        // ManualPreviousSeasonModal.tsx's copy of this same fix.
+        autoCorrect="off"
+        autoComplete="off"
+        spellCheck={false}
         onChange={(event) => {
           onSearchChange(event.currentTarget.value);
           setShowResults(true);

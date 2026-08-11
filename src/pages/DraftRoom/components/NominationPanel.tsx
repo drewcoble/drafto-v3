@@ -114,42 +114,40 @@ export function NominationPanel({
             </Text>
             {usingGenericValues && <GenericValueBadge />}
           </Group>
-          {activeNomination ? (
-            nominatingTeam && (
-              <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                Nominated by {nominatingTeam.name}
-              </Text>
-            )
-          ) : (
-            nominationOrderEnabled && (
-              <Group gap={6} wrap="nowrap">
+          {activeNomination
+            ? nominatingTeam && (
                 <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                  Nominating team
+                  Nominated by {nominatingTeam.name}
                 </Text>
-                <Select
-                  size="xs"
-                  w={120}
-                  placeholder="Set turn..."
-                  data={[
-                    { value: "__manual__", label: "— Manual —" },
-                    ...teams.map((team) => ({
-                      value: team._id,
-                      label: team.name,
-                    })),
-                  ]}
-                  value={turnTeamId ?? "__manual__"}
-                  onChange={(value) =>
-                    onSetTurnTeam(
-                      !value || value === "__manual__"
-                        ? null
-                        : (value as Id<"seasonTeams">),
-                    )
-                  }
-                  allowDeselect={false}
-                />
-              </Group>
-            )
-          )}
+              )
+            : nominationOrderEnabled && (
+                <Group gap={6} wrap="nowrap">
+                  <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                    Nominating team
+                  </Text>
+                  <Select
+                    size="xs"
+                    w={120}
+                    placeholder="Set turn..."
+                    data={[
+                      { value: "__manual__", label: "— Manual —" },
+                      ...teams.map((team) => ({
+                        value: team._id,
+                        label: team.name,
+                      })),
+                    ]}
+                    value={turnTeamId ?? "__manual__"}
+                    onChange={(value) =>
+                      onSetTurnTeam(
+                        !value || value === "__manual__"
+                          ? null
+                          : (value as Id<"seasonTeams">),
+                      )
+                    }
+                    allowDeselect={false}
+                  />
+                </Group>
+              )}
         </Group>
 
         <Divider />
@@ -252,10 +250,10 @@ function ActiveNominationBody({
   // than competing separately-labeled tags - only ever 0-2 short fragments,
   // so a plain join reads cleaner here than another row of badges.
   const valueParts = [
-    nominatedValue
-      ? `Fair ~$${Math.round(nominatedValue.dollarValue)}`
+    nominatedValue ? `Fair ~$${Math.round(nominatedValue.dollarValue)}` : null,
+    planMatch
+      ? `${planMatch.slotLabel} ~$${Math.round(planMatch.amount)}`
       : null,
-    planMatch ? `${planMatch.slotLabel} ~$${Math.round(planMatch.amount)}` : null,
   ].filter((part): part is string => part !== null);
 
   return (
@@ -348,7 +346,12 @@ function ActiveNominationBody({
         >
           Log winner
         </Button>
-        <Button size="compact-sm" variant="subtle" color="gray" onClick={onPass}>
+        <Button
+          size="compact-sm"
+          variant="subtle"
+          color="gray"
+          onClick={onPass}
+        >
           Pass
         </Button>
       </Group>
@@ -384,6 +387,13 @@ export function SearchBody({
         size={touchFriendly ? "md" : "sm"}
         placeholder="Search a player to nominate..."
         value={search}
+        // iOS's autocorrect/QuickType bar doesn't recognize most player
+        // surnames and pops a suggestion strip on top of the results list
+        // below, eating the first tap on an option - see
+        // ManualPreviousSeasonModal.tsx's copy of this same fix.
+        autoCorrect="off"
+        autoComplete="off"
+        spellCheck={false}
         onChange={(event) => onSearchChange(event.currentTarget.value)}
       />
       {searchResults.length > 0 && (
