@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { ActionIcon, Group, NumberInput, Text } from "@mantine/core";
 import { STEPPER_BUTTON_SIZE } from "../constants/general";
 
@@ -113,7 +113,9 @@ export function CountStepper({
       </Text>
       <IncrementButton
         label={label}
-        disabled={disabled || (value !== undefined && max !== undefined && value >= max)}
+        disabled={
+          disabled || (value !== undefined && max !== undefined && value >= max)
+        }
         onClick={handleIncrement}
       />
     </Group>
@@ -158,7 +160,18 @@ export function EditableNumberStepper({
   disabled = false,
   onKeyDown,
 }: EditableNumberStepperProps) {
+  // Tracks "the field is mid-edit and currently empty" separately from the
+  // committed `value` prop. Without this, clearing the field to retype a
+  // number from scratch (e.g. erasing a default "1" to type "46") used to
+  // coerce straight to 0 (or undefined) on that very keystroke and get fed
+  // back in as the controlled value - so the next digit typed landed after
+  // that stray "0" instead of into an empty box (typing "46" produced
+  // "460"). Coercing only happens on blur now, so the box stays visually
+  // blank for as long as the user is actively retyping it.
+  const [isEditingBlank, setIsEditingBlank] = useState(false);
+
   const handleDecrement = () => {
+    setIsEditingBlank(false);
     if (value === undefined) return;
     const next = value - step;
     if (nullable && min !== undefined && next < min) {
@@ -169,6 +182,7 @@ export function EditableNumberStepper({
   };
 
   const handleIncrement = () => {
+    setIsEditingBlank(false);
     if (value === undefined) {
       onChange(min ?? 0);
       return;
@@ -189,16 +203,23 @@ export function EditableNumberStepper({
         {...(min !== undefined ? { min } : {})}
         {...(max !== undefined ? { max } : {})}
         step={step}
-        value={value ?? ""}
+        value={isEditingBlank ? "" : (value ?? "")}
         placeholder={placeholder}
         disabled={disabled}
         onKeyDown={onKeyDown}
         onChange={(val) => {
           if (val === "") {
-            onChange(nullable ? undefined : 0);
+            setIsEditingBlank(true);
             return;
           }
+          setIsEditingBlank(false);
           onChange(Number(val));
+        }}
+        onBlur={() => {
+          if (isEditingBlank) {
+            setIsEditingBlank(false);
+            onChange(nullable ? undefined : 0);
+          }
         }}
         {...(prefix !== undefined ? { prefix } : {})}
         w={width}
@@ -207,7 +228,9 @@ export function EditableNumberStepper({
       />
       <IncrementButton
         label={label}
-        disabled={disabled || (value !== undefined && max !== undefined && value >= max)}
+        disabled={
+          disabled || (value !== undefined && max !== undefined && value >= max)
+        }
         onClick={handleIncrement}
       />
     </Group>
