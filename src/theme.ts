@@ -353,6 +353,24 @@ export const theme = createTheme({
         shadow: "sm",
       },
     },
+    // Badges (position tags, injury status, K/keeper tags, league status,
+    // etc.) are always short fixed-vocabulary text (QB, WR, K3, Drafting...)
+    // that should never lose characters to an ellipsis - but Mantine's own
+    // Badge CSS sets overflow: hidden + text-overflow: ellipsis on both its
+    // root and label by default, which makes it a *willing* shrink target
+    // any time it's a flex child without an explicit flexShrink: 0 on that
+    // one call site - true almost everywhere a Badge is used in this app
+    // (inside a Group). Pinning flexShrink: 0 globally here means every
+    // badge always renders at its full content width - other flex siblings
+    // (player names, etc.) shrink/truncate/wrap instead, rather than a
+    // badge quietly clipping to "Q…" on a squeezed row.
+    Badge: {
+      styles: {
+        root: {
+          flexShrink: 0,
+        },
+      },
+    },
     // Dark mode matches var(--mantine-color-dark-6) - the same "soft
     // surface" shade Card uses, already Mantine's own default there - so
     // every Popover in the app (SlotRow's closest-players list, PlayerBar's
