@@ -495,8 +495,17 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
           </Text>
         ) : (
           tierDrafts.map((tier) => {
-            const liveFpids =
-              keeperRules.tiers.find((t) => t.id === tier.id)?.fpids ?? [];
+            const liveTier = keeperRules.tiers.find((t) => t.id === tier.id);
+            const liveFpids = liveTier?.fpids ?? [];
+            // Player selection commits immediately through its own mutation
+            // (setKeeperTierPlayers via handleToggleTierPlayer above),
+            // separate from this panel's batched Save - but that mutation
+            // only knows how to patch an EXISTING server-side tier. A
+            // brand-new rule (via addTier) only exists in local tierDrafts
+            // until Save Keeper Rules persists it, so toggling a player
+            // before that point was a silent no-op. Gate the picker on that
+            // instead of leaving it looking functional but doing nothing.
+            const isSaved = liveTier !== undefined;
             return (
               <Card key={tier.id} withBorder padding="sm">
                 <Stack gap="xs">
@@ -610,25 +619,35 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
                       </Group>
                     </Chip.Group>
                   </Stack>
-                  <Text size="xs" c="dimmed">
-                    Players ({liveFpids.length}
-                    {tier.maxSize !== undefined ? `/${tier.maxSize}` : ""})
-                  </Text>
-                  <KeeperTierPlayerPicker
-                    fpids={liveFpids}
-                    maxSize={tier.maxSize}
-                    otherTiersFpids={otherTiersFpids(tier.id)}
-                    nameByFpid={nameByFpid}
-                    searchResults={searchResultsForTier(tier.id)}
-                    search={tierSearch[tier.id] ?? ""}
-                    onSearchChange={(value) =>
-                      setTierSearch((current) => ({
-                        ...current,
-                        [tier.id]: value,
-                      }))
-                    }
-                    onToggle={(fpid) => handleToggleTierPlayer(tier.id, fpid)}
-                  />
+                  {isSaved ? (
+                    <>
+                      <Text size="xs" c="dimmed">
+                        Players ({liveFpids.length}
+                        {tier.maxSize !== undefined ? `/${tier.maxSize}` : ""})
+                      </Text>
+                      <KeeperTierPlayerPicker
+                        fpids={liveFpids}
+                        maxSize={tier.maxSize}
+                        otherTiersFpids={otherTiersFpids(tier.id)}
+                        nameByFpid={nameByFpid}
+                        searchResults={searchResultsForTier(tier.id)}
+                        search={tierSearch[tier.id] ?? ""}
+                        onSearchChange={(value) =>
+                          setTierSearch((current) => ({
+                            ...current,
+                            [tier.id]: value,
+                          }))
+                        }
+                        onToggle={(fpid) =>
+                          handleToggleTierPlayer(tier.id, fpid)
+                        }
+                      />
+                    </>
+                  ) : (
+                    <Text size="xs" c="dimmed">
+                      Save Keeper Rules below to add players to this new rule.
+                    </Text>
+                  )}
                 </Stack>
               </Card>
             );
