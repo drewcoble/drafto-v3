@@ -257,33 +257,40 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                       </Badge>
                       {/* flex: 1 (not a fixed width calc'd against the
                           other cells) so this absorbs whatever space is
-                          left instead of assuming a fixed sibling total -
-                          the keeper badge below is conditional, so that
-                          total isn't constant. minWidth: 0 is required for
-                          a flex item to actually truncate instead of
-                          overflowing its flex basis. */}
-                      <Text
-                        truncate
-                        size="sm"
-                        ta="left"
+                          left instead of assuming a fixed sibling total.
+                          minWidth: 0 is required for a flex item to
+                          actually truncate instead of overflowing its flex
+                          basis. The keeper badge (when present) sits inside
+                          this same cell, right after the name, rather than
+                          its own column before price - name truncates
+                          first if the two don't both fit. */}
+                      <Group
+                        gap={4}
+                        wrap="nowrap"
                         style={{ flex: 1, minWidth: 0 }}
                       >
-                        {player?.name ?? "-"}
-                      </Text>
-                      {pick?.isKeeper && (
-                        <Badge
+                        <Text
+                          truncate
                           size="sm"
-                          variant="light"
-                          color="gray"
-                          w={30}
-                          style={{ flexShrink: 0 }}
+                          ta="left"
+                          style={{ flex: 1, minWidth: 0 }}
                         >
-                          {settings.keeperRules?.maxConsecutiveYears !==
-                          undefined
-                            ? `K${pick.keeperStreak ?? 1}`
-                            : "K"}
-                        </Badge>
-                      )}
+                          {player?.name ?? "-"}
+                        </Text>
+                        {pick?.isKeeper && (
+                          <Badge
+                            size="sm"
+                            variant="light"
+                            color="gray"
+                            style={{ flexShrink: 0 }}
+                          >
+                            {settings.keeperRules?.maxConsecutiveYears !==
+                            undefined
+                              ? `K${pick.keeperStreak ?? 1}`
+                              : "K"}
+                          </Badge>
+                        )}
+                      </Group>
                       <Text
                         size="sm"
                         ta="right"
