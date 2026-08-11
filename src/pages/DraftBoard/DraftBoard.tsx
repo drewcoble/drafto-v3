@@ -3,6 +3,7 @@ import {
   Card,
   Center,
   Group,
+  Image,
   Loader,
   SimpleGrid,
   Stack,
@@ -15,6 +16,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ColorSchemeToggle } from "../../components/ColorSchemeToggle";
 import { WEEK } from "../../constants/general";
+import logo from "../../infinidraft_v1_noBg.png";
 import { POSITION_COLORS, positionColorOrGray } from "../../lib/positionColors";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { assignPicksToSlots } from "../../lib/slotAssignment";
@@ -138,7 +140,21 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
   return (
     <Stack gap="lg" p="lg">
       <Group justify="space-between" align="center" wrap="wrap">
-        <Group>
+        <Group align="center" wrap="wrap">
+          {/* No AppHeader on this page (see the file comment - deliberately
+              bare for a second-screen/TV display), so the brand mark just
+              sits inline at the front of this row instead, smaller than the
+              league name since that's the thing actually worth reading from
+              across the room. */}
+          <Group gap={8} wrap="nowrap">
+            <Image src={logo} alt="InfiniDraft" h={36} w="auto" />
+            <Title order={4} c="var(--mantine-color-text)">
+              <Text component="span" inherit c="saddlebrown.7">
+                infini
+              </Text>
+              draft
+            </Title>
+          </Group>
           <Title order={2}>{settings.name}</Title>
           <Group gap="xs" wrap="wrap">
             {activeNomination && nominatingTeam && (
