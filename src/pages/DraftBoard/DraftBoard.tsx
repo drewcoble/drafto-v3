@@ -240,27 +240,57 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                 const player = pick ? playerByFpid.get(pick.fpid) : undefined;
                 return (
                   <>
-                    <Group gap={10} w="100%" justify="space-between">
+                    <Group
+                      gap={10}
+                      w="100%"
+                      wrap="nowrap"
+                      justify="space-between"
+                    >
                       <Badge
                         size="sm"
                         variant="light"
                         color={positionColorOrGray(slot.position)}
                         w={65}
+                        style={{ flexShrink: 0 }}
                       >
                         {slot.label}
                       </Badge>
-                      <Text truncate size="sm" ta="left" w="calc(100% - 155px)">
+                      {/* flex: 1 (not a fixed width calc'd against the
+                          other cells) so this absorbs whatever space is
+                          left instead of assuming a fixed sibling total -
+                          the keeper badge below is conditional, so that
+                          total isn't constant. minWidth: 0 is required for
+                          a flex item to actually truncate instead of
+                          overflowing its flex basis. */}
+                      <Text
+                        truncate
+                        size="sm"
+                        ta="left"
+                        style={{ flex: 1, minWidth: 0 }}
+                      >
                         {player?.name ?? "-"}
                       </Text>
                       {pick?.isKeeper && (
-                        <Badge size="sm" variant="light" color="gray" w={30}>
+                        <Badge
+                          size="sm"
+                          variant="light"
+                          color="gray"
+                          w={30}
+                          style={{ flexShrink: 0 }}
+                        >
                           {settings.keeperRules?.maxConsecutiveYears !==
                           undefined
                             ? `K${pick.keeperStreak ?? 1}`
                             : "K"}
                         </Badge>
                       )}
-                      <Text size="sm" ta="right" w={35} fw={600}>
+                      <Text
+                        size="sm"
+                        ta="right"
+                        w={35}
+                        fw={600}
+                        style={{ flexShrink: 0 }}
+                      >
                         {pick ? `$${pick.price}` : ""}
                       </Text>
                     </Group>
