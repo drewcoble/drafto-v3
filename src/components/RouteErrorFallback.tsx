@@ -3,6 +3,25 @@ import { Button, Center, Group, Stack, Text, Title } from "@mantine/core";
 import { Link, type ErrorComponentProps } from "@tanstack/react-router";
 import { getErrorMessage } from "../lib/errors";
 
+// @convex-dev/auth's React client stores its JWT/refresh token/etc in
+// localStorage under these key prefixes (namespaced by a suffix derived
+// from the Convex deployment URL - see node_modules/@convex-dev/auth/dist/
+// react/client.js's useNamespacedStorage) rather than anywhere signOut()'s
+// own server round-trip can be relied on to reach: if that round-trip is
+// failing for the same underlying reason the stored token is bad in the
+// first place (see handleBackToSignIn below), signOut() never actually
+// clears it, and a reload just re-reads the same bad token again -
+// reproducing the exact same "must be signed in" failure forever.
+const CONVEX_AUTH_STORAGE_PREFIX = "__convexAuth";
+
+function clearStoredConvexAuthTokens() {
+  for (const key of Object.keys(window.localStorage)) {
+    if (key.startsWith(CONVEX_AUTH_STORAGE_PREFIX)) {
+      window.localStorage.removeItem(key);
+    }
+  }
+}
+
 // Wired in as __root.tsx's errorComponent - the one app-wide safety net
 // against a blank white screen. Convex's useQuery throws synchronously
 // during render when the underlying query errors (e.g. a stale/deleted
@@ -28,18 +47,28 @@ export function RouteErrorFallback({ error, reset }: ErrorComponentProps) {
 
   // Deliberately not an automatic useEffect - an earlier version tried
   // signOut() + reset() (an in-place re-render) as soon as this mounted,
-  // but reset() can fire before isAuthenticated has actually finished
-  // settling, so the same query fails again immediately, remounting this
+  // but reset() can fire before isAuthenticated had actually finished
+  // settling, so the same query failed again immediately, remounting this
   // component and re-triggering the effect - a visible flash loop between
-  // this screen and the sign-in form instead of settling on either. A hard
-  // reload sidesteps that entirely: it throws away the whole in-memory
-  // auth/Convex client state and starts completely fresh against whatever
-  // is actually in storage after signOut() clears it, so there's no
-  // in-place render to race. Manual (one click) rather than automatic also
-  // means it can only ever happen once, never loop on its own.
+  // this screen and the sign-in form instead of settling on either. Manual
+  // (one click) means it can only ever run once, never loop on its own.
+  //
+  // signOut() is still attempted first (properly invalidates the session
+  // server-side when it can), but isn't trusted alone - it needs a network
+  // round-trip that can fail for the exact reason this screen exists in the
+  // first place, silently leaving the bad token in place. Clearing storage
+  // directly guarantees the token is actually gone regardless, and the hard
+  // reload after throws away the whole in-memory auth/Convex client state
+  // and starts completely fresh against it, so there's no in-place render
+  // left to race.
   const handleBackToSignIn = () => {
     void (async () => {
-      await signOut();
+      try {
+        await signOut();
+      } catch {
+        // Expected when the stored session is what's broken - see above.
+      }
+      clearStoredConvexAuthTokens();
       window.location.href = "/";
     })();
   };
