@@ -16,16 +16,19 @@ import type { SlotDescriptor } from "../../../lib/rosterSlots";
 import { eligibleSlotsForPosition } from "../../../lib/slotAssignment";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { KeeperStreakCell } from "./KeeperStreakInput";
+import { KeeperPriceCell, KeeperTeamCell } from "./KeeperPriceTeamCells";
 
 interface KeeperCardListProps {
   keepers: Doc<"draftPicks">[];
   nameByFpid: Map<number, { name: string; team: string | null }>;
-  teamNameById: Map<string, string>;
+  teams: { _id: Id<"seasonTeams">; name: string }[];
   slots: SlotDescriptor[];
   flexPositions: readonly Position[];
   superflexPositions: readonly Position[];
   onRemove: (pickId: Id<"draftPicks">) => void;
   onSetStreak: (pickId: Id<"draftPicks">, streak: number) => void;
+  onSetPrice: (pickId: Id<"draftPicks">, price: number) => void;
+  onSetTeam: (pickId: Id<"draftPicks">, teamId: Id<"seasonTeams">) => void;
   onMove: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer: (fpid: number) => void;
   // Gates the "Yrs kept" editor below - true when the league has a
@@ -41,12 +44,14 @@ interface KeeperCardListProps {
 export function KeeperCardList({
   keepers,
   nameByFpid,
-  teamNameById,
+  teams,
   slots,
   flexPositions,
   superflexPositions,
   onRemove,
   onSetStreak,
+  onSetPrice,
+  onSetTeam,
   onMove,
   onSelectPlayer,
   showStreakInput,
@@ -139,12 +144,12 @@ export function KeeperCardList({
               </Group>
 
               <Group gap={8} wrap="wrap">
-                <Text size="sm" c="dimmed">
-                  {teamNameById.get(pick.teamId) ?? "—"}
-                </Text>
-                <Text size="sm" c="dimmed">
-                  ${pick.price}
-                </Text>
+                <KeeperTeamCell
+                  pick={pick}
+                  teams={teams}
+                  onSetTeam={onSetTeam}
+                />
+                <KeeperPriceCell pick={pick} onSetPrice={onSetPrice} />
                 {currentSlotLabel ? (
                   <Badge variant="light" color="gray">
                     {currentSlotLabel}

@@ -55,6 +55,8 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   const addKeeper = useMutation(api.draft.picks.addKeeper);
   const removeKeeper = useMutation(api.draft.picks.removeKeeper);
   const setKeeperStreak = useMutation(api.draft.picks.setKeeperStreak);
+  const setKeeperPriceMutation = useMutation(api.draft.picks.setKeeperPrice);
+  const setKeeperTeamMutation = useMutation(api.draft.picks.setKeeperTeam);
   const setPickSlot = useMutation(api.draft.picks.setPickSlot);
 
   const [keeperSearch, setKeeperSearch] = useState("");
@@ -116,14 +118,6 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     return map;
   }, [allProjections]);
 
-  const teamNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const team of draftTeams ?? []) {
-      map.set(team._id, team.name);
-    }
-    return map;
-  }, [draftTeams]);
-
   const keeperSearchResults = useMemo(() => {
     if (!allProjections || !settings || keeperSearch.trim().length < 2) {
       return [];
@@ -180,16 +174,22 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     fpid: number,
     position: Position,
     price: number,
+    // Overrides the search form's currently-selected team - used by
+    // RecommendedKeepers' quick-add (handleQuickAddKeeper below), which
+    // resolves its own team from a confirmed manual-entry roster and
+    // shouldn't depend on whatever's sitting in the search form's picker.
+    teamIdOverride?: Id<"seasonTeams">,
   ) => {
-    if (!settings || !keeperTeamId) return;
+    const teamId = teamIdOverride ?? keeperTeamId;
+    if (!settings || !teamId) return;
     setKeeperError(null);
     try {
-      const team = draftTeams?.find((t) => t._id === keeperTeamId);
+      const team = draftTeams?.find((t) => t._id === teamId);
       let planSlotKey: string | undefined;
       if (team?.isSelf) {
         const selfKeeperSlotKeys = new Set(
           keepers
-            .filter((pick) => pick.teamId === keeperTeamId)
+            .filter((pick) => pick.teamId === teamId)
             .map((pick) => pick.planSlotKey)
             .filter((key): key is string => !!key),
         );
@@ -203,7 +203,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
       }
       await addKeeper({
         seasonId,
-        teamId: keeperTeamId,
+        teamId,
         fpid,
         price,
         ...(planSlotKey ? { planSlotKey } : {}),
@@ -212,6 +212,27 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     } catch (err) {
       setKeeperError(getErrorMessage(err, "Failed to add keeper."));
     }
+  };
+
+  // Recommended Keepers' "Add" button adds the keeper outright rather than
+  // just dropping the name into the search box - that old behavior left the
+  // search dropdown closed (it only opens on focus/typing, not a
+  // programmatic value change) so nothing appeared to happen. Team is
+  // resolved from the recommendation's confirmed manual-entry team name
+  // when there is one (see getPlayerPriceHistory), falling back to whatever
+  // team the search form currently has selected (defaults to the self
+  // team) otherwise - either way it's just a starting point, editable
+  // afterward via the Current Keepers table/cards below.
+  const handleQuickAddKeeper = (
+    fpid: number,
+    position: Position,
+    price: number,
+    teamName: string | undefined,
+  ) => {
+    const matchedTeamId = teamName
+      ? draftTeams?.find((t) => t.name === teamName)?._id
+      : undefined;
+    void handleAddKeeper(fpid, position, price, matchedTeamId);
   };
 
   const handleRemoveKeeper = async (pickId: Id<"draftPicks">) => {
@@ -229,6 +250,27 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
       await setKeeperStreak({ pickId, streak });
     } catch (err) {
       setKeeperError(getErrorMessage(err, "Failed to update keeper streak."));
+    }
+  };
+
+  const handleSetPrice = async (pickId: Id<"draftPicks">, price: number) => {
+    setKeeperError(null);
+    try {
+      await setKeeperPriceMutation({ pickId, price });
+    } catch (err) {
+      setKeeperError(getErrorMessage(err, "Failed to update keeper price."));
+    }
+  };
+
+  const handleSetTeam = async (
+    pickId: Id<"draftPicks">,
+    teamId: Id<"seasonTeams">,
+  ) => {
+    setKeeperError(null);
+    try {
+      await setKeeperTeamMutation({ pickId, teamId });
+    } catch (err) {
+      setKeeperError(getErrorMessage(err, "Failed to update keeper team."));
     }
   };
 
@@ -297,7 +339,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 allProjections={allProjections}
                 activePositions={activePositions}
                 draftedFpids={draftedFpids}
-                onAddToSearch={setKeeperSearch}
+                onQuickAdd={handleQuickAddKeeper}
                 onSelectPlayer={setSelectedFpid}
                 onOpenManualEntry={() => setManualEntryOpened(true)}
               />
@@ -343,12 +385,14 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                     <KeeperTable
                       keepers={keepers}
                       nameByFpid={nameByFpid}
-                      teamNameById={teamNameById}
+                      teams={draftTeams}
                       slots={slots}
                       flexPositions={settings.flexPositions}
                       superflexPositions={settings.superflexPositions}
                       onRemove={handleRemoveKeeper}
                       onSetStreak={handleSetStreak}
+                      onSetPrice={handleSetPrice}
+                      onSetTeam={handleSetTeam}
                       onMove={handleMoveKeeper}
                       onSelectPlayer={setSelectedFpid}
                       showStreakInput={
@@ -359,12 +403,14 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                   <KeeperCardList
                     keepers={keepers}
                     nameByFpid={nameByFpid}
-                    teamNameById={teamNameById}
+                    teams={draftTeams}
                     slots={slots}
                     flexPositions={settings.flexPositions}
                     superflexPositions={settings.superflexPositions}
                     onRemove={handleRemoveKeeper}
                     onSetStreak={handleSetStreak}
+                    onSetPrice={handleSetPrice}
+                    onSetTeam={handleSetTeam}
                     onMove={handleMoveKeeper}
                     onSelectPlayer={setSelectedFpid}
                     showStreakInput={

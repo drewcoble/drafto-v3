@@ -33,7 +33,16 @@ interface RecommendedKeepersProps {
   allProjections: ProjectionRow[] | undefined;
   activePositions: readonly Position[];
   draftedFpids: Set<number>;
-  onAddToSearch: (name: string) => void;
+  // Adds the keeper outright at the suggested cost - team is resolved by
+  // the caller (KeepersTab.tsx) from `teamName` below when it's set
+  // (a confirmed manual-entry roster - see getPlayerPriceHistory), falling
+  // back to whatever team is otherwise selected.
+  onQuickAdd: (
+    fpid: number,
+    position: Position,
+    price: number,
+    teamName: string | undefined,
+  ) => void;
   onSelectPlayer: (fpid: number) => void;
   onOpenManualEntry: () => void;
 }
@@ -56,7 +65,7 @@ export function RecommendedKeepers({
   allProjections,
   activePositions,
   draftedFpids,
-  onAddToSearch,
+  onQuickAdd,
   onSelectPlayer,
   onOpenManualEntry,
 }: RecommendedKeepersProps) {
@@ -226,7 +235,14 @@ export function RecommendedKeepers({
                               component="button"
                               type="button"
                               size="xs"
-                              onClick={() => onAddToSearch(player.name)}
+                              onClick={() =>
+                                onQuickAdd(
+                                  player.fpid,
+                                  player.position,
+                                  keeperCost,
+                                  teamName,
+                                )
+                              }
                             >
                               Add
                             </Anchor>

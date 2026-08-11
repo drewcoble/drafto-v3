@@ -506,6 +506,91 @@ export const setKeeperStreak = mutation({
   },
 });
 
+// Manual correction for a keeper's price after the fact - e.g. a typo while
+// adding it, or a Recommended Keepers quick-add (KeepersTab.tsx) whose
+// suggested cost needs adjusting. Feeds the same $ value engine addKeeper's
+// price does (see convex/draftValues.ts's keptDollars), so this invalidates
+// that cache the same way adding/removing a keeper does.
+export const setKeeperPrice = mutation({
+  args: { pickId: v.id("draftPicks"), price: v.number() },
+  handler: async (ctx, args) => {
+    const pick = await ctx.db.get(args.pickId);
+    if (!pick) {
+      throw new Error("Pick not found.");
+    }
+    const draft = await requireSeasonForPick(ctx, pick);
+    if (!pick.isKeeper) {
+      throw new Error("This pick isn't a keeper.");
+    }
+    if (draft.startedAt !== undefined) {
+      throw new Error(
+        "This draft has already started - reopen setup to change league settings.",
+      );
+    }
+    await ctx.db.patch(args.pickId, { price: args.price });
+    await invalidateDraftValues(ctx, pick.draftId);
+    return null;
+  },
+});
+
+// Manual correction for which team holds a keeper - e.g. Recommended
+// Keepers' team-name guess (see convex/draft/history.ts's
+// getPlayerPriceHistory) was wrong, or the host just fat-fingered the
+// picker while adding it. Same maxKeepersPerTeam check addKeeper runs,
+// against the destination team. Clears any roster-slot assignment rather
+// than carrying it to the new team - planSlotKey occupancy (setPickSlot) is
+// scoped per team, so keeping it risks silently colliding with whatever the
+// new team already has in that slot.
+export const setKeeperTeam = mutation({
+  args: { pickId: v.id("draftPicks"), teamId: v.id("seasonTeams") },
+  handler: async (ctx, args) => {
+    const pick = await ctx.db.get(args.pickId);
+    if (!pick) {
+      throw new Error("Pick not found.");
+    }
+    const draft = await requireSeasonForPick(ctx, pick);
+    if (!pick.isKeeper) {
+      throw new Error("This pick isn't a keeper.");
+    }
+    if (draft.startedAt !== undefined) {
+      throw new Error(
+        "This draft has already started - reopen setup to change league settings.",
+      );
+    }
+    if (args.teamId === pick.teamId) return null;
+
+    const team = await ctx.db.get(args.teamId);
+    if (!team || team.seasonId !== draft.seasonId) {
+      throw new Error("Team not found in this draft.");
+    }
+
+    const season = await ctx.db.get(draft.seasonId);
+    if (!season) {
+      throw new Error("Season not found.");
+    }
+    if (season.keeperRules?.maxKeepersPerTeam !== undefined) {
+      const teamPicks = await ctx.db
+        .query("draftPicks")
+        .withIndex("by_draft", (q) => q.eq("draftId", pick.draftId))
+        .collect();
+      const teamKeeperCount = teamPicks.filter(
+        (p) => p.isKeeper && p.teamId === args.teamId,
+      ).length;
+      if (teamKeeperCount >= season.keeperRules.maxKeepersPerTeam) {
+        throw new Error(
+          `This team already has the maximum of ${season.keeperRules.maxKeepersPerTeam} keeper(s).`,
+        );
+      }
+    }
+
+    await ctx.db.patch(args.pickId, {
+      teamId: args.teamId,
+      planSlotKey: undefined,
+    });
+    return null;
+  },
+});
+
 // General-purpose removal for any single pick - keeper or live auction
 // result, any team, regardless of sequence position. Unlike undoLastPick
 // (LIFO-only) or removeKeeper (keeper-only), this is what the Draft Room's

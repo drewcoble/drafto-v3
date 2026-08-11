@@ -16,16 +16,19 @@ import type { SlotDescriptor } from "../../../lib/rosterSlots";
 import { eligibleSlotsForPosition } from "../../../lib/slotAssignment";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { KeeperStreakCell } from "./KeeperStreakInput";
+import { KeeperPriceCell, KeeperTeamCell } from "./KeeperPriceTeamCells";
 
 interface KeeperTableProps {
   keepers: Doc<"draftPicks">[];
   nameByFpid: Map<number, { name: string; team: string | null }>;
-  teamNameById: Map<string, string>;
+  teams: { _id: Id<"seasonTeams">; name: string }[];
   slots: SlotDescriptor[];
   flexPositions: readonly Position[];
   superflexPositions: readonly Position[];
   onRemove: (pickId: Id<"draftPicks">) => void;
   onSetStreak: (pickId: Id<"draftPicks">, streak: number) => void;
+  onSetPrice: (pickId: Id<"draftPicks">, price: number) => void;
+  onSetTeam: (pickId: Id<"draftPicks">, teamId: Id<"seasonTeams">) => void;
   onMove: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer: (fpid: number) => void;
   // Gates the "Yrs kept" column below - true when the league has a
@@ -37,12 +40,14 @@ interface KeeperTableProps {
 export function KeeperTable({
   keepers,
   nameByFpid,
-  teamNameById,
+  teams,
   slots,
   flexPositions,
   superflexPositions,
   onRemove,
   onSetStreak,
+  onSetPrice,
+  onSetTeam,
   onMove,
   onSelectPlayer,
   showStreakInput,
@@ -100,8 +105,16 @@ export function KeeperTable({
                     {pick.position}
                   </Badge>
                 </Table.Td>
-                <Table.Td>{teamNameById.get(pick.teamId) ?? "—"}</Table.Td>
-                <Table.Td>${pick.price}</Table.Td>
+                <Table.Td>
+                  <KeeperTeamCell
+                    pick={pick}
+                    teams={teams}
+                    onSetTeam={onSetTeam}
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <KeeperPriceCell pick={pick} onSetPrice={onSetPrice} />
+                </Table.Td>
                 <Table.Td>
                   {currentSlotLabel ? (
                     <Badge variant="light" color="gray">
