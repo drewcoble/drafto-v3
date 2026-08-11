@@ -103,6 +103,14 @@ function PlayerSearchAdd({
           size="xs"
           placeholder="Search a player to add..."
           value={search}
+          // iOS's autocorrect/QuickType bar doesn't recognize most player
+          // surnames (e.g. "Nabers") and pops up a suggestion strip that
+          // sits on top of the dropdown below, eating the first tap on an
+          // option. This is a search field, not prose - nothing here
+          // benefits from autocorrect anyway.
+          autoCorrect="off"
+          autoComplete="off"
+          spellCheck={false}
           onChange={(event) => {
             setSearch(event.currentTarget.value);
             combobox.openDropdown();
