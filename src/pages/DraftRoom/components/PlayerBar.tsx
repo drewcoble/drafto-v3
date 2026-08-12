@@ -214,9 +214,8 @@ export function PlayerBar({
               withArrow
             >
               <ThemeIcon
-                bg={tag === "target" ? "green.9" : "red.9"}
-                c={tag === "target" ? "green.2" : "red.2"}
-                // opacity={0.85}
+                color={tag === "target" ? "green" : "red"}
+                variant="light"
               >
                 {tag === "target" ? (
                   <Crosshair size={ICON_SIZE} />
