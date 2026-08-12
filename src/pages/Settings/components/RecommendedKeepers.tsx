@@ -181,13 +181,19 @@ export function RecommendedKeepers({
               - team-less, since last season's draft doesn't tell us who still
               has them.
             </Text>
-            <Table.ScrollContainer minWidth={420}>
+            <Table.ScrollContainer minWidth={320}>
               <Table verticalSpacing={4}>
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th>Player</Table.Th>
-                    <Table.Th ta="right">Keeper Cost</Table.Th>
-                    <Table.Th ta="right">Fair Value</Table.Th>
+                    <Table.Th ta="right">Cost</Table.Th>
+                    {/* Redundant with Savings (= Value - Cost) once space is
+                        tight - Savings alone is the actionable number, so
+                        this drops out below "sm" rather than forcing a
+                        horizontal scroll for it. */}
+                    <Table.Th ta="right" visibleFrom="sm">
+                      Value
+                    </Table.Th>
                     <Table.Th ta="right">Savings</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
@@ -225,7 +231,9 @@ export function RecommendedKeepers({
                           )}
                         </Table.Td>
                         <Table.Td ta="right">${keeperCost}</Table.Td>
-                        <Table.Td ta="right">${Math.round(fairValue)}</Table.Td>
+                        <Table.Td ta="right" visibleFrom="sm">
+                          ${Math.round(fairValue)}
+                        </Table.Td>
                         <Table.Td ta="right">
                           <Group gap={6} justify="flex-end" wrap="nowrap">
                             <Text size="sm" fw={600} c="teal">
