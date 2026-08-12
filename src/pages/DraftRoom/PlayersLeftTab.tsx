@@ -350,7 +350,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
             : `$ = projected cost, green = within $${BUDGET_MATCH_WINDOW} of an open budget spot at this position, orange = not close to one · gold row = currently on the block. Drafted players are hidden.`}
         </Text>
         <SegmentedControl
-          size="xs"
+          size="sm"
           value={view}
           onChange={(value) => setView(value as BoardView)}
           data={[
@@ -358,8 +358,8 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
               value: "bar",
               label: (
                 <Group gap={4} wrap="nowrap">
-                  <LayoutList size={14} />
-                  <Text size="xs">Bars</Text>
+                  <LayoutList size={16} />
+                  <Text size="sm">Bars</Text>
                 </Group>
               ),
             },
@@ -367,8 +367,8 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
               value: "table",
               label: (
                 <Group gap={4} wrap="nowrap">
-                  <LayoutGrid size={14} />
-                  <Text size="xs">Table</Text>
+                  <LayoutGrid size={16} />
+                  <Text size="sm">Table</Text>
                 </Group>
               ),
             },
