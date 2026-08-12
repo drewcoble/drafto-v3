@@ -3,16 +3,20 @@ import { useMutation, useQuery } from "convex/react";
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Card,
   Chip,
+  Collapse,
   Group,
   NumberInput,
   Stack,
   Text,
   TextInput,
+  UnstyledButton,
 } from "@mantine/core";
-import { Plus, Trash2 } from "lucide-react";
+import { useDisclosure } from "@mantine/hooks";
+import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import {
@@ -189,6 +193,11 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
   });
   const isDirty = localSignature !== committedSignature;
 
+  // Mobile-only - see the collapsible wrapper in the return below. Desktop
+  // always shows the full section (there's room), so this state is simply
+  // unused there.
+  const [mobileOpened, { toggle: toggleMobileOpened }] = useDisclosure(false);
+
   const setKeeperRules = useMutation(api.draft.keeperRules.setKeeperRules);
   const setKeeperTierPlayers = useMutation(
     api.draft.keeperRules.setKeeperTierPlayers,
@@ -357,11 +366,8 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     }
   };
 
-  return (
-    <Stack gap="sm">
-      <Text size="md" fw={500}>
-        Keeper Rules
-      </Text>
+  const body = (
+    <>
       <Text size="xs" c="dimmed">
         Configures the suggested cost when adding a keeper on the Keepers tab,
         plus optional league-wide limits. Leaving a max blank means unlimited.
@@ -673,6 +679,46 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
           {isDirty ? "Unsaved changes" : "All changes saved"}
         </Badge>
       </Group>
-    </Stack>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop: always expanded, no toggle - there's room for it in the
+          two-column Settings layout. */}
+      <Box visibleFrom="sm">
+        <Stack gap="sm">
+          <Text size="md" fw={500}>
+            Keeper Rules
+          </Text>
+          {body}
+        </Stack>
+      </Box>
+      {/* Mobile: collapsed by default - this is a dense, one-time-setup
+          section (formulas, per-rule player pickers), not something worth
+          the scroll distance on every visit to the Settings tab. */}
+      <Box hiddenFrom="sm">
+        <Stack gap="sm">
+          <UnstyledButton
+            onClick={toggleMobileOpened}
+            aria-expanded={mobileOpened}
+          >
+            <Group justify="space-between" wrap="nowrap">
+              <Text size="md" fw={500}>
+                Keeper Rules
+              </Text>
+              {mobileOpened ? (
+                <ChevronUp size={16} />
+              ) : (
+                <ChevronDown size={16} />
+              )}
+            </Group>
+          </UnstyledButton>
+          <Collapse in={mobileOpened}>
+            <Stack gap="sm">{body}</Stack>
+          </Collapse>
+        </Stack>
+      </Box>
+    </>
   );
 }
