@@ -4,6 +4,7 @@ import {
   ActionIcon,
   Anchor,
   Badge,
+  Box,
   Card,
   Center,
   Group,
@@ -155,7 +156,13 @@ export function InjuryReport({
     allRankings === undefined;
 
   return (
-    <Stack gap="md" py="sm" pt={{ base: POSITION_FILTER_BAR_HEIGHT, sm: "sm" }}>
+    <Stack gap="md" py="sm">
+      {/* Reserves space for PositionFilterBar's fixed mobile bar below,
+          which is pulled out of document flow - see
+          POSITION_FILTER_BAR_HEIGHT's comment for why this is a real
+          spacer element rather than a `pt` prop on this Stack (which
+          already sets `py`). */}
+      <Box hiddenFrom="sm" h={POSITION_FILTER_BAR_HEIGHT} />
       <Group justify="space-between" align="center" wrap="wrap">
         <PositionFilterBar
           positions={activePositions}

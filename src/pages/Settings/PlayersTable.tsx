@@ -2,7 +2,16 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useQuery as useTanStackQuery } from "@tanstack/react-query";
 import { convexQuery } from "@convex-dev/react-query";
-import { Card, Center, Group, Loader, Stack, Table, Text } from "@mantine/core";
+import {
+  Box,
+  Card,
+  Center,
+  Group,
+  Loader,
+  Stack,
+  Table,
+  Text,
+} from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import {
@@ -316,7 +325,13 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   ]);
 
   return (
-    <Stack gap="md" py="sm" pt={{ base: POSITION_FILTER_BAR_HEIGHT, sm: "sm" }}>
+    <Stack gap="md" py="sm">
+      {/* Reserves space for PositionFilterBar's fixed mobile bar below,
+          which is pulled out of document flow - see
+          POSITION_FILTER_BAR_HEIGHT's comment for why this is a real
+          spacer element rather than a `pt` prop on this Stack (which
+          already sets `py`). */}
+      <Box hiddenFrom="sm" h={POSITION_FILTER_BAR_HEIGHT} />
       <Group justify="space-between" align="center" wrap="wrap">
         <PositionFilterBar
           positions={activePositions}

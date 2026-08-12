@@ -28,7 +28,10 @@ import {
   matchPlanSlot,
   type PlanSlotMatch,
 } from "../../lib/planRecommendation";
-import { filterRelevantPlayers, scoringConfigFromSeason } from "../../lib/relevantPlayers";
+import {
+  filterRelevantPlayers,
+  scoringConfigFromSeason,
+} from "../../lib/relevantPlayers";
 import { recommendationFor, groupByTier } from "../../lib/draftRecommendation";
 import { POSITION_COLORS } from "../../lib/positionColors";
 import {
@@ -78,7 +81,11 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   const draftBoardResult = useQuery(
     api.draft.board.getDraftBoard,
     settings
-      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
+      ? {
+          seasonId,
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
       : "skip",
   ) as { isGeneric: boolean; rows: DraftTierRow[] } | undefined;
   const tieredValues = draftBoardResult?.rows;
@@ -327,13 +334,15 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
     // reachable without having to scroll all the way across the bars first
     // - a child anchored to the far edge of an very-wide (miw: max-content)
     // scroll container is only actually visible once scrolled there.
-    <Stack
-      gap="lg"
-      py="sm"
-      {...(view === "table"
-        ? { pt: { base: POSITION_FILTER_BAR_HEIGHT } }
-        : {})}
-    >
+    <Stack gap="lg" py="sm">
+      {/* Reserves space for PositionFilterBar's fixed mobile bar below
+          (rendered further down, once view === "table") - see
+          POSITION_FILTER_BAR_HEIGHT's comment for why this is a real
+          spacer element rather than a `pt` prop on this Stack (which
+          already sets `py`). */}
+      {view === "table" && (
+        <Box hiddenFrom="sm" h={POSITION_FILTER_BAR_HEIGHT} />
+      )}
       <Group justify="space-between" wrap="wrap" gap="sm" px={4}>
         <Text size="xs" c="dimmed" maw={640}>
           {view === "bar"
