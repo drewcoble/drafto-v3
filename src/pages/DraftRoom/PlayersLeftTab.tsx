@@ -66,10 +66,10 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [view, setView] = useState<BoardView>("bar");
-  // Only surfaced in table view - the bar view's tier-grouped horizontal
-  // layout is already scannable position-by-position, but the table's flat
-  // per-position sections benefit more from being able to narrow down to
-  // just the positions currently being drafted for.
+  // Narrows which position sections render, in both bar and table view -
+  // useful even in the bar view's already position-grouped layout once a
+  // league has many active positions and scrolling past ones you're not
+  // drafting for gets tedious.
   const [selectedPositions, setSelectedPositions] = useState<Position[]>([
     ...POSITIONS,
   ]);
@@ -335,14 +335,12 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
     // - a child anchored to the far edge of an very-wide (miw: max-content)
     // scroll container is only actually visible once scrolled there.
     <Stack gap="lg" py="sm">
-      {/* Reserves space for PositionFilterBar's fixed mobile bar below
-          (rendered further down, once view === "table") - see
+      {/* Reserves space for PositionFilterBar's fixed mobile bar below,
+          which is pulled out of document flow - see
           POSITION_FILTER_BAR_HEIGHT's comment for why this is a real
           spacer element rather than a `pt` prop on this Stack (which
           already sets `py`). */}
-      {view === "table" && (
-        <Box hiddenFrom="sm" h={POSITION_FILTER_BAR_HEIGHT} />
-      )}
+      <Box hiddenFrom="sm" h={POSITION_FILTER_BAR_HEIGHT} />
       <Group justify="space-between" wrap="wrap" gap="sm" px={4}>
         <Text size="xs" c="dimmed" maw={640}>
           {view === "bar"
@@ -380,16 +378,14 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
           <GenericValuesNotice />
         </Box>
       )}
-      {view === "table" && (
-        <Box px={4}>
-          <PositionFilterBar
-            positions={activePositions}
-            selected={selectedPositions}
-            onChange={setSelectedPositions}
-            top={MOBILE_HEADER_HEIGHT + MOBILE_STATS_ROW_HEIGHT}
-          />
-        </Box>
-      )}
+      <Box px={4}>
+        <PositionFilterBar
+          positions={activePositions}
+          selected={selectedPositions}
+          onChange={setSelectedPositions}
+          top={MOBILE_HEADER_HEIGHT + MOBILE_STATS_ROW_HEIGHT}
+        />
+      </Box>
       {actionError && (
         <Text size="xs" c="red" px={4}>
           {actionError}
@@ -403,7 +399,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
       <Box style={{ overflowX: view === "bar" ? "auto" : "visible" }} px={4}>
         <Stack gap="lg" miw={view === "bar" ? "max-content" : undefined}>
           {activePositions
-            .filter((pos) => view === "bar" || selectedPositions.includes(pos))
+            .filter((pos) => selectedPositions.includes(pos))
             .map((pos) => {
               const rows = rowsByPosition.get(pos) ?? [];
               const remainingTopTiers = rows.filter(
