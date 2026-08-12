@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
   Badge,
@@ -64,6 +64,9 @@ function PlayerSearchAdd({
   portalTarget: HTMLDivElement | null;
 }) {
   const [search, setSearch] = useState("");
+  // Blurred once a player's added so the on-screen keyboard on iOS/Android
+  // doesn't stick around covering the rest of this team's row.
+  const inputRef = useRef<HTMLInputElement>(null);
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
   });
@@ -93,6 +96,7 @@ function PlayerSearchAdd({
       onOptionSubmit={(value) => {
         const player = candidates.find((row) => String(row.fpid) === value);
         combobox.closeDropdown();
+        inputRef.current?.blur();
         if (!player) return;
         onAdd(player);
         setSearch("");
@@ -100,6 +104,7 @@ function PlayerSearchAdd({
     >
       <Combobox.Target>
         <TextInput
+          ref={inputRef}
           size="xs"
           placeholder="Search a player to add..."
           value={search}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Anchor,
   Badge,
@@ -73,6 +73,10 @@ export function KeeperSearchForm({
 }: KeeperSearchFormProps) {
   const [selectedCandidate, setSelectedCandidate] =
     useState<KeeperSearchResult | null>(null);
+  // Blurred once a player's picked from the dropdown so the on-screen
+  // keyboard on iOS/Android doesn't stick around covering the team/cost
+  // fields that appear next.
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
@@ -88,6 +92,7 @@ export function KeeperSearchForm({
       (row) => String(row.fpid) === value,
     );
     combobox.closeDropdown();
+    inputRef.current?.blur();
     if (!candidate) return;
     setSelectedCandidate(candidate);
     onKeeperSearchChange(candidate.name);
@@ -126,6 +131,7 @@ export function KeeperSearchForm({
       <Combobox store={combobox} onOptionSubmit={handleOptionSubmit}>
         <Combobox.Target>
           <TextInput
+            ref={inputRef}
             label="Search a player to keep..."
             placeholder="e.g. CeeDee Lamb"
             value={keeperSearch}

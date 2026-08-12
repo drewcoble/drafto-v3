@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   Badge,
@@ -46,6 +46,9 @@ export function KeeperTierPlayerPicker({
 }: KeeperTierPlayerPickerProps) {
   const [showResults, setShowResults] = useState(false);
   const atCapacity = maxSize !== undefined && fpids.length >= maxSize;
+  // Blurred once a player's added so the on-screen keyboard on iOS/Android
+  // doesn't stick around covering the results list.
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const selected = useMemo(
     () =>
@@ -86,6 +89,7 @@ export function KeeperTierPlayerPicker({
         )}
       </Group>
       <TextInput
+        ref={inputRef}
         size="xs"
         placeholder={
           atCapacity
@@ -138,6 +142,7 @@ export function KeeperTierPlayerPicker({
                     onToggle(row.fpid);
                     onSearchChange("");
                     setShowResults(false);
+                    inputRef.current?.blur();
                   }}
                 >
                   +

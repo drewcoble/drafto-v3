@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActionIcon,
   Anchor,
@@ -381,9 +381,16 @@ export function SearchBody({
   onSelectPlayer,
   touchFriendly = false,
 }: SearchBodyProps) {
+  // Blurred once a result is acted on (nominate, or opening the player
+  // detail modal via the name) so the on-screen keyboard on iOS/Android
+  // doesn't stick around covering the rest of the panel/modal.
+  const inputRef = useRef<HTMLInputElement>(null);
+  const blurInput = () => inputRef.current?.blur();
+
   return (
     <Stack gap={touchFriendly ? 10 : 6}>
       <TextInput
+        ref={inputRef}
         size={touchFriendly ? "md" : "sm"}
         placeholder="Search a player to nominate..."
         value={search}
@@ -408,7 +415,10 @@ export function SearchBody({
                         component="button"
                         type="button"
                         size={touchFriendly ? "sm" : "xs"}
-                        onClick={() => onSelectPlayer(row.fpid)}
+                        onClick={() => {
+                          blurInput();
+                          onSelectPlayer(row.fpid);
+                        }}
                       >
                         {row.name}
                       </Anchor>
@@ -437,7 +447,10 @@ export function SearchBody({
                     <Table.Td>
                       <Button
                         size={touchFriendly ? "sm" : "compact-xs"}
-                        onClick={() => onNominate(row.fpid)}
+                        onClick={() => {
+                          blurInput();
+                          onNominate(row.fpid);
+                        }}
                       >
                         Nominate
                       </Button>
