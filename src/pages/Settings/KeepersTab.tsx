@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Card, Center, Grid, Loader, Stack, Text } from "@mantine/core";
+import {
+  Card,
+  Center,
+  Divider,
+  Grid,
+  Loader,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { POSITIONS, type Position } from "../../types";
@@ -317,6 +325,13 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
           <KeeperRulesPanel settings={settings} />
         </Grid.Col>
 
+        {/* Only meaningful once the two columns collapse into one stacked
+            column below "md" - side by side above that, there's no shared
+            edge between Rules and Add a Keeper to divide. */}
+        <Grid.Col span={12} hiddenFrom="md">
+          <Divider />
+        </Grid.Col>
+
         <Grid.Col span={{ base: 12, md: 6 }}>
           <Stack gap="md">
             <Stack gap="md">
@@ -357,6 +372,8 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 onSelectPlayer={setSelectedFpid}
               />
             </Stack>
+
+            <Divider />
 
             <Stack gap="md">
               <Text size="md" fw={500}>
