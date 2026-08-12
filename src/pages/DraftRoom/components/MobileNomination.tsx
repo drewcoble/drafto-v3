@@ -173,11 +173,19 @@ export function MobileNomination({
                 // instead of a flat fill, each stop still mixed with
                 // transparent at the same 65% as before so it stays
                 // translucent against the frosted bar underneath it (see
-                // BottomNav.tsx).
+                // BottomNav.tsx). Unaffected by disabled state on purpose -
+                // only the icon darkens below.
                 background:
                   "linear-gradient(135deg, color-mix(in srgb, var(--mantine-color-saddlebrown-3) 65%, transparent), color-mix(in srgb, var(--mantine-color-saddlebrown-7) 65%, transparent))",
                 backdropFilter: "blur(16px)",
                 WebkitBackdropFilter: "blur(16px)",
+                // Mantine's own disabled icon color (dark-3/gray-5) is too
+                // close to the saddlebrown gradient to read clearly once
+                // disabled - a darker neutral gray gives it real contrast
+                // instead of blending into the background.
+                ...(activeNomination
+                  ? { color: "var(--mantine-color-gray-8)" }
+                  : {}),
               }}
             >
               {popoverOpen ? <X size={24} /> : <UserPlus size={24} />}
