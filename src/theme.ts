@@ -346,6 +346,10 @@ export const theme = createTheme({
     ],
   },
   primaryColor: "burlywood",
+  // Mantine's own default ("md") reads a little square/sharp-cornered app-
+  // wide (buttons especially) - "lg" softens every component that doesn't
+  // set its own explicit `radius` (Card still pins "md" below, on purpose).
+  defaultRadius: "lg",
   components: {
     Card: {
       defaultProps: {
