@@ -1,3 +1,8 @@
+import {
+  MAX_PX_PER_DOLLAR,
+  MIN_BAR_WIDTH,
+  TARGET_MAX_BAR_WIDTH,
+} from "../constants/playersLeft";
 import type { DraftBoardRow } from "../types";
 import type { ConsistencyLabel } from "./consistency";
 
@@ -69,6 +74,30 @@ function consistencyOutline(consistency: ConsistencyLabel | undefined): string {
   //       : "red-8";
   // return `2.5px solid var(--mantine-color-${color})`;
   return `none`;
+}
+
+// The most expensive currently-undrafted player (across the whole board,
+// not just whatever positions are toggled visible - see PlayersLeftTab.tsx's
+// highestVisibleDollarValue) reaches TARGET_MAX_BAR_WIDTH; everyone else
+// scales down from there at the same recalculated px/dollar rate, floored
+// at MIN_BAR_WIDTH. Recalculating against the current board (rather than a
+// fixed px/dollar rate tuned for early-draft prices) is what keeps a late-
+// draft board of $1-$5 leftovers from all being squashed indistinguishably
+// to MIN_BAR_WIDTH. MAX_PX_PER_DOLLAR caps how far that rate can climb when
+// the board's priciest leftover is itself cheap, so a $1 player never
+// balloons toward the same width as that "priciest" $3 one.
+export function barWidth(
+  dollarValue: number,
+  highestVisibleDollarValue: number,
+): number {
+  const rate =
+    highestVisibleDollarValue > 0
+      ? Math.min(
+          MAX_PX_PER_DOLLAR,
+          TARGET_MAX_BAR_WIDTH / highestVisibleDollarValue,
+        )
+      : MAX_PX_PER_DOLLAR;
+  return Math.max(MIN_BAR_WIDTH, Math.round(dollarValue * rate));
 }
 
 // Bar fill is just the target/avoid tag (green/red), defaulting to blue

@@ -16,14 +16,12 @@ import {
   BAR_HEIGHT,
   ICON_SIZE,
   MAX_BAR_WIDTH,
-  MIN_BAR_WIDTH,
-  PX_PER_DOLLAR,
 } from "../../../constants/playersLeft";
 import {
   consistencyColor,
   type ConsistencyLabel,
 } from "../../../lib/consistency";
-import { barStyle } from "../../../lib/draftRecommendation";
+import { barStyle, barWidth } from "../../../lib/draftRecommendation";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
 import { playerTagStyle } from "../../../lib/playerTagStyle";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
@@ -49,6 +47,10 @@ const CONSISTENCY_ICON: Record<ConsistencyLabel, typeof ShieldCheck> = {
 interface PlayerBarProps {
   row: DraftBoardRow;
   budgetAmount: number | undefined;
+  // The single most expensive currently-undrafted player's $ value, across
+  // the whole board - see barWidth's comment for how this drives the
+  // recalculated px/dollar scale every bar on the page shares.
+  highestVisibleDollarValue: number;
   planMatch: PlanSlotMatch | undefined;
   tag: PlayerTag | undefined;
   valueGap: ValueGap | undefined;
@@ -77,6 +79,7 @@ interface PlayerBarProps {
 export function PlayerBar({
   row,
   budgetAmount,
+  highestVisibleDollarValue,
   planMatch,
   tag,
   valueGap,
@@ -87,10 +90,7 @@ export function PlayerBar({
   onNominate,
   onSelectPlayer,
 }: PlayerBarProps) {
-  const width = Math.max(
-    Math.round(row.dollarValue * PX_PER_DOLLAR),
-    MIN_BAR_WIDTH,
-  );
+  const width = barWidth(row.dollarValue, highestVisibleDollarValue);
   // Bars are narrow (width = projected cost), so most names truncate -
   // rather than a tooltip, smoothly grow the bar itself to its natural
   // content width on hover (and back on hover end) so the full name (and

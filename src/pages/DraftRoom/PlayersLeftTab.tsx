@@ -272,6 +272,21 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
     return map;
   }, [board, settings, activePositions, adpByFpid]);
 
+  // Across the whole board, not just whatever positions selectedPositions
+  // currently has toggled visible - see lib/draftRecommendation.ts's
+  // barWidth for why this needs to be the same regardless of the position
+  // filter, so a $20 player's bar is always the same width no matter which
+  // positions happen to be shown at the moment.
+  const highestVisibleDollarValue = useMemo(() => {
+    let max = 0;
+    for (const rows of rowsByPosition.values()) {
+      for (const row of rows) {
+        if (row.dollarValue > max) max = row.dollarValue;
+      }
+    }
+    return max;
+  }, [rowsByPosition]);
+
   // Which of the team's still-open budget-plan slots each visible player's
   // market value best matches (e.g. a $23 WR reads against WR2's $23 budget
   // rather than WR1's $40, even though WR1 is the "first" open WR slot) -
@@ -493,6 +508,9 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                                   key={row.fpid}
                                   row={row}
                                   budgetAmount={budgetAmount}
+                                  highestVisibleDollarValue={
+                                    highestVisibleDollarValue
+                                  }
                                   planMatch={planMatch}
                                   tag={tagByFpid.get(row.fpid)}
                                   valueGap={valueGapByFpid.get(row.fpid)}
