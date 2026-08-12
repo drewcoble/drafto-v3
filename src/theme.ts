@@ -384,21 +384,24 @@ export const theme = createTheme({
         },
       },
     },
-    // Dark mode matches var(--mantine-color-dark-6) - the same "soft
-    // surface" shade Card uses, already Mantine's own default there - so
-    // every Popover in the app (SlotRow's closest-players list, PlayerBar's
-    // detail card, MobileNomination's nominate search) reads as the same
-    // floating-panel surface as Card, on purpose, not by accident of
-    // Mantine's current defaults. Light mode gets a plain light gray
-    // instead of gray-1's dark-tinted counterpart - dark-6 is a fixed shade
-    // from the dark palette (see the dark: [...] array above), not
-    // something that flips with color scheme on its own, so without this
-    // light mode would render the same dark-green surface as dark mode.
+    // Same frosted-glass treatment as BottomNav.tsx's floating pill - dark
+    // mode matches var(--mantine-color-dark-5) (one shade lighter than
+    // Card's dark-6 "soft surface"), translucent + blurred rather than a
+    // flat cutout, so every Popover in the app (SlotRow's closest-players
+    // list, PlayerBar's detail card, MobileNomination's nominate search)
+    // reads as the same elevated floating surface as the bottom nav bar.
+    // Light mode gets a plain light gray instead of gray-1's dark-tinted
+    // counterpart - dark-5 is a fixed shade from the dark palette (see the
+    // dark: [...] array above), not something that flips with color scheme
+    // on its own, so without this light mode would render the same
+    // dark-green surface as dark mode.
     Popover: {
       styles: {
         dropdown: {
           backgroundColor:
-            "light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6))",
+            "light-dark(color-mix(in srgb, var(--mantine-color-gray-1) 65%, transparent), color-mix(in srgb, var(--mantine-color-dark-5) 50%, transparent))",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
         },
       },
     },

@@ -352,18 +352,11 @@ function MobileNominationBar({
         border: "1px solid var(--mantine-color-default-border)",
         // Same light-dark() as the global Popover default in theme.ts -
         // this Box isn't a real Popover (just styled to match one), so it
-        // doesn't inherit that theme default and needs its own copy. Dark
-        // mode is dark-6, the shade Mantine's Card component defaults to
-        // (see Card.css) - this used to come from an inner <Card> nested
-        // inside this Box (see the earlier commit that collapsed them into
-        // one element), which is where the "slightly lighter" look came
-        // from. Light mode gets a plain light gray instead, since dark-6 is
-        // a fixed dark-palette shade that doesn't flip with color scheme on
-        // its own. Translucent + blurred rather than opaque, same
-        // frosted-glass treatment as every other fixed bar (BottomNav.tsx,
-        // AppHeader.tsx, etc.).
+        // doesn't inherit that theme default and needs its own copy. Same
+        // frosted-glass treatment as every other elevated surface
+        // (BottomNav.tsx, AppHeader.tsx, and now Popover.Dropdown itself).
         background:
-          "light-dark(color-mix(in srgb, var(--mantine-color-gray-1) 75%, transparent), color-mix(in srgb, var(--mantine-color-dark-6) 75%, transparent))",
+          "light-dark(color-mix(in srgb, var(--mantine-color-gray-1) 65%, transparent), color-mix(in srgb, var(--mantine-color-dark-5) 50%, transparent))",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         boxShadow: "var(--mantine-shadow-lg)",
