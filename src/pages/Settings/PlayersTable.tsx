@@ -43,6 +43,23 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     ...POSITIONS,
   ]);
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
+  // Which rows' target/avoid toggle + Keeper info is showing - dropped from
+  // the main row (see PlayerRow.tsx) to fit mobile widths, same
+  // click-to-expand pattern InjuryReport.tsx uses.
+  const [expandedIds, setExpandedIds] = useState<Set<Id<"projections">>>(
+    new Set(),
+  );
+  const toggleExpanded = (id: Id<"projections">) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const allProjections = useQuery(api.projections.getAllProjections, {
     week,
@@ -334,15 +351,15 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
             No projections yet for the selected position(s) - fetch data first.
           </Text>
         ) : (
-          <Table.ScrollContainer minWidth={900}>
+          <Table.ScrollContainer minWidth={640}>
             <Table striped highlightOnHover>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Rank</Table.Th>
-                  {/* Action (target/avoid toggle) then flags (value-gap/
-                    consistency) - unlabeled columns right next to Player,
-                    same placement every icon-flag table in the app uses. */}
-                  <Table.Th></Table.Th>
+                  {/* Flags (value-gap/consistency) - unlabeled column right
+                    next to Player, same placement every icon-flag table in
+                    the app uses. Target/avoid toggle and Keeper moved into
+                    the expanded detail row (see PlayerRow.tsx). */}
                   <Table.Th></Table.Th>
                   <Table.Th miw={220}>Player</Table.Th>
                   <Table.Th miw={70}>Pos</Table.Th>
@@ -353,7 +370,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                       {draftValuesResult?.isGeneric ? "$ (est.)" : "$"}
                     </Table.Th>
                   )}
-                  {selectedSettings && <Table.Th>Keeper</Table.Th>}
+                  <Table.Th />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -388,6 +405,8 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                     }
                     showKeeperColumn={!!selectedSettings}
                     showKeeperYear={showKeeperYear}
+                    isExpanded={expandedIds.has(row._id)}
+                    onToggleExpand={() => toggleExpanded(row._id)}
                   />
                 ))}
               </Table.Tbody>
