@@ -153,15 +153,16 @@ export function BottomNav({
         margin: "0 auto",
         borderRadius: "var(--mantine-radius-xl)",
         border: "1px solid var(--mantine-color-default-border)",
-        // Dark mode: a shade lighter than the dark-green "surface" color
-        // Card/Popover use (--mantine-color-dark-6, see theme.ts) rather
-        // than the even-darker body color, so the floating bar visibly
-        // pops off the page instead of blending into it - then translucent
-        // (same as before) so backdropFilter's blur of whatever's
-        // scrolling underneath still reads as frosted glass, not a flat
-        // cutout. Light mode is unchanged, still keyed off body.
+        // Dark mode: dark-5, one shade lighter than the dark-green
+        // "surface" color Card/Popover use (--mantine-color-dark-6, see
+        // theme.ts's dark: [...] array) and the even-darker body color, so
+        // the floating bar visibly pops off the page instead of blending
+        // into it - then translucent (same as before) so backdropFilter's
+        // blur of whatever's scrolling underneath still reads as frosted
+        // glass, not a flat cutout. Light mode is unchanged, still keyed
+        // off body.
         background:
-          "light-dark(color-mix(in srgb, var(--mantine-color-body) 65%, transparent), color-mix(in srgb, color-mix(in srgb, var(--mantine-color-dark-6) 85%, white) 65%, transparent))",
+          "light-dark(color-mix(in srgb, var(--mantine-color-body) 65%, transparent), color-mix(in srgb, var(--mantine-color-dark-5) 65%, transparent))",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         boxShadow: "var(--mantine-shadow-lg)",
