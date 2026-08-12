@@ -217,7 +217,14 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
         zIndex: 220,
         display: "flex",
         alignItems: "center",
-        background: "var(--mantine-color-body)",
+        // Translucent + blurred rather than a flat cutout - same frosted-
+        // glass treatment as BottomNav.tsx, so content scrolling underneath
+        // the fixed mobile header still shows through softly instead of
+        // vanishing behind a hard edge.
+        background:
+          "color-mix(in srgb, var(--mantine-color-body) 75%, transparent)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
         borderBottom: "1px solid var(--mantine-color-default-border)",
       }}
     >

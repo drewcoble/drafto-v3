@@ -34,7 +34,14 @@ export function MobileStatsRow({
           : planSafe > 0
             ? `+$${planSafe}`
             : `-$${Math.abs(planSafe)}`,
-      color: planSafe === null ? "inherit" : planSafe > 0 ? "green" : planSafe < 0 ? "red" : "inherit",
+      color:
+        planSafe === null
+          ? "inherit"
+          : planSafe > 0
+            ? "green"
+            : planSafe < 0
+              ? "red"
+              : "inherit",
     },
     { label: "Open", value: openSlots.toString(), color: "inherit" },
     { label: "/Slot", value: `$${perOpenSlot.toFixed(1)}`, color: "inherit" },
@@ -53,7 +60,13 @@ export function MobileStatsRow({
         minHeight: MOBILE_STATS_ROW_HEIGHT,
         display: "flex",
         alignItems: "center",
-        background: "var(--mantine-color-body)",
+        // Same frosted-glass treatment as AppHeader.tsx/BottomNav.tsx -
+        // translucent + blurred rather than a flat cutout, so this reads
+        // as one continuous fixed header block with AppHeader above it.
+        background:
+          "color-mix(in srgb, var(--mantine-color-body) 75%, transparent)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
         borderBottom: "1px solid var(--mantine-color-default-border)",
       }}
     >
