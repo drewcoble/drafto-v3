@@ -80,8 +80,7 @@ export function SlotRow({
   // Exact match, not "close enough" - the budgeted amount should equal what
   // was actually spent once a slot's filled; any difference means the plan
   // is now stale for this slot and worth fixing.
-  const mismatch =
-    filledPlayer !== undefined && filledPlayer.price !== amount;
+  const mismatch = filledPlayer !== undefined && filledPlayer.price !== amount;
 
   // Recomputed on every amount change (a lot cheaper than it looks - the
   // pool BudgetTab hands down is already drafted/kept-filtered, so this is
@@ -204,7 +203,12 @@ export function SlotRow({
               </Text>
             ) : (
               closestPlayers.map((player) => (
-                <Group key={player.fpid} justify="space-between" wrap="nowrap" gap={8}>
+                <Group
+                  key={player.fpid}
+                  justify="space-between"
+                  wrap="nowrap"
+                  gap={8}
+                >
                   <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
                     <Badge
                       size="xs"
@@ -264,8 +268,8 @@ export function SlotRow({
           onClick={onRevert}
           title={
             isOverridden
-              ? "Revert to pre-draft amount"
-              : "Following pre-draft plan"
+              ? "Revert to original amount"
+              : "Following original budget"
           }
         >
           <RotateCcw size={14} />

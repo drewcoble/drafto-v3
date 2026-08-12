@@ -413,7 +413,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
       }
       setSavedSnapshot({ amounts: { ...amounts }, overspendBehavior });
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to save plan."));
+      setError(getErrorMessage(err, "Failed to save budget."));
     } finally {
       setIsSaving(false);
     }
@@ -422,7 +422,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
   const handleReset = async () => {
     if (
       !window.confirm(
-        "Reset the live budget to your pre-draft plan? Any in-draft reallocations will be lost.",
+        "Revert the live budget to your original budget? Any in-draft reallocations will be lost.",
       )
     ) {
       return;
@@ -446,7 +446,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
         overspendBehavior: resetOverspendBehavior,
       });
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to reset plan."));
+      setError(getErrorMessage(err, "Failed to revert budget."));
     } finally {
       setIsResetting(false);
     }
@@ -473,11 +473,11 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
       <Box hiddenFrom="sm" h={BUDGET_UNALLOCATED_BAR_HEIGHT} />
       <Stack gap={2}>
         <Text fw={700} size="lg">
-          {mode === "live" ? "Live Budget" : "Allocate the cap"}
+          {mode === "live" ? "Live Budget" : "Draft Budget"}
         </Text>
         {mode === "live" && (
           <Text size="xs" c="dimmed">
-            Slots you haven't touched keep following your pre-draft plan. Only
+            Slots you haven't touched keep following your original budget. Only
             the ones you adjust here get saved as overrides.
           </Text>
         )}
@@ -520,7 +520,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
                 disabled={!isDirty}
                 fullWidth
               >
-                {mode === "live" ? "Save live plan" : "Save pre-draft plan"}
+                Save Budget
               </Button>
               {mode === "live" && (
                 <Button
@@ -530,7 +530,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
                   loading={isResetting}
                   fullWidth
                 >
-                  Reset to pre-draft plan
+                  Revert to original budget
                 </Button>
               )}
               {/* Mobile's dirty-state badge lives in the fixed UnallocatedBar
@@ -544,7 +544,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
                   disabled={!isDirty}
                   w="fit-content"
                 >
-                  {mode === "live" ? "Save live plan" : "Save pre-draft plan"}
+                  Save Budget
                 </Button>
                 {mode === "live" && (
                   <Button
@@ -554,7 +554,7 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
                     loading={isResetting}
                     w="fit-content"
                   >
-                    Reset to pre-draft plan
+                    Revert to original budget
                   </Button>
                 )}
                 <Badge
