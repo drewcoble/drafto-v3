@@ -75,7 +75,7 @@ export function LeagueDetails({
   const phase = useDraftPhase(selectedLeagueId);
   const isStarted = phase?.isStarted ?? false;
   const startDraft = useMutation(api.draft.lifecycle.startDraft);
-  const reopenSetup = useMutation(api.draft.lifecycle.reopenSetup);
+  const reopenPreDraft = useMutation(api.draft.lifecycle.reopenPreDraft);
   const seasonLineage = useQuery(
     api.draft.history.listSeasonLineage,
     selectedLeagueId ? { seasonId: selectedLeagueId } : "skip",
@@ -286,14 +286,14 @@ export function LeagueDetails({
     }
   };
 
-  const handleReopenSetup = async () => {
+  const handleReopenPreDraft = async () => {
     if (!settings) return;
     setIsReopening(true);
     setReopenError(null);
     try {
-      await reopenSetup({ seasonId: settings._id });
+      await reopenPreDraft({ seasonId: settings._id });
     } catch (err) {
-      setReopenError(getErrorMessage(err, "Failed to reopen setup."));
+      setReopenError(getErrorMessage(err, "Failed to reopen pre-draft."));
     } finally {
       setIsReopening(false);
     }
@@ -399,7 +399,7 @@ export function LeagueDetails({
                 ...(isStarted
                   ? {
                       lockedMessage:
-                        "This draft has started - reopen setup to change it.",
+                        "This draft has started - reopen pre-draft to change it.",
                     }
                   : {}),
               },
@@ -449,10 +449,10 @@ export function LeagueDetails({
             <Button
               variant="default"
               leftSection={<Undo2 size={16} />}
-              onClick={handleReopenSetup}
+              onClick={handleReopenPreDraft}
               loading={isReopening}
             >
-              Reopen Setup
+              Reopen Pre-Draft
             </Button>
           )}
           <Button
@@ -487,7 +487,7 @@ export function LeagueDetails({
             This locks league scoring, roster slots, and keeper rules for the
             rest of the draft, and enables nominating/bidding on players. Team
             names, salary cap overrides, and nomination order stay editable. You
-            can reopen setup afterward, but only until the first player is
+            can reopen pre-draft afterward, but only until the first player is
             actually drafted.
           </Text>
           {startError && (

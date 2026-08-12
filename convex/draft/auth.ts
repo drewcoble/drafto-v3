@@ -27,7 +27,7 @@ export async function requireSeasonOwner(
 }
 
 // Resolves this season's canonical live draft - the "real" (not mock) draft
-// every current UI flow (setup, live auction) operates on. Today's app never
+// every current UI flow (pre-draft, live auction) operates on. Today's app never
 // exposes creating a second (mock) draft, so this always exists once the
 // season itself does - convex/leagues.ts's createLeague and
 // convex/draft/history.ts's createNextSeason both create the real draft
@@ -64,7 +64,7 @@ export async function requireDraftOwner(
 // Guards every mutation that edits league configuration locked once the
 // draft starts (scoring/roster slots, keeper rules, team count/league
 // salary cap, adding/removing teams) - see convex/draft/lifecycle.ts's
-// startDraft/reopenSetup for the only two mutations that flip startedAt.
+// startDraft/reopenPreDraft for the only two mutations that flip startedAt.
 export async function requireDraftNotStarted(
   ctx: QueryCtx | MutationCtx,
   seasonId: Id<"seasons">,
@@ -72,7 +72,7 @@ export async function requireDraftNotStarted(
   const result = await requireDraftOwner(ctx, seasonId);
   if (result.draft.startedAt !== undefined) {
     throw new Error(
-      "This draft has already started - reopen setup to change league settings.",
+      "This draft has already started - reopen pre-draft to change league settings.",
     );
   }
   return result;

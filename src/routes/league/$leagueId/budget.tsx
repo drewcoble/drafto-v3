@@ -8,8 +8,8 @@ export const Route = createFileRoute("/league/$leagueId/budget")({
   component: BudgetRoute,
 });
 
-// mode is phase-derived, not route-derived, now that setup/live share one
-// page - "predraft" edits draftBudgetPlans directly, "live" edits
+// mode is phase-derived, not route-derived, now that pre-draft/live share
+// one page - "predraft" edits draftBudgetPlans directly, "live" edits
 // draftLiveBudgetOverrides on top of that plan (see BudgetTab.tsx). That
 // plan-vs-override split is still worth keeping even on one page: it's what
 // lets a commissioner deviate live without losing the original plan to

@@ -467,7 +467,7 @@ export const removeKeeper = mutation({
     }
     if (draft.startedAt !== undefined) {
       throw new Error(
-        "This draft has already started - reopen setup to change league settings.",
+        "This draft has already started - reopen pre-draft to change league settings.",
       );
     }
     await ctx.db.delete(args.pickId);
@@ -496,7 +496,7 @@ export const setKeeperStreak = mutation({
     }
     if (draft.startedAt !== undefined) {
       throw new Error(
-        "This draft has already started - reopen setup to change league settings.",
+        "This draft has already started - reopen pre-draft to change league settings.",
       );
     }
     await ctx.db.patch(args.pickId, {
@@ -524,7 +524,7 @@ export const setKeeperPrice = mutation({
     }
     if (draft.startedAt !== undefined) {
       throw new Error(
-        "This draft has already started - reopen setup to change league settings.",
+        "This draft has already started - reopen pre-draft to change league settings.",
       );
     }
     await ctx.db.patch(args.pickId, { price: args.price });
@@ -554,7 +554,7 @@ export const setKeeperTeam = mutation({
     }
     if (draft.startedAt !== undefined) {
       throw new Error(
-        "This draft has already started - reopen setup to change league settings.",
+        "This draft has already started - reopen pre-draft to change league settings.",
       );
     }
     if (args.teamId === pick.teamId) return null;
@@ -612,7 +612,7 @@ export const removePick = mutation({
     // the Draft Room's roster-correction views).
     if (pick.isKeeper && draft.startedAt !== undefined) {
       throw new Error(
-        "This draft has already started - reopen setup to change league settings.",
+        "This draft has already started - reopen pre-draft to change league settings.",
       );
     }
     await ctx.db.delete(args.pickId);

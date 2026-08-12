@@ -50,11 +50,11 @@ export interface SeasonWithLeagueName extends Doc<"seasons"> {
   name: string;
   // The season's one real draft's status (see convex/draft/status.ts's
   // syncDraftStatus, which keeps this in sync with actual pick count).
-  // Defaults to "setup" in the never-expected case a season's real draft is
-  // missing, rather than throwing - this powers the dashboard league grid
-  // (src/routes/index.tsx), which needs every league to render even if one
-  // row is in a bad state.
-  draftStatus: "setup" | "in_progress" | "complete";
+  // Defaults to "pre_draft" in the never-expected case a season's real
+  // draft is missing, rather than throwing - this powers the dashboard
+  // league grid (src/routes/index.tsx), which needs every league to render
+  // even if one row is in a bad state.
+  draftStatus: "pre_draft" | "in_progress" | "complete";
 }
 
 // Every season across every league this user owns, each carrying its
@@ -89,7 +89,7 @@ export const listSeasons = query({
         result.push({
           ...season,
           name: league.name,
-          draftStatus: draft?.status ?? "setup",
+          draftStatus: draft?.status ?? "pre_draft",
         });
       }
     }
@@ -171,7 +171,7 @@ export const createLeague = mutation({
       seasonId,
       kind: "real",
       name,
-      status: "setup",
+      status: "pre_draft",
       createdAt: now,
     });
 
@@ -261,7 +261,7 @@ export const updateSeason = mutation({
           JSON.stringify(season.superflexPositions);
       if (!configUnchanged) {
         throw new Error(
-          "This draft has already started - reopen setup to change league settings.",
+          "This draft has already started - reopen pre-draft to change league settings.",
         );
       }
     }

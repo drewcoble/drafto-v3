@@ -30,7 +30,7 @@ export const Route = createFileRoute("/")({
 // its draft has gotten - mirrors AppHeader's modeSwitchButton branching
 // (unified league view vs. completed season).
 const ENTER_ACTION: Record<DraftStatus, { label: string }> = {
-  setup: { label: "Enter League" },
+  pre_draft: { label: "Enter League" },
   in_progress: { label: "Enter Draft Room" },
   complete: { label: "Enter Season" },
 };
@@ -65,7 +65,7 @@ function EnterLeagueLink({
       </Link>
     );
   }
-  // "setup" and "in_progress" both land in the same unified league view now
+  // "pre_draft" and "in_progress" both land in the same unified league view now
   // (see routes/league/$leagueId) - the view itself adapts to phase, so
   // there's no separate "in progress" destination anymore. Settings (not
   // league.tsx's live roster breakdown) is the general-purpose landing tab.

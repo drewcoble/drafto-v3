@@ -13,7 +13,7 @@ const REPORT_CARD_WEEK = "0";
 // Keeps drafts.status in sync with startedAt + actual pick count - called at
 // the end of every mutation that changes draftPicks row count (resolvePick,
 // addKeeper, removePick, removeKeeper, undoLastPick in convex/draft/
-// picks.ts) as well as convex/draft/lifecycle.ts's startDraft/reopenSetup.
+// picks.ts) as well as convex/draft/lifecycle.ts's startDraft/reopenPreDraft.
 // Driving this off every pick write rather than just resolvePick makes it
 // self-healing: a commissioner correction via the League tab that drops a
 // team below a full roster automatically reverts status from "complete"
@@ -21,9 +21,9 @@ const REPORT_CARD_WEEK = "0";
 // matches reality. Gates convex/draft/reportCard.ts's getDraftReportCard.
 //
 // Status is NOT derived from pick count alone - a draft with startedAt unset
-// is always "setup" regardless of how many keepers have been added (keepers
-// are just draftPicks rows with isKeeper: true, and adding one pre-draft
-// must not look like the auction has begun).
+// is always "pre_draft" regardless of how many keepers have been added
+// (keepers are just draftPicks rows with isKeeper: true, and adding one
+// pre-draft must not look like the auction has begun).
 export async function syncDraftStatus(
   ctx: MutationCtx,
   draftId: Id<"drafts">,
@@ -33,9 +33,9 @@ export async function syncDraftStatus(
   const season = await ctx.db.get(draft.seasonId);
   if (!season) return;
 
-  let newStatus: "setup" | "in_progress" | "complete";
+  let newStatus: "pre_draft" | "in_progress" | "complete";
   if (draft.startedAt === undefined) {
-    newStatus = "setup";
+    newStatus = "pre_draft";
   } else {
     const picks = await ctx.db
       .query("draftPicks")

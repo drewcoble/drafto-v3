@@ -412,17 +412,17 @@ export default defineSchema({
       v.union(v.literal("linear"), v.literal("snake")),
     ),
     status: v.union(
-      v.literal("setup"),
+      v.literal("pre_draft"),
       v.literal("in_progress"),
       v.literal("complete"),
     ),
     // Set once, explicitly, by convex/draft/lifecycle.ts's startDraft (and
-    // cleared by its reopenSetup) - the actual "has this draft been
+    // cleared by its reopenPreDraft) - the actual "has this draft been
     // deliberately started" flag. `status` above is still derived (see
     // convex/draft/status.ts's syncDraftStatus) but now as a function of
     // this field plus roster fullness, NOT of raw pick count - a keeper
     // added before the draft starts must not flip status away from
-    // "setup", since keepers are just draftPicks rows with isKeeper: true.
+    // "pre_draft", since keepers are just draftPicks rows with isKeeper: true.
     startedAt: v.optional(v.number()),
     // How this draft's picks got into the database when they weren't run
     // through this app's own live auction - absent means a real in-app

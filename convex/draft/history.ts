@@ -201,7 +201,7 @@ export const createNextSeason = mutation({
       seasonId: newSeasonId,
       kind: "real",
       name: args.name,
-      status: "setup",
+      status: "pre_draft",
       createdAt: now,
     });
 

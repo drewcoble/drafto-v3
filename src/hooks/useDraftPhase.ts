@@ -2,13 +2,14 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
-export type DraftPhase = "setup" | "in_progress" | "complete";
+export type DraftPhase = "pre_draft" | "in_progress" | "complete";
 
 export interface DraftPhaseResult {
   phase: DraftPhase;
   // startedAt-derived (see convex/draft/status.ts's syncDraftStatus) -
-  // "setup" and "!isStarted" are exactly equivalent, so nothing here needs
-  // startedAt itself, just the same draftStatus every route already fetches.
+  // "pre_draft" and "!isStarted" are exactly equivalent, so nothing here
+  // needs startedAt itself, just the same draftStatus every route already
+  // fetches.
   isStarted: boolean;
   isComplete: boolean;
 }
@@ -18,7 +19,7 @@ export interface DraftPhaseResult {
 // (src/routes/index.tsx reading server draftStatus directly, and
 // AppHeader.tsx re-deriving it client-side via isDraftComplete). Reuses
 // api.leagues.listSeasons' draftStatus field rather than a new query, same
-// as every existing setup/draft route already fetches to resolve `settings`.
+// as every existing league route already fetches to resolve `settings`.
 export function useDraftPhase(
   seasonId: Id<"seasons"> | undefined,
 ): DraftPhaseResult | undefined {
@@ -27,7 +28,7 @@ export function useDraftPhase(
   if (!phase) return undefined;
   return {
     phase,
-    isStarted: phase !== "setup",
+    isStarted: phase !== "pre_draft",
     isComplete: phase === "complete",
   };
 }

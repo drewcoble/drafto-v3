@@ -99,7 +99,7 @@ export function SettingsForm({
       {configLocked && (
         <LockedNotice>
           This draft has started - scoring, roster, and keeper rules are locked.
-          Reopen setup (Settings tab) to change them.
+          Reopen pre-draft (Settings tab) to change them.
         </LockedNotice>
       )}
       <Card withBorder padding="md">

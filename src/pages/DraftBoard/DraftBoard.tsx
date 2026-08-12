@@ -196,7 +196,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
               </Group>
               <Title order={2}>{settings.name}</Title>
               <Group gap="xs" wrap="wrap">
-                {settings.draftStatus === "setup" ? (
+                {settings.draftStatus === "pre_draft" ? (
                   <Badge size="xl" radius="md" variant="light" color="gray">
                     Draft not started
                   </Badge>

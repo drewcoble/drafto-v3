@@ -31,8 +31,8 @@ export const startDraft = mutation({
 // Reverses startDraft - only while nothing has actually been drafted yet
 // (keepers don't count, since those are meant to be added pre-draft). Once
 // a real pick exists, the auction has genuinely begun and there's no way
-// back to "setup" other than undoing picks first (undoLastPick).
-export const reopenSetup = mutation({
+// back to "pre_draft" other than undoing picks first (undoLastPick).
+export const reopenPreDraft = mutation({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
     const { draft } = await requireDraftOwner(ctx, args.seasonId);
@@ -45,7 +45,7 @@ export const reopenSetup = mutation({
       .collect();
     if (picks.some((pick) => !pick.isKeeper)) {
       throw new Error(
-        "Players have already been drafted - undo those picks before reopening setup.",
+        "Players have already been drafted - undo those picks before reopening pre-draft.",
       );
     }
     await ctx.db.patch(draft._id, { startedAt: undefined });
