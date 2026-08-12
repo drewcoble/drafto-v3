@@ -162,7 +162,7 @@ export function BottomNav({
         // glass, not a flat cutout. Light mode is unchanged, still keyed
         // off body.
         background:
-          "light-dark(color-mix(in srgb, var(--mantine-color-body) 65%, transparent), color-mix(in srgb, var(--mantine-color-dark-5) 65%, transparent))",
+          "light-dark(color-mix(in srgb, var(--mantine-color-body) 65%, transparent), color-mix(in srgb, var(--mantine-color-dark-5) 60%, transparent))",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         boxShadow: "var(--mantine-shadow-lg)",
