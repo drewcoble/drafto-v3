@@ -3,6 +3,7 @@ import { useMutation } from "convex/react";
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Group,
   Menu,
@@ -304,26 +305,34 @@ export function TeamsPanel({
           items={localOrder}
           strategy={verticalListSortingStrategy}
         >
-          <Stack gap={4}>
-            {localOrder.map((teamId, index) => {
-              const team = teamById.get(teamId);
-              if (!team) return null;
-              return (
-                <TeamOrderRow
-                  key={teamId}
-                  team={team}
-                  index={index}
-                  salaryCap={salaryCap}
-                  editingCaps={editingCaps}
-                  reordering={reordering}
-                  removing={removingMode}
-                  onRename={(name) => onRenameTeam(team._id, name)}
-                  onSetSalaryCap={(cap) => onSetTeamSalaryCap(team._id, cap)}
-                  onRequestRemove={() => setPendingRemoveId(team._id)}
-                />
-              );
-            })}
-          </Stack>
+          {/* Each row's controls (name field, salary cap stepper, drag
+              handle, remove button - especially with Edit Caps on) add up
+              to wider than a phone screen. overflowX lets that overflow be
+              reached by scrolling instead of just clipping off-screen with
+              no way back to it; miw on the Stack keeps rows at their
+              natural width instead of getting squished to fit. */}
+          <Box style={{ overflowX: "auto" }}>
+            <Stack gap={4} miw="max-content">
+              {localOrder.map((teamId, index) => {
+                const team = teamById.get(teamId);
+                if (!team) return null;
+                return (
+                  <TeamOrderRow
+                    key={teamId}
+                    team={team}
+                    index={index}
+                    salaryCap={salaryCap}
+                    editingCaps={editingCaps}
+                    reordering={reordering}
+                    removing={removingMode}
+                    onRename={(name) => onRenameTeam(team._id, name)}
+                    onSetSalaryCap={(cap) => onSetTeamSalaryCap(team._id, cap)}
+                    onRequestRemove={() => setPendingRemoveId(team._id)}
+                  />
+                );
+              })}
+            </Stack>
+          </Box>
         </SortableContext>
       </DndContext>
       {orderError && (

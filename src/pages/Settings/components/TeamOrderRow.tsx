@@ -36,8 +36,14 @@ export function TeamOrderRow({
   onSetSalaryCap,
   onRequestRemove,
 }: TeamOrderRowProps) {
-  const { setNodeRef, transform, transition, attributes, listeners, isDragging } =
-    useSortable({ id: team._id, disabled: !reordering });
+  const {
+    setNodeRef,
+    transform,
+    transition,
+    attributes,
+    listeners,
+    isDragging,
+  } = useSortable({ id: team._id, disabled: !reordering });
 
   return (
     <Group
@@ -50,7 +56,10 @@ export function TeamOrderRow({
       gap="xs"
       wrap="nowrap"
     >
-      <Text size="sm" w={20} c="dimmed">
+      {/* Right-aligned in a fixed-width box (rather than left-aligned) so
+          "10"'s extra digit doesn't shift every field after it out of
+          alignment with the single-digit rows above/below it. */}
+      <Text size="sm" w={22} ta="right" c="dimmed">
         {index + 1}
       </Text>
       <TeamNameField team={team} onRename={onRename} />
