@@ -310,9 +310,8 @@ function MobileNominationBar({
     ...teams.filter((team) => team._id !== selfTeamId),
   ];
 
-  const [winnerTeamId, setWinnerTeamId] = useState<Id<"seasonTeams">>(
-    selfTeamId,
-  );
+  const [winnerTeamId, setWinnerTeamId] =
+    useState<Id<"seasonTeams">>(selfTeamId);
   const [bidDraft, setBidDraft] = useState<number | string>(
     activeNomination.currentBid,
   );
@@ -360,9 +359,13 @@ function MobileNominationBar({
         // one element), which is where the "slightly lighter" look came
         // from. Light mode gets a plain light gray instead, since dark-6 is
         // a fixed dark-palette shade that doesn't flip with color scheme on
-        // its own.
+        // its own. Translucent + blurred rather than opaque, same
+        // frosted-glass treatment as every other fixed bar (BottomNav.tsx,
+        // AppHeader.tsx, etc.).
         background:
-          "light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6))",
+          "light-dark(color-mix(in srgb, var(--mantine-color-gray-1) 75%, transparent), color-mix(in srgb, var(--mantine-color-dark-6) 75%, transparent))",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
         boxShadow: "var(--mantine-shadow-lg)",
       }}
     >

@@ -21,7 +21,11 @@ interface UnallocatedBarProps {
 // soon as you started editing, right when they matter most. Callers must
 // reserve BUDGET_UNALLOCATED_BAR_HEIGHT with a spacer, since a `position:
 // fixed` element is pulled out of normal document flow.
-export function UnallocatedBar({ unallocated, isDirty, top }: UnallocatedBarProps) {
+export function UnallocatedBar({
+  unallocated,
+  isDirty,
+  top,
+}: UnallocatedBarProps) {
   return (
     <Box
       hiddenFrom="sm"
@@ -35,7 +39,10 @@ export function UnallocatedBar({ unallocated, isDirty, top }: UnallocatedBarProp
         minHeight: BUDGET_UNALLOCATED_BAR_HEIGHT,
         display: "flex",
         alignItems: "center",
-        background: "var(--mantine-color-body)",
+        background:
+          "color-mix(in srgb, var(--mantine-color-body) 75%, transparent)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
         borderBottom: "1px solid var(--mantine-color-default-border)",
       }}
     >
@@ -43,7 +50,11 @@ export function UnallocatedBar({ unallocated, isDirty, top }: UnallocatedBarProp
         <Badge variant="light" color={isDirty ? "yellow" : "teal"} size="lg">
           {isDirty ? "Unsaved changes" : "All changes saved"}
         </Badge>
-        <Badge variant="light" color={unallocatedBadgeColor(unallocated)} size="lg">
+        <Badge
+          variant="light"
+          color={unallocatedBadgeColor(unallocated)}
+          size="lg"
+        >
           {unallocatedBadgeLabel(unallocated)}
         </Badge>
       </Group>

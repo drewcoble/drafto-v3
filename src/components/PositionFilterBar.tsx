@@ -132,7 +132,10 @@ export function PositionFilterBar({
           zIndex: 205,
           minHeight: POSITION_FILTER_BAR_HEIGHT,
           overflowX: "auto",
-          background: "var(--mantine-color-body)",
+          background:
+            "color-mix(in srgb, var(--mantine-color-body) 75%, transparent)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
           borderBottom: "1px solid var(--mantine-color-default-border)",
         }}
       >

@@ -25,7 +25,10 @@ export function SignedOutHeader() {
         zIndex: 220,
         display: "flex",
         alignItems: "center",
-        background: "var(--mantine-color-body)",
+        background:
+          "color-mix(in srgb, var(--mantine-color-body) 75%, transparent)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
         borderBottom: "1px solid var(--mantine-color-default-border)",
       }}
     >
