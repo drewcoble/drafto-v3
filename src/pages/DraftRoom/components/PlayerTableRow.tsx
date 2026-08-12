@@ -141,33 +141,33 @@ export function PlayerTableRow({
         <Group gap={4} wrap="nowrap">
           {isNominated && (
             <Tooltip label="Currently up for bids" withArrow>
-              <ThemeIcon size="sm" bg="yellow.6" c="dark.8">
+              <ThemeIcon size="sm" color="yellow" variant="light">
                 <Banknote size={ICON_SIZE} />
               </ThemeIcon>
             </Tooltip>
           )}
           {valueGap?.direction === "undervalued" ? (
             <Tooltip label="Undervalued" withArrow>
-              <ThemeIcon size="sm" color="gold.9" c="gold.2">
+              <ThemeIcon size="sm" color="gold" variant="light">
                 <HandCoins size={ICON_SIZE} />
               </ThemeIcon>
             </Tooltip>
           ) : valueGap?.direction === "breakout" ? (
             <Tooltip label="Breakout Player" withArrow>
-              <ThemeIcon size="sm" color="grape.9" c="grape.2">
+              <ThemeIcon size="sm" color="grape" variant="light">
                 <Rocket size={ICON_SIZE} />
               </ThemeIcon>
             </Tooltip>
           ) : valueGap?.direction === "falloff" ? (
             <Tooltip label="Falloff Player" withArrow>
-              <ThemeIcon size="sm" color="red.9" c="red.2">
+              <ThemeIcon size="sm" color="red" variant="light">
                 <TrendingDown size={ICON_SIZE} />
               </ThemeIcon>
             </Tooltip>
           ) : (
             valueGap?.direction === "overvalued" && (
               <Tooltip label="Overvalued" withArrow>
-                <ThemeIcon size="sm" color="red.9" c="red.2">
+                <ThemeIcon size="sm" color="red" variant="light">
                   <BanknoteArrowDown size={ICON_SIZE} />
                 </ThemeIcon>
               </Tooltip>
@@ -177,8 +177,8 @@ export function PlayerTableRow({
             <Tooltip label={consistency} withArrow>
               <ThemeIcon
                 size="sm"
-                color={`${consistencyColor(consistency)}.9`}
-                c={`${consistencyColor(consistency)}.2`}
+                color={consistencyColor(consistency)}
+                variant="light"
               >
                 <ConsistencyIcon size={ICON_SIZE} />
               </ThemeIcon>
