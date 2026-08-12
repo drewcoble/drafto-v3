@@ -18,6 +18,7 @@ import { POSITION_COLORS } from "../../../lib/positionColors";
 import { injuryColor } from "../../../lib/playerFormatting";
 import { pointsForScoringConfig } from "../../../lib/relevantPlayers";
 import type { ConsistencyLabel } from "../../../lib/consistency";
+import { playerTagStyle } from "../../../lib/playerTagStyle";
 import { ConsistencyIcon } from "./ConsistencyIcon";
 import { ValueGapIcon } from "./ValueGapIcon";
 
@@ -188,18 +189,13 @@ export function PlayerRow({
                     }
                   >
                     <ActionIcon
-                      variant={tag ? "light" : "subtle"}
                       size={36}
-                      color={
-                        tag === "target"
-                          ? "green"
-                          : tag === "avoid"
-                            ? "red"
-                            : "gray"
-                      }
                       disabled={!onCycleTag}
                       onClick={onCycleTag}
                       aria-label="Cycle target/avoid"
+                      {...(tag
+                        ? playerTagStyle(tag)
+                        : { variant: "subtle", color: "gray" })}
                     >
                       {tag === "avoid" ? (
                         <Ban size={16} />

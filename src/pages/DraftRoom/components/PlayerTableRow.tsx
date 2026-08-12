@@ -26,6 +26,7 @@ import {
   consistencyColor,
   type ConsistencyLabel,
 } from "../../../lib/consistency";
+import { playerTagStyle } from "../../../lib/playerTagStyle";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
 
 // Matches the icon choices PlayerBar.tsx/PlayerBarDetails.tsx use for the
@@ -115,8 +116,10 @@ export function PlayerTableRow({
           )}
           <Tooltip label="Target" withArrow>
             <ActionIcon
-              variant={tag === "target" ? "light" : "subtle"}
-              color="green"
+              variant={
+                tag === "target" ? playerTagStyle("target").variant : "subtle"
+              }
+              color={playerTagStyle("target").color}
               size={40}
               onClick={() => onSetTag("target")}
               aria-label="Target"
@@ -126,8 +129,10 @@ export function PlayerTableRow({
           </Tooltip>
           <Tooltip label="Avoid" withArrow>
             <ActionIcon
-              variant={tag === "avoid" ? "light" : "subtle"}
-              color="red"
+              variant={
+                tag === "avoid" ? playerTagStyle("avoid").variant : "subtle"
+              }
+              color={playerTagStyle("avoid").color}
               size={40}
               onClick={() => onSetTag("avoid")}
               aria-label="Avoid"

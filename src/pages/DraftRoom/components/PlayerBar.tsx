@@ -25,6 +25,7 @@ import {
 } from "../../../lib/consistency";
 import { barStyle } from "../../../lib/draftRecommendation";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
+import { playerTagStyle } from "../../../lib/playerTagStyle";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
 import { PlayerBarDetails } from "./PlayerBarDetails";
 
@@ -213,10 +214,7 @@ export function PlayerBar({
               position="top"
               withArrow
             >
-              <ThemeIcon
-                color={tag === "target" ? "green" : "red"}
-                variant="light"
-              >
+              <ThemeIcon {...playerTagStyle(tag)}>
                 {tag === "target" ? (
                   <Crosshair size={ICON_SIZE} />
                 ) : (
