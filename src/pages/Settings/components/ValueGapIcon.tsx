@@ -29,7 +29,7 @@ export function ValueGapIcon({ valueGap, position }: ValueGapIconProps) {
           <Rocket size={16} strokeWidth={2} />
         </ThemeIcon>
       ) : valueGap.direction === "falloff" ? (
-        <ThemeIcon color="blue" size="md" radius="md" variant="light">
+        <ThemeIcon color="red" size="md" radius="md" variant="light">
           <TrendingDown size={16} strokeWidth={2} />
         </ThemeIcon>
       ) : (

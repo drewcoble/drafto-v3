@@ -1,4 +1,12 @@
-import { Anchor, Badge, Button, Divider, Group, Stack, Text } from "@mantine/core";
+import {
+  Anchor,
+  Badge,
+  Button,
+  Divider,
+  Group,
+  Stack,
+  Text,
+} from "@mantine/core";
 import {
   BanknoteArrowDown,
   BatteryLow,
@@ -13,7 +21,10 @@ import {
 } from "lucide-react";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
-import { consistencyColor, type ConsistencyLabel } from "../../../lib/consistency";
+import {
+  consistencyColor,
+  type ConsistencyLabel,
+} from "../../../lib/consistency";
 
 // Matches the icon choices already used for the bar's own corner badges
 // (see PlayerBar.tsx) - kept in sync there rather than imported, since that
@@ -24,18 +35,16 @@ const VALUE_GAP_META: Record<
 > = {
   undervalued: { label: "Undervalued", color: "yellow", icon: HandCoins },
   breakout: { label: "Breakout", color: "grape", icon: Rocket },
-  falloff: { label: "Fall Off", color: "blue", icon: TrendingDown },
+  falloff: { label: "Fall Off", color: "red", icon: TrendingDown },
   overvalued: { label: "Overvalued", color: "red", icon: BanknoteArrowDown },
 };
 
-const CONSISTENCY_META: Record<
-  ConsistencyLabel,
-  { icon: typeof ShieldCheck }
-> = {
-  Reliable: { icon: ShieldCheck },
-  "Boom/Bust": { icon: TrendingUpDown },
-  "Low Output": { icon: BatteryLow },
-};
+const CONSISTENCY_META: Record<ConsistencyLabel, { icon: typeof ShieldCheck }> =
+  {
+    Reliable: { icon: ShieldCheck },
+    "Boom/Bust": { icon: TrendingUpDown },
+    "Low Output": { icon: BatteryLow },
+  };
 
 interface PlayerBarDetailsProps {
   row: DraftBoardRow;
@@ -69,9 +78,13 @@ export function PlayerBarDetails({
   canNominate,
   onNominate,
 }: PlayerBarDetailsProps) {
-  const valueGapMeta = valueGap ? VALUE_GAP_META[valueGap.direction] : undefined;
+  const valueGapMeta = valueGap
+    ? VALUE_GAP_META[valueGap.direction]
+    : undefined;
   const ValueGapMetaIcon = valueGapMeta?.icon;
-  const consistencyMeta = consistency ? CONSISTENCY_META[consistency] : undefined;
+  const consistencyMeta = consistency
+    ? CONSISTENCY_META[consistency]
+    : undefined;
   const ConsistencyMetaIcon = consistencyMeta?.icon;
 
   return (
