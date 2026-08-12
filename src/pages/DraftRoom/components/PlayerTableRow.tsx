@@ -115,7 +115,7 @@ export function PlayerTableRow({
           )}
           <Tooltip label="Target" withArrow>
             <ActionIcon
-              variant={tag === "target" ? "filled" : "subtle"}
+              variant={tag === "target" ? "light" : "subtle"}
               color="green"
               size={40}
               onClick={() => onSetTag("target")}
@@ -126,7 +126,7 @@ export function PlayerTableRow({
           </Tooltip>
           <Tooltip label="Avoid" withArrow>
             <ActionIcon
-              variant={tag === "avoid" ? "filled" : "subtle"}
+              variant={tag === "avoid" ? "light" : "subtle"}
               color="red"
               size={40}
               onClick={() => onSetTag("avoid")}
