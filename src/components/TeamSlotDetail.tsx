@@ -12,7 +12,7 @@ import type { Doc, Id } from "../../convex/_generated/dataModel";
 import type { Position } from "../types";
 import type { SlotDescriptor } from "../lib/rosterSlots";
 import { eligibleSlotsForPosition } from "../lib/slotAssignment";
-import { positionColorOrGray } from "../lib/positionColors";
+import { positionColorOrDefault } from "../lib/positionColors";
 
 interface TeamSlotDetailProps {
   slots: SlotDescriptor[];
@@ -75,7 +75,7 @@ export function TeamSlotDetail({
             <Badge
               variant="light"
               size="sm"
-              color={positionColorOrGray(slot.position)}
+              color={positionColorOrDefault(slot.label)}
             >
               {slot.label}
             </Badge>

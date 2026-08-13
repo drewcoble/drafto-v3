@@ -13,7 +13,7 @@ import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { Position } from "../../../types";
 import type { SlotDescriptor } from "../../../lib/rosterSlots";
 import { eligibleSlotsForPosition } from "../../../lib/slotAssignment";
-import { positionColorOrGray } from "../../../lib/positionColors";
+import { positionColorOrDefault } from "../../../lib/positionColors";
 
 interface SlotTableProps {
   slots: SlotDescriptor[];
@@ -76,7 +76,7 @@ export function SlotTable({
                   <Group gap={6} wrap="nowrap" align="center">
                     <Badge
                       variant="light"
-                      color={positionColorOrGray(slot.position)}
+                      color={positionColorOrDefault(slot.label)}
                     >
                       {slot.label}
                     </Badge>

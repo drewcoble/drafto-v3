@@ -19,7 +19,10 @@ import { ColorSchemeToggle } from "../../components/ColorSchemeToggle";
 import { WEEK } from "../../constants/general";
 import { useFitScale } from "../../hooks/useFitScale";
 import logo from "../../infinidraft_v1_noBg.png";
-import { POSITION_COLORS, positionColorOrGray } from "../../lib/positionColors";
+import {
+  POSITION_COLORS,
+  positionColorOrDefault,
+} from "../../lib/positionColors";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { assignPicksToSlots } from "../../lib/slotAssignment";
 import {
@@ -284,7 +287,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                           <Badge
                             size="sm"
                             variant="light"
-                            color={positionColorOrGray(slot.position)}
+                            color={positionColorOrDefault(slot.label)}
                             w={65}
                             style={{ flexShrink: 0 }}
                           >

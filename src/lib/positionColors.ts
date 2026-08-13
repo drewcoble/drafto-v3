@@ -20,14 +20,6 @@ export function positionColorVar(position: Position, shade: number): string {
   return `var(--mantine-color-${POSITION_COLORS[position]}-${shade})`;
 }
 
-// For roster slots that aren't tied to one fixed position (FLEX/SUPERFLEX/
-// BENCH - see SlotDescriptor.position in lib/rosterSlots.ts), fall back to
-// gray rather than leaving the color unset (which would render as Mantine's
-// default primary color, i.e. blue, regardless of position).
-export function positionColorOrGray(position: Position | null): string {
-  return position ? POSITION_COLORS[position] : "gray";
-}
-
 const ADDITIONAL_POSITION_COLORS = {
   FLEX: "flex",
   SFLEX: "superflex",
