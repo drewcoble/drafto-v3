@@ -2,6 +2,7 @@ import {
   ActionIcon,
   Badge,
   Card,
+  Divider,
   Group,
   Progress,
   SimpleGrid,
@@ -326,19 +327,22 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                   ))}
                 </Group>
                 {expandedTeamIds.has(team._id) && (
-                  <TeamSlotDetail
-                    slots={slots}
-                    bySlot={bySlot}
-                    nameByFpid={nameByFpid}
-                    flexPositions={settings.flexPositions}
-                    superflexPositions={settings.superflexPositions}
-                    onRemove={handleRemove}
-                    onMove={handleMove}
-                    onSelectPlayer={setSelectedFpid}
-                    trackConsecutiveYears={
-                      settings.keeperRules?.maxConsecutiveYears !== undefined
-                    }
-                  />
+                  <>
+                    <Divider mt={4} />
+                    <TeamSlotDetail
+                      slots={slots}
+                      bySlot={bySlot}
+                      nameByFpid={nameByFpid}
+                      flexPositions={settings.flexPositions}
+                      superflexPositions={settings.superflexPositions}
+                      onRemove={handleRemove}
+                      onMove={handleMove}
+                      onSelectPlayer={setSelectedFpid}
+                      trackConsecutiveYears={
+                        settings.keeperRules?.maxConsecutiveYears !== undefined
+                      }
+                    />
+                  </>
                 )}
               </Stack>
             </Card>
