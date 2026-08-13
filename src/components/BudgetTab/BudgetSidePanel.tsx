@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import {
   Card,
+  Badge,
   Button,
   Collapse,
   Group,
@@ -42,9 +43,14 @@ interface BudgetSidePanelProps {
 // not a one-time setup choice you'd want to tuck away).
 function CollapsibleCard({
   title,
+  titleExtra,
   children,
 }: {
   title: string;
+  // A brief "here's what's currently chosen" badge next to the title, so
+  // the choice is still visible at a glance while collapsed - e.g. Auto
+  // Adjustments' On: Bench/On: All/Off summary below.
+  titleExtra?: ReactNode;
   children: ReactNode;
 }) {
   const [opened, { toggle }] = useDisclosure(false);
@@ -53,9 +59,12 @@ function CollapsibleCard({
       <Stack gap={8}>
         <UnstyledButton onClick={toggle} aria-expanded={opened}>
           <Group justify="space-between" wrap="nowrap">
-            <Text size="sm" fw={500} tt="uppercase" c="dimmed">
-              {title}
-            </Text>
+            <Group gap={6} wrap="nowrap">
+              <Text size="sm" fw={500} tt="uppercase" c="dimmed">
+                {title}
+              </Text>
+              {titleExtra}
+            </Group>
             {opened ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </Group>
         </UnstyledButton>
@@ -65,6 +74,16 @@ function CollapsibleCard({
       </Stack>
     </Card>
   );
+}
+
+// Super-brief summary of the current overspend/auto-adjust choice, shown
+// next to the "Auto Adjustments" title so it's legible even while the card
+// is collapsed - OVERSPEND_OPTIONS' own labels/captions are full sentences,
+// too long for that spot.
+function overspendSummary(value: OverspendBehavior): string {
+  if (value === "bench") return "On: Bench";
+  if (value === "spread") return "On: All";
+  return "Off";
 }
 
 export function BudgetSidePanel({
@@ -114,7 +133,14 @@ export function BudgetSidePanel({
         </CollapsibleCard>
       )}
 
-      <CollapsibleCard title="Auto Adjustments">
+      <CollapsibleCard
+        title="Auto Adjustments"
+        titleExtra={
+          <Badge variant="light" color="gray" size="sm">
+            {overspendSummary(overspendBehavior)}
+          </Badge>
+        }
+      >
         {OVERSPEND_OPTIONS.map((option) => (
           <Button
             key={option.value}
