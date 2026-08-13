@@ -66,6 +66,21 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [view, setView] = useState<BoardView>("bar");
+  // Which table-view rows' nominate/target/avoid actions are showing -
+  // dropped from the main row to fit mobile widths, same click-to-expand
+  // pattern PlayersTable.tsx/PlayerRow.tsx uses.
+  const [expandedFpids, setExpandedFpids] = useState<Set<number>>(new Set());
+  const toggleExpanded = (fpid: number) => {
+    setExpandedFpids((current) => {
+      const next = new Set(current);
+      if (next.has(fpid)) {
+        next.delete(fpid);
+      } else {
+        next.add(fpid);
+      }
+      return next;
+    });
+  };
   // Narrows which position sections render, in both bar and table view -
   // useful even in the bar view's already position-grouped layout once a
   // league has many active positions and scrolling past ones you're not
@@ -537,11 +552,11 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                         <Table.Thead>
                           <Table.Tr>
                             <Table.Th></Table.Th>
-                            <Table.Th></Table.Th>
                             <Table.Th>Player</Table.Th>
                             <Table.Th>Tier</Table.Th>
                             <Table.Th>$</Table.Th>
                             <Table.Th visibleFrom="sm">Pts</Table.Th>
+                            <Table.Th></Table.Th>
                           </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
@@ -564,11 +579,13 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                                 budgetMatch={
                                   budgetMatchByFpid.get(row.fpid) ?? false
                                 }
+                                isExpanded={expandedFpids.has(row.fpid)}
                                 onSetTag={(nextTag) =>
                                   handleSetTag(row.fpid, nextTag)
                                 }
                                 onNominate={() => handleNominate(row.fpid)}
                                 onSelectPlayer={setSelectedFpid}
+                                onToggleExpand={() => toggleExpanded(row.fpid)}
                               />
                             );
                           })}

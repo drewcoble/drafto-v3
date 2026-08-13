@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import {
   ActionIcon,
   Anchor,
@@ -12,6 +13,8 @@ import {
   Banknote,
   BanknoteArrowDown,
   BatteryLow,
+  ChevronDown,
+  ChevronUp,
   CircleSlash,
   Crosshair,
   HandCoins,
@@ -52,10 +55,17 @@ interface PlayerTableRowProps {
   // green when true, orange when not (only once budgetAmount is defined,
   // i.e. there's an actual plan to compare against).
   budgetMatch: boolean;
+  isExpanded: boolean;
   onSetTag: (tag: PlayerTag) => void;
   onNominate: () => void;
   onSelectPlayer: (fpid: number) => void;
+  onToggleExpand: () => void;
 }
+
+// Player, Tier, $, Pts, status-icon flags, chevron - kept in sync with the
+// header column count in PlayersLeftTab.tsx so the expanded actions row's
+// colSpan always spans the full table width.
+const COLUMN_COUNT = 6;
 
 // Table-view alternative to PlayerBar.tsx for the same DraftBoardRow data -
 // same status icons/actions (nominate, target/avoid), but as a plain
@@ -72,9 +82,11 @@ export function PlayerTableRow({
   isNominated,
   hasActiveNomination,
   budgetMatch,
+  isExpanded,
   onSetTag,
   onNominate,
   onSelectPlayer,
+  onToggleExpand,
 }: PlayerTableRowProps) {
   // No color at all until there's actually a budget plan to compare
   // against (budgetAmount undefined) - green/orange only once budgetMatch
@@ -90,140 +102,162 @@ export function PlayerTableRow({
     : undefined;
 
   return (
-    <Table.Tr
-      style={
-        isNominated
-          ? {
-              boxShadow: "inset 0 0 0 2px var(--mantine-color-yellow-6)",
-              backgroundColor: "var(--mantine-color-yellow-light)",
-            }
-          : undefined
-      }
-    >
-      <Table.Td>
-        <Group gap={4} wrap="nowrap">
-          {!hasActiveNomination && (
-            <Tooltip label="Nominate" withArrow>
-              <ActionIcon
-                variant="light"
-                size={40}
-                onClick={onNominate}
-                aria-label="Nominate"
-              >
-                <UserRoundPlus size={14} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-          <Tooltip label="Target" withArrow>
-            <ActionIcon
-              variant={
-                tag === "target" ? playerTagStyle("target").variant : "subtle"
+    <Fragment>
+      <Table.Tr
+        onClick={onToggleExpand}
+        style={{
+          cursor: "pointer",
+          ...(isNominated
+            ? {
+                boxShadow: "inset 0 0 0 2px var(--mantine-color-yellow-6)",
+                backgroundColor: "var(--mantine-color-yellow-light)",
               }
-              color={playerTagStyle("target").color}
-              size={40}
-              onClick={() => onSetTag("target")}
-              aria-label="Target"
-            >
-              <Crosshair size={14} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Avoid" withArrow>
-            <ActionIcon
-              variant={
-                tag === "avoid" ? playerTagStyle("avoid").variant : "subtle"
-              }
-              color={playerTagStyle("avoid").color}
-              size={40}
-              onClick={() => onSetTag("avoid")}
-              aria-label="Avoid"
-            >
-              <CircleSlash size={14} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-      </Table.Td>
-      <Table.Td>
-        <Group gap={4} wrap="nowrap">
-          {isNominated && (
-            <Tooltip label="Currently up for bids" withArrow>
-              <ThemeIcon size="sm" color="yellow" variant="light">
-                <Banknote size={ICON_SIZE} />
-              </ThemeIcon>
-            </Tooltip>
-          )}
-          {valueGap?.direction === "undervalued" ? (
-            <Tooltip label="Undervalued" withArrow>
-              <ThemeIcon size="sm" color="gold" variant="light">
-                <HandCoins size={ICON_SIZE} />
-              </ThemeIcon>
-            </Tooltip>
-          ) : valueGap?.direction === "breakout" ? (
-            <Tooltip label="Breakout Player" withArrow>
-              <ThemeIcon size="sm" color="grape" variant="light">
-                <Rocket size={ICON_SIZE} />
-              </ThemeIcon>
-            </Tooltip>
-          ) : valueGap?.direction === "falloff" ? (
-            <Tooltip label="Falloff Player" withArrow>
-              <ThemeIcon size="sm" color="red" variant="light">
-                <TrendingDown size={ICON_SIZE} />
-              </ThemeIcon>
-            </Tooltip>
-          ) : (
-            valueGap?.direction === "overvalued" && (
-              <Tooltip label="Overvalued" withArrow>
-                <ThemeIcon size="sm" color="red" variant="light">
-                  <BanknoteArrowDown size={ICON_SIZE} />
+            : undefined),
+        }}
+      >
+        <Table.Td>
+          <Group gap={4} wrap="nowrap">
+            {isNominated && (
+              <Tooltip label="Currently up for bids" withArrow>
+                <ThemeIcon size="sm" color="yellow" variant="light">
+                  <Banknote size={ICON_SIZE} />
                 </ThemeIcon>
               </Tooltip>
-            )
-          )}
-          {consistency && ConsistencyIcon && (
-            <Tooltip label={consistency} withArrow>
-              <ThemeIcon
-                size="sm"
-                color={consistencyColor(consistency)}
-                variant="light"
-              >
-                <ConsistencyIcon size={ICON_SIZE} />
-              </ThemeIcon>
-            </Tooltip>
-          )}
-        </Group>
-      </Table.Td>
-      <Table.Td>
-        <Group gap={6} wrap="nowrap">
-          <Anchor
-            component="button"
-            type="button"
-            size="sm"
-            fw={500}
-            onClick={() => onSelectPlayer(row.fpid)}
+            )}
+            {valueGap?.direction === "undervalued" ? (
+              <Tooltip label="Undervalued" withArrow>
+                <ThemeIcon size="sm" color="gold" variant="light">
+                  <HandCoins size={ICON_SIZE} />
+                </ThemeIcon>
+              </Tooltip>
+            ) : valueGap?.direction === "breakout" ? (
+              <Tooltip label="Breakout Player" withArrow>
+                <ThemeIcon size="sm" color="grape" variant="light">
+                  <Rocket size={ICON_SIZE} />
+                </ThemeIcon>
+              </Tooltip>
+            ) : valueGap?.direction === "falloff" ? (
+              <Tooltip label="Falloff Player" withArrow>
+                <ThemeIcon size="sm" color="red" variant="light">
+                  <TrendingDown size={ICON_SIZE} />
+                </ThemeIcon>
+              </Tooltip>
+            ) : (
+              valueGap?.direction === "overvalued" && (
+                <Tooltip label="Overvalued" withArrow>
+                  <ThemeIcon size="sm" color="red" variant="light">
+                    <BanknoteArrowDown size={ICON_SIZE} />
+                  </ThemeIcon>
+                </Tooltip>
+              )
+            )}
+            {consistency && ConsistencyIcon && (
+              <Tooltip label={consistency} withArrow>
+                <ThemeIcon
+                  size="sm"
+                  color={consistencyColor(consistency)}
+                  variant="light"
+                >
+                  <ConsistencyIcon size={ICON_SIZE} />
+                </ThemeIcon>
+              </Tooltip>
+            )}
+          </Group>
+        </Table.Td>
+        <Table.Td>
+          <Group gap={6} wrap="nowrap">
+            <Anchor
+              component="button"
+              type="button"
+              size="sm"
+              fw={500}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectPlayer(row.fpid);
+              }}
+            >
+              {row.name}
+            </Anchor>
+            {row.team && (
+              <Text size="xs" c="dimmed">
+                {row.team}
+              </Text>
+            )}
+          </Group>
+        </Table.Td>
+        <Table.Td>
+          <Badge size="sm" variant="light" color="gray">
+            {row.tierLabel}
+          </Badge>
+        </Table.Td>
+        <Table.Td>
+          <Text size="sm" c={priceColor} fw={600}>
+            ${Math.round(row.dollarValue)}
+          </Text>
+        </Table.Td>
+        <Table.Td visibleFrom="sm">
+          <Text size="sm" c="dimmed">
+            {row.points.toFixed(1)}
+          </Text>
+        </Table.Td>
+        <Table.Td>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            aria-label={isExpanded ? "Hide actions" : "Show actions"}
           >
-            {row.name}
-          </Anchor>
-          {row.team && (
-            <Text size="xs" c="dimmed">
-              {row.team}
-            </Text>
-          )}
-        </Group>
-      </Table.Td>
-      <Table.Td>
-        <Badge size="sm" variant="light" color="gray">
-          {row.tierLabel}
-        </Badge>
-      </Table.Td>
-      <Table.Td>
-        <Text size="sm" c={priceColor} fw={600}>
-          ${Math.round(row.dollarValue)}
-        </Text>
-      </Table.Td>
-      <Table.Td visibleFrom="sm">
-        <Text size="sm" c="dimmed">
-          {row.points.toFixed(1)}
-        </Text>
-      </Table.Td>
-    </Table.Tr>
+            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </ActionIcon>
+        </Table.Td>
+      </Table.Tr>
+      {isExpanded && (
+        <Table.Tr>
+          <Table.Td colSpan={COLUMN_COUNT}>
+            <Group gap={4} wrap="nowrap" py={4}>
+              {!hasActiveNomination && (
+                <Tooltip label="Nominate" withArrow>
+                  <ActionIcon
+                    variant="light"
+                    size={40}
+                    onClick={onNominate}
+                    aria-label="Nominate"
+                  >
+                    <UserRoundPlus size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+              <Tooltip label="Target" withArrow>
+                <ActionIcon
+                  variant={
+                    tag === "target"
+                      ? playerTagStyle("target").variant
+                      : "subtle"
+                  }
+                  color={playerTagStyle("target").color}
+                  size={40}
+                  onClick={() => onSetTag("target")}
+                  aria-label="Target"
+                >
+                  <Crosshair size={14} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label="Avoid" withArrow>
+                <ActionIcon
+                  variant={
+                    tag === "avoid" ? playerTagStyle("avoid").variant : "subtle"
+                  }
+                  color={playerTagStyle("avoid").color}
+                  size={40}
+                  onClick={() => onSetTag("avoid")}
+                  aria-label="Avoid"
+                >
+                  <CircleSlash size={14} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          </Table.Td>
+        </Table.Tr>
+      )}
+    </Fragment>
   );
 }
