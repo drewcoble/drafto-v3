@@ -256,14 +256,20 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                 <Text size="xs" c="dimmed" mt={4}>
                   Needs
                 </Text>
-                <Group justify="space-between" wrap="wrap" gap="xs">
+                <Group
+                  justify="space-between"
+                  wrap="wrap"
+                  gap="xs"
+                  align="flex-start"
+                >
                   {/* Every group renders in the same order, with the same
                       number of badges (groupSlotCounts - the league-wide
                       total for that group), for every team - so a group's
-                      badges always sit in the same horizontal spot whether
-                      or not this team still needs all of them. One badge
-                      per still-open slot in that group (openCountByGroup);
-                      the rest render invisible (same label, so same width)
+                      badges always sit in the same spot whether or not this
+                      team still needs all of them. One badge per still-open
+                      slot in that group (openCountByGroup), stacked
+                      vertically within the group rather than side by side;
+                      the rest render invisible (same label, so same height)
                       rather than disappearing, both so the row doesn't
                       reflow as picks come in and so drafting e.g. a WR
                       removes just the last WR badge instead of the whole
@@ -272,7 +278,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                     const openCount = openCountByGroup.get(group) ?? 0;
                     const slotCount = groupSlotCounts.get(group) ?? 0;
                     return (
-                      <Group key={group} gap={2} wrap="nowrap">
+                      <Stack key={group} gap={2}>
                         {Array.from({ length: slotCount }, (_, i) => (
                           <Badge
                             key={i}
@@ -288,7 +294,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                             {group}
                           </Badge>
                         ))}
-                      </Group>
+                      </Stack>
                     );
                   })}
                 </Group>
