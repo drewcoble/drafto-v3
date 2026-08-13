@@ -346,17 +346,18 @@ export const theme = createTheme({
     ],
   },
   primaryColor: "burlywood",
-  // Mantine's own default ("md") reads a little square/sharp-cornered app-
-  // wide (buttons especially) - "lg" softens every component that doesn't
-  // set its own explicit `radius`.
-  defaultRadius: "lg",
+  // Mantine's own default ("md", 8px) reads a little square/sharp-cornered
+  // app-wide (buttons especially) - 12px softens every component that
+  // doesn't set its own explicit `radius`, without going all the way to
+  // the "lg" token (16px, still used standalone by e.g. PlayerBar.tsx).
+  defaultRadius: "12px",
   components: {
     Card: {
       defaultProps: {
         // Explicit even though it now matches defaultRadius, so Card's
         // radius doesn't silently drift if the app-wide default ever
         // changes again.
-        radius: "lg",
+        radius: "12px",
         shadow: "sm",
       },
     },
