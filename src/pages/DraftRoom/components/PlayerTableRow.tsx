@@ -165,7 +165,11 @@ export function PlayerTableRow({
           </Group>
         </Table.Td>
         <Table.Td>
-          <Group gap={6} wrap="nowrap">
+          {/* mih matches a two-line wrapped name (e.g. "Jacory
+              Croskey-Merritt") so every row - wrapped or not - shares
+              that same height instead of single-line names producing a
+              visibly shorter, inconsistent row. */}
+          <Group gap={6} wrap="nowrap" mih={44} align="center">
             <Anchor
               component="button"
               type="button"
