@@ -3,6 +3,7 @@ import {
   ActionIcon,
   Anchor,
   Badge,
+  Button,
   Group,
   Table,
   Text,
@@ -224,47 +225,37 @@ export function PlayerTableRow({
       {isExpanded && (
         <Table.Tr>
           <Table.Td colSpan={COLUMN_COUNT}>
-            <Group gap={4} wrap="nowrap" py={4}>
+            <Group gap={6} wrap="wrap" py={4}>
               {!hasActiveNomination && (
-                <Tooltip label="Nominate" withArrow>
-                  <ActionIcon
-                    variant="light"
-                    size={40}
-                    onClick={onNominate}
-                    aria-label="Nominate"
-                  >
-                    <UserRoundPlus size={14} />
-                  </ActionIcon>
-                </Tooltip>
+                <Button
+                  variant="light"
+                  size="xs"
+                  leftSection={<UserRoundPlus size={14} />}
+                  onClick={onNominate}
+                >
+                  Nominate
+                </Button>
               )}
-              <Tooltip label="Target" withArrow>
-                <ActionIcon
-                  variant={
-                    tag === "target"
-                      ? playerTagStyle("target").variant
-                      : "subtle"
-                  }
-                  color={playerTagStyle("target").color}
-                  size={40}
-                  onClick={() => onSetTag("target")}
-                  aria-label="Target"
-                >
-                  <Crosshair size={14} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="Avoid" withArrow>
-                <ActionIcon
-                  variant={
-                    tag === "avoid" ? playerTagStyle("avoid").variant : "subtle"
-                  }
-                  color={playerTagStyle("avoid").color}
-                  size={40}
-                  onClick={() => onSetTag("avoid")}
-                  aria-label="Avoid"
-                >
-                  <CircleSlash size={14} />
-                </ActionIcon>
-              </Tooltip>
+              <Button
+                {...(tag === "target"
+                  ? playerTagStyle("target")
+                  : { variant: "default" })}
+                size="xs"
+                leftSection={<Crosshair size={14} />}
+                onClick={() => onSetTag("target")}
+              >
+                Target
+              </Button>
+              <Button
+                {...(tag === "avoid"
+                  ? playerTagStyle("avoid")
+                  : { variant: "default" })}
+                size="xs"
+                leftSection={<CircleSlash size={14} />}
+                onClick={() => onSetTag("avoid")}
+              >
+                Avoid
+              </Button>
             </Group>
           </Table.Td>
         </Table.Tr>
