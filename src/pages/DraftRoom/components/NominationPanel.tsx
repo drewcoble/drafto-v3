@@ -20,6 +20,7 @@ import type { Position } from "../../../types";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
+import { useHoldRepeat } from "../../../hooks/useHoldRepeat";
 
 export interface SearchResult {
   fpid: number;
@@ -235,6 +236,9 @@ function ActiveNominationBody({
     if (!editingBid) setBidDraft(activeNomination.currentBid);
   }, [activeNomination._id, activeNomination.currentBid, editingBid]);
 
+  const decrementBidHold = useHoldRepeat(() => onBumpBid(-1));
+  const incrementBidHold = useHoldRepeat(() => onBumpBid(1));
+
   const commitBidDraft = () => {
     setEditingBid(false);
     const amount =
@@ -289,7 +293,12 @@ function ActiveNominationBody({
           )}
         </Group>
         <Group gap={4} align="center" wrap="nowrap">
-          <ActionIcon size="sm" variant="default" onClick={() => onBumpBid(-1)}>
+          <ActionIcon
+            size="sm"
+            variant="default"
+            onClick={() => onBumpBid(-1)}
+            {...decrementBidHold}
+          >
             −
           </ActionIcon>
           <NumberInput
@@ -314,7 +323,12 @@ function ActiveNominationBody({
               },
             }}
           />
-          <ActionIcon size="sm" variant="default" onClick={() => onBumpBid(1)}>
+          <ActionIcon
+            size="sm"
+            variant="default"
+            onClick={() => onBumpBid(1)}
+            {...incrementBidHold}
+          >
             +
           </ActionIcon>
         </Group>

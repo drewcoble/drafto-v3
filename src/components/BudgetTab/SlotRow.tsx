@@ -15,6 +15,7 @@ import type { SlotDescriptor } from "../../lib/rosterSlots";
 import { categoryForSlot } from "../../lib/budgetCategories";
 import { CATEGORY_COLORS } from "../../constants/budget";
 import { POSITION_COLORS } from "../../lib/positionColors";
+import { useHoldRepeat } from "../../hooks/useHoldRepeat";
 import type { DraftValueRow, Position } from "../../types";
 
 // How many closest-priced players the popover shows - "3-5" was the ask;
@@ -81,6 +82,9 @@ export function SlotRow({
   // was actually spent once a slot's filled; any difference means the plan
   // is now stale for this slot and worth fixing.
   const mismatch = filledPlayer !== undefined && filledPlayer.price !== amount;
+
+  const decrementHold = useHoldRepeat(() => onChange(Math.max(amount - 1, 0)));
+  const incrementHold = useHoldRepeat(() => onChange(amount + 1));
 
   // Recomputed on every amount change (a lot cheaper than it looks - the
   // pool BudgetTab hands down is already drafted/kept-filtered, so this is
@@ -245,6 +249,7 @@ export function SlotRow({
           variant="default"
           size={40}
           onClick={() => onChange(Math.max(amount - 1, 0))}
+          {...decrementHold}
         >
           −
         </ActionIcon>
@@ -255,6 +260,7 @@ export function SlotRow({
           variant="default"
           size={40}
           onClick={() => onChange(amount + 1)}
+          {...incrementHold}
         >
           +
         </ActionIcon>

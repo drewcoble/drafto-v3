@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import { ActionIcon, Group, NumberInput, Text } from "@mantine/core";
 import { STEPPER_BUTTON_SIZE } from "../constants/general";
+import { useHoldRepeat } from "../hooks/useHoldRepeat";
 
 interface StepperButtonProps {
   label?: string | undefined;
@@ -16,6 +17,7 @@ function DecrementButton({
   disabled,
   onClick,
 }: StepperButtonProps & { disabled: boolean }) {
+  const holdHandlers = useHoldRepeat(onClick);
   return (
     <ActionIcon
       size={STEPPER_BUTTON_SIZE}
@@ -23,6 +25,7 @@ function DecrementButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label ? `Decrease ${label}` : "Decrease"}
+      {...holdHandlers}
     >
       −
     </ActionIcon>
@@ -34,6 +37,7 @@ function IncrementButton({
   disabled,
   onClick,
 }: StepperButtonProps & { disabled: boolean }) {
+  const holdHandlers = useHoldRepeat(onClick);
   return (
     <ActionIcon
       size={STEPPER_BUTTON_SIZE}
@@ -41,6 +45,7 @@ function IncrementButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label ? `Increase ${label}` : "Increase"}
+      {...holdHandlers}
     >
       +
     </ActionIcon>

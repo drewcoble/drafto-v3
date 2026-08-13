@@ -19,6 +19,7 @@ import {
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
 } from "../../../constants/general";
+import { useHoldRepeat } from "../../../hooks/useHoldRepeat";
 import { SearchBody, type SearchResult } from "./NominationPanel";
 
 interface MobileNominationProps {
@@ -344,6 +345,9 @@ function MobileNominationBar({
     }
   };
 
+  const decrementBidHold = useHoldRepeat(() => onBumpBid(-1));
+  const incrementBidHold = useHoldRepeat(() => onBumpBid(1));
+
   return (
     <Box
       hiddenFrom="sm"
@@ -422,7 +426,12 @@ function MobileNominationBar({
             allowDeselect={false}
             style={{ flex: 1, minWidth: 0 }}
           />
-          <ActionIcon size={40} variant="default" onClick={() => onBumpBid(-1)}>
+          <ActionIcon
+            size={40}
+            variant="default"
+            onClick={() => onBumpBid(-1)}
+            {...decrementBidHold}
+          >
             −
           </ActionIcon>
           <NumberInput
@@ -447,7 +456,12 @@ function MobileNominationBar({
               },
             }}
           />
-          <ActionIcon size={40} variant="default" onClick={() => onBumpBid(1)}>
+          <ActionIcon
+            size={40}
+            variant="default"
+            onClick={() => onBumpBid(1)}
+            {...incrementBidHold}
+          >
             +
           </ActionIcon>
         </Group>
