@@ -33,69 +33,105 @@ export const Route = createFileRoute("/league/$leagueId")({
   component: LeagueLayout,
 });
 
-const TABS = [
-  {
-    value: "settings",
+type TabValue =
+  | "settings"
+  | "keepers"
+  | "budget"
+  | "players"
+  | "myTeam"
+  | "injuries"
+  | "league"
+  | "draft";
+
+// Shared metadata, keyed by value - the two phases below reorder and
+// regroup these same eight tabs rather than defining separate copies.
+const TAB_META: Record<
+  TabValue,
+  { label: string; icon: typeof Settings2; to: string }
+> = {
+  settings: {
     label: "Settings",
     icon: Settings2,
     to: "/league/$leagueId/settings",
   },
-  {
-    value: "keepers",
+  keepers: {
     label: "Keepers",
     icon: UserCheck,
     to: "/league/$leagueId/keepers",
   },
-  {
-    value: "budget",
+  budget: {
     label: "Budget",
     icon: DollarSign,
     to: "/league/$leagueId/budget",
   },
-  {
-    value: "players",
+  players: {
     label: "Players",
     icon: UserSearch,
     to: "/league/$leagueId/players",
   },
-  {
-    value: "myTeam",
+  myTeam: {
     label: "My Team",
     icon: CircleUserRound,
     to: "/league/$leagueId/myTeam",
   },
-  {
-    value: "injuries",
+  injuries: {
     label: "Injuries",
     icon: HeartPulse,
     to: "/league/$leagueId/injuries",
   },
   // The live per-team roster breakdown (see league.tsx) is a
-  // draft-in-progress reference tool, not where you land day-to-day the
-  // way Settings used to be before the split.
-  {
-    value: "league",
+  // draft-in-progress reference tool.
+  league: {
     label: "League",
     icon: LayoutGrid,
     to: "/league/$leagueId/league",
   },
-  {
-    value: "draft",
+  draft: {
     label: "Draft",
     icon: ListChecks,
     to: "/league/$leagueId/draft",
   },
-] as const;
+};
 
-// Settings/Keepers/Budget/Players are the ones worth a direct bottom-nav
-// slot pre-draft - My Team/Injuries/League/Draft always go in "More".
-const ALWAYS_MORE_VALUES = new Set(["myTeam", "injuries", "league", "draft"]);
+// Two entirely separate orderings/groupings, not just a reshuffle of one
+// list - pre-draft is about setting the league up (Settings first), once
+// the draft's live the auction tools (Budget/Players) and in-draft
+// reference views (League/Draft) matter more than one-time setup.
+const PRE_DRAFT_ORDER: TabValue[] = [
+  "settings",
+  "keepers",
+  "budget",
+  "players",
+  "myTeam",
+  "injuries",
+  "league",
+  "draft",
+];
+const PRE_DRAFT_DIRECT = new Set<TabValue>([
+  "settings",
+  "keepers",
+  "budget",
+  "players",
+]);
 
-const toBottomNavItem = (tab: (typeof TABS)[number]) => ({
-  value: tab.value,
-  label: tab.label,
-  icon: tab.icon,
-  to: tab.to,
+const STARTED_ORDER: TabValue[] = [
+  "budget",
+  "players",
+  "league",
+  "draft",
+  "myTeam",
+  "injuries",
+  "settings",
+  "keepers",
+];
+// Only 3 direct slots once started (not 4) - the nominate FAB takes the
+// bottom nav's center gap, so 3 tab buttons + the More button splits 2+2
+// around it instead of the pre-draft 4-tabs-no-FAB layout.
+const STARTED_DIRECT = new Set<TabValue>(["budget", "players", "league"]);
+
+const toBottomNavItem = (value: TabValue) => ({
+  value,
+  ...TAB_META[value],
 });
 
 // Single merged layout for the whole season lifecycle - previously two
@@ -137,23 +173,20 @@ function LeagueLayout() {
   // Absent means true (see schema.ts's useKeepers comment) - don't hide the
   // tab while settings is still loading, only once positively known off.
   const keepersEnabled = settings?.useKeepers !== false;
-  const visibleTabs = TABS.filter((tab) => {
-    if (tab.value === "keepers") return keepersEnabled;
-    return true;
-  });
-  // Settings also moves into "More" once the draft has started - it locks
-  // itself at that point anyway (see LeagueDetails.tsx), and freeing up its
-  // direct slot leaves Keepers/Budget/Players (3 buttons + the More button =
-  // 4) for a clean 2+2 split around the nominate FAB's center gap, instead
-  // of a lopsided 3+2 with a direct slot for a tab you can't edit anymore.
-  const moreValues = isStarted
-    ? new Set([...ALWAYS_MORE_VALUES, "settings"])
-    : ALWAYS_MORE_VALUES;
-  const bottomNavItems = visibleTabs
-    .filter((tab) => !moreValues.has(tab.value))
+  const order = isStarted ? STARTED_ORDER : PRE_DRAFT_ORDER;
+  const directValues = isStarted ? STARTED_DIRECT : PRE_DRAFT_DIRECT;
+  const visibleValues = order.filter(
+    (value) => value !== "keepers" || keepersEnabled,
+  );
+  const visibleTabs = visibleValues.map((value) => ({
+    value,
+    ...TAB_META[value],
+  }));
+  const bottomNavItems = visibleValues
+    .filter((value) => directValues.has(value))
     .map(toBottomNavItem);
-  const bottomNavMoreItems = visibleTabs
-    .filter((tab) => moreValues.has(tab.value))
+  const bottomNavMoreItems = visibleValues
+    .filter((value) => !directValues.has(value))
     .map(toBottomNavItem);
 
   return (
