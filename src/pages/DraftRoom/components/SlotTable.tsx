@@ -45,7 +45,7 @@ export function SlotTable({
 }: SlotTableProps) {
   return (
     <Table.ScrollContainer minWidth={340}>
-      <Table striped highlightOnHover>
+      <Table highlightOnHover>
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Player</Table.Th>
