@@ -203,13 +203,10 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
             >
               <Stack gap={6}>
                 <Group justify="space-between" wrap="nowrap">
-                  <Text fw={700}>
-                    {team.name}
-                    {team.isSelf ? " (you)" : ""}
-                  </Text>
                   <Group gap={4} wrap="nowrap">
-                    <Text size="sm" style={{ whiteSpace: "nowrap" }}>
-                      max bid: <strong>${Math.max(stats.maxBid, 0)}</strong>
+                    <Text fw={700}>
+                      {team.name}
+                      {team.isSelf ? " (you)" : ""}
                     </Text>
                     {/* Decorative only - the whole card is the click target
                         (see the Card's own onClick above), this just makes
@@ -230,6 +227,9 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                       )}
                     </ActionIcon>
                   </Group>
+                  <Text size="sm" style={{ whiteSpace: "nowrap" }}>
+                    max bid: <strong>${Math.max(stats.maxBid, 0)}</strong>
+                  </Text>
                 </Group>
                 <Group justify="space-between">
                   <Text size="xs" c="dimmed">
