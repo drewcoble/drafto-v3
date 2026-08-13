@@ -547,8 +547,12 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                       ))}
                     </Group>
                   ) : (
-                    <Table.ScrollContainer minWidth={420}>
-                      <Table verticalSpacing={4} highlightOnHover>
+                    <Table.ScrollContainer minWidth={300}>
+                      <Table
+                        verticalSpacing={4}
+                        horizontalSpacing="xs"
+                        highlightOnHover
+                      >
                         <Table.Thead>
                           <Table.Tr>
                             <Table.Th></Table.Th>

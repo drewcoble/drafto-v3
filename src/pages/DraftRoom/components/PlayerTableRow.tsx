@@ -186,9 +186,15 @@ export function PlayerTableRow({
           </Group>
         </Table.Td>
         <Table.Td>
-          <Badge size="sm" variant="light" color="gray">
-            {row.tierLabel}
-          </Badge>
+          {/* Bare tier number rather than the "Tier N" label used
+              elsewhere (e.g. bar-view section headers) - keeps this
+              column narrow enough that the trailing chevron stays on
+              screen on mobile without horizontal scrolling. */}
+          <Tooltip label={row.tierLabel} withArrow>
+            <Badge size="sm" variant="light" color="gray" circle>
+              {row.tier}
+            </Badge>
+          </Tooltip>
         </Table.Td>
         <Table.Td>
           <Text size="sm" c={priceColor} fw={600}>
@@ -204,9 +210,10 @@ export function PlayerTableRow({
           <ActionIcon
             variant="subtle"
             color="gray"
+            size="sm"
             aria-label={isExpanded ? "Hide actions" : "Show actions"}
           >
-            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </ActionIcon>
         </Table.Td>
       </Table.Tr>
