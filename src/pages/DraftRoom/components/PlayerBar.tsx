@@ -272,7 +272,7 @@ export function PlayerBar({
                   ? Math.max(style.opacity, HOVER_OPACITY_FLOOR)
                   : style.opacity,
               outline: style.outline,
-              borderRadius: 8,
+              borderRadius: 12,
               outlineOffset: 1.5,
               cursor: "pointer",
               boxShadow: isNominated
