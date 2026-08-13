@@ -25,6 +25,7 @@ import { expandRosterSlots } from "../../lib/rosterSlots";
 import { getErrorMessage } from "../../lib/errors";
 import { assignPicksToSlots } from "../../lib/slotAssignment";
 import {
+  computeMaxPerStarter,
   computeTeamBudgetStats,
   resolveTeamSalaryCap,
 } from "../../lib/teamBudget";
@@ -94,9 +95,8 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
         settings.flexPositions,
         settings.superflexPositions,
       );
-      const needs = slots
-        .filter((slot) => !bySlot.has(slot.key))
-        .map((slot) => slot.label);
+      const openSlots = slots.filter((slot) => !bySlot.has(slot.key));
+      const needs = openSlots.map((slot) => slot.label);
       // Same label-stripping as allNeedGroups below (see its comment) so a
       // group here matches the fixed set of badge slots every team's card
       // renders into.
@@ -107,6 +107,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
       // const fillPct = slots.length
       //   ? ((slots.length - needs.length) / slots.length) * 100
       //   : 0;
+      const maxPerStarter = computeMaxPerStarter(stats.remaining, openSlots);
       return {
         team,
         teamPicks,
@@ -116,6 +117,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
         needs,
         neededGroups,
         fillPct,
+        maxPerStarter,
       };
     });
   }, [teams, settings, picks]);
@@ -190,6 +192,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
             teamPicks,
             slots,
             bySlot,
+            maxPerStarter,
           }) => (
             <Card
               key={team._id}
@@ -230,8 +233,15 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                 </Group>
                 <Group justify="space-between">
                   <Text size="xs" c="dimmed">
-                    max ${Math.max(stats.maxBid, 0)} - {teamPicks.length}/
-                    {stats.totalSlots} filled
+                    {/* Most aggressive per-starter estimate - reserves just
+                        $1 for bench/K/DST (a common punt strategy) instead
+                        of splitting evenly across every open slot the way
+                        maxBid above does. See computeMaxPerStarter. */}
+                    {maxPerStarter !== null
+                      ? `max $${Math.max(Math.round(maxPerStarter), 0)}/starter`
+                      : "no starter slots open"}
+                    {" - "}
+                    {teamPicks.length}/{stats.totalSlots} filled
                   </Text>
                 </Group>
                 <Progress value={fillPct} size="lg" color="green" />
