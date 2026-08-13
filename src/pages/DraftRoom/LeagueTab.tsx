@@ -328,7 +328,11 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                 </Group>
                 {expandedTeamIds.has(team._id) && (
                   <>
-                    <Divider mt={4} />
+                    {/* mt matches the Card's own padding="md" (16px), so
+                        the divider lands roughly where the card's bottom
+                        border sits when collapsed, instead of hugging the
+                        needs badges above it. */}
+                    <Divider mt="md" />
                     <TeamSlotDetail
                       slots={slots}
                       bySlot={bySlot}
