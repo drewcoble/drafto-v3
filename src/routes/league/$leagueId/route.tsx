@@ -53,10 +53,10 @@ const TABS = [
     to: "/league/$leagueId/budget",
   },
   {
-    value: "draft",
-    label: "Draft",
-    icon: ListChecks,
-    to: "/league/$leagueId/draft",
+    value: "players",
+    label: "Players",
+    icon: UserSearch,
+    to: "/league/$leagueId/players",
   },
   {
     value: "myTeam",
@@ -65,18 +65,12 @@ const TABS = [
     to: "/league/$leagueId/myTeam",
   },
   {
-    value: "players",
-    label: "Players",
-    icon: UserSearch,
-    to: "/league/$leagueId/players",
-  },
-  {
     value: "injuries",
     label: "Injuries",
     icon: HeartPulse,
     to: "/league/$leagueId/injuries",
   },
-  // Last - the live per-team roster breakdown (see league.tsx) is a
+  // The live per-team roster breakdown (see league.tsx) is a
   // draft-in-progress reference tool, not where you land day-to-day the
   // way Settings used to be before the split.
   {
@@ -85,11 +79,17 @@ const TABS = [
     icon: LayoutGrid,
     to: "/league/$leagueId/league",
   },
+  {
+    value: "draft",
+    label: "Draft",
+    icon: ListChecks,
+    to: "/league/$leagueId/draft",
+  },
 ] as const;
 
-// Settings/Budget/MyTeam/Players are the ones worth a direct bottom-nav
-// slot pre-draft - Keepers/Draft/Injuries/League always go in "More".
-const ALWAYS_MORE_VALUES = new Set(["keepers", "draft", "injuries", "league"]);
+// Settings/Keepers/Budget/Players are the ones worth a direct bottom-nav
+// slot pre-draft - My Team/Injuries/League/Draft always go in "More".
+const ALWAYS_MORE_VALUES = new Set(["myTeam", "injuries", "league", "draft"]);
 
 const toBottomNavItem = (tab: (typeof TABS)[number]) => ({
   value: tab.value,
@@ -143,7 +143,7 @@ function LeagueLayout() {
   });
   // Settings also moves into "More" once the draft has started - it locks
   // itself at that point anyway (see LeagueDetails.tsx), and freeing up its
-  // direct slot leaves Budget/MyTeam/Players (3 buttons + the More button =
+  // direct slot leaves Keepers/Budget/Players (3 buttons + the More button =
   // 4) for a clean 2+2 split around the nominate FAB's center gap, instead
   // of a lopsided 3+2 with a direct slot for a tab you can't edit anymore.
   const moreValues = isStarted
