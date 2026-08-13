@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Badge,
   Card,
   Group,
@@ -7,6 +8,7 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
@@ -197,14 +199,34 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
               style={{ cursor: "pointer" }}
             >
               <Stack gap={6}>
-                <Group justify="space-between">
+                <Group justify="space-between" wrap="nowrap">
                   <Text fw={700}>
                     {team.name}
                     {team.isSelf ? " (you)" : ""}
                   </Text>
-                  <Text size="sm">
-                    max bid: <strong>${Math.max(stats.maxBid, 0)}</strong>
-                  </Text>
+                  <Group gap={4} wrap="nowrap">
+                    <Text size="sm" style={{ whiteSpace: "nowrap" }}>
+                      max bid: <strong>${Math.max(stats.maxBid, 0)}</strong>
+                    </Text>
+                    {/* Decorative only - the whole card is the click target
+                        (see the Card's own onClick above), this just makes
+                        it visually obvious the card expands. */}
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      aria-label={
+                        expandedTeamIds.has(team._id)
+                          ? "Hide roster"
+                          : "Show roster"
+                      }
+                    >
+                      {expandedTeamIds.has(team._id) ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </ActionIcon>
+                  </Group>
                 </Group>
                 <Group justify="space-between">
                   <Text size="xs" c="dimmed">
@@ -213,7 +235,10 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                   </Text>
                 </Group>
                 <Progress value={fillPct} size="lg" color="green" />
-                <Group justify="space-between" wrap="nowrap" mt={8}>
+                <Text size="xs" c="dimmed" mt={4}>
+                  Needs
+                </Text>
+                <Group justify="space-between" wrap="nowrap">
                   {/* Every group renders in the same order for every team
                       (allNeedGroups), so a group's badge sits in the same
                       horizontal slot whether or not this team still needs
