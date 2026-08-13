@@ -266,8 +266,12 @@ async function computeDraftValuesForSettings(
   // as the allocation weight instead keeps the same rank order but
   // compresses that top-end spike into a believable curve - raw VOR is
   // still returned below as valueOverReplacement, it's only the $ split
-  // that changes.
-  const FALLOFF_EXPONENT = 0.85;
+  // that changes. 0.70 (not 0.85) was chosen by comparing generic-settings
+  // output against ESPN's 2026 PPR auction cheat sheet: 0.85 put the top RB/WR
+  // ~35% above ESPN's real-auction-calibrated prices (elite players rarely
+  // clear $65-70 of a $200 budget in practice) while leaving picks ranked
+  // ~4+ already accurate, so only the top-end taper needed adjusting.
+  const FALLOFF_EXPONENT = 0.7;
   let totalWeight = 0;
   const vorByFpid = new Map<number, number>();
   const weightByFpid = new Map<number, number>();
