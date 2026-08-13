@@ -96,13 +96,16 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
         settings.superflexPositions,
       );
       const openSlots = slots.filter((slot) => !bySlot.has(slot.key));
-      const needs = openSlots.map((slot) => slot.label);
-      // Same label-stripping as allNeedGroups below (see its comment) so a
-      // group here matches the fixed set of badge slots every team's card
-      // renders into.
-      const neededGroups = new Set(
-        needs.map((label) => label.replace(/\d+$/, "")),
-      );
+      // How many still-open slots this team has in each group - same
+      // label-stripping as allNeedGroups/groupSlotCounts below (see their
+      // comments) so a group here matches the fixed set of badge slots
+      // every team's card reserves. Counts (not just presence) drive the
+      // stacked-badges-per-slot needs row - see the render below.
+      const openCountByGroup = new Map<string, number>();
+      for (const slot of openSlots) {
+        const group = slot.label.replace(/\d+$/, "");
+        openCountByGroup.set(group, (openCountByGroup.get(group) ?? 0) + 1);
+      }
       const fillPct = (stats.remaining / (stats.remaining + stats.spent)) * 100;
       // const fillPct = slots.length
       //   ? ((slots.length - needs.length) / slots.length) * 100
@@ -114,8 +117,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
         stats,
         slots,
         bySlot,
-        needs,
-        neededGroups,
+        openCountByGroup,
         fillPct,
         maxPerStarter,
       };
@@ -123,20 +125,26 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
   }, [teams, settings, picks]);
 
   // The full, fixed set of position groups a "needs" row could ever show for
-  // this league (same roster shape for every team) - rendered in this same
-  // order for every card so a group's badge sits in the same horizontal spot
-  // whether or not that team still needs it, making it easy to scan across
-  // teams at a glance. Same label-stripping/sort as the old inline
-  // computation below, just against every roster slot instead of only the
-  // still-open ones.
-  const allNeedGroups = useMemo(() => {
-    if (!settings) return [];
+  // this league (same roster shape for every team), and how many slots each
+  // one has league-wide (e.g. 2 for a 2-RB league) - every team's card
+  // always reserves that many badge slots per group (openCountByGroup
+  // above decides how many render visible vs. hidden placeholders), so a
+  // group's badges sit in the same horizontal spot whether or not this
+  // team still needs all of them, making it easy to scan across teams at a
+  // glance. Same label-stripping/sort as the old inline computation below,
+  // just against every roster slot instead of only the still-open ones.
+  const { allNeedGroups, groupSlotCounts } = useMemo(() => {
+    if (!settings) return { allNeedGroups: [], groupSlotCounts: new Map() };
     const slots = expandRosterSlots(settings.rosterSlots);
-    return Array.from(
-      new Set(slots.map((slot) => slot.label.replace(/\d+$/, ""))),
-    )
+    const counts = new Map<string, number>();
+    for (const slot of slots) {
+      const group = slot.label.replace(/\d+$/, "");
+      counts.set(group, (counts.get(group) ?? 0) + 1);
+    }
+    const groups = Array.from(counts.keys())
       .filter((group) => POSITION_ORDER.includes(group))
       .sort((a, b) => POSITION_ORDER.indexOf(a) - POSITION_ORDER.indexOf(b));
+    return { allNeedGroups: groups, groupSlotCounts: counts };
   }, [settings]);
 
   const sortedSummaries = useMemo(() => {
@@ -187,7 +195,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
           ({
             team,
             stats,
-            neededGroups,
+            openCountByGroup,
             fillPct,
             teamPicks,
             slots,
@@ -248,28 +256,41 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                 <Text size="xs" c="dimmed" mt={4}>
                   Needs
                 </Text>
-                <Group justify="space-between" wrap="nowrap">
-                  {/* Every group renders in the same order for every team
-                      (allNeedGroups), so a group's badge sits in the same
-                      horizontal slot whether or not this team still needs
-                      it - filled groups render invisible (same label, so
-                      same width) instead of disappearing, so the row
-                      doesn't reflow as picks come in. */}
-                  {allNeedGroups.map((group) => (
-                    <Badge
-                      key={group}
-                      color={positionColorOrDefault(group)}
-                      size="xs"
-                      variant="light"
-                      style={
-                        neededGroups.has(group)
-                          ? undefined
-                          : { visibility: "hidden" }
-                      }
-                    >
-                      {group}
-                    </Badge>
-                  ))}
+                <Group justify="space-between" wrap="wrap" gap="xs">
+                  {/* Every group renders in the same order, with the same
+                      number of badges (groupSlotCounts - the league-wide
+                      total for that group), for every team - so a group's
+                      badges always sit in the same horizontal spot whether
+                      or not this team still needs all of them. One badge
+                      per still-open slot in that group (openCountByGroup);
+                      the rest render invisible (same label, so same width)
+                      rather than disappearing, both so the row doesn't
+                      reflow as picks come in and so drafting e.g. a WR
+                      removes just the last WR badge instead of the whole
+                      group vanishing. */}
+                  {allNeedGroups.map((group) => {
+                    const openCount = openCountByGroup.get(group) ?? 0;
+                    const slotCount = groupSlotCounts.get(group) ?? 0;
+                    return (
+                      <Group key={group} gap={2} wrap="nowrap">
+                        {Array.from({ length: slotCount }, (_, i) => (
+                          <Badge
+                            key={i}
+                            color={positionColorOrDefault(group)}
+                            size="xs"
+                            variant="light"
+                            style={
+                              i < openCount
+                                ? undefined
+                                : { visibility: "hidden" }
+                            }
+                          >
+                            {group}
+                          </Badge>
+                        ))}
+                      </Group>
+                    );
+                  })}
                 </Group>
                 {expandedTeamIds.has(team._id) && (
                   <TeamSlotDetail
