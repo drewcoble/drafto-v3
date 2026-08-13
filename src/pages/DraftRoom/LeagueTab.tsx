@@ -36,6 +36,12 @@ interface LeagueTabProps {
   selfTeamId: Id<"seasonTeams">;
 }
 
+// QB and SFLEX share one needs-badge column instead of each getting their
+// own - a superflex slot is almost always spent on a QB in practice, so
+// the two read as one combined "quarterback-ish" need at a glance rather
+// than two separate ones.
+const QB_SFLEX_COMBO: Record<string, string> = { QB: "SFLEX" };
+
 export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
@@ -133,7 +139,10 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
   // team still needs all of them, making it easy to scan across teams at a
   // glance. Same label-stripping/sort as the old inline computation below,
   // just against every roster slot instead of only the still-open ones.
-  const { allNeedGroups, groupSlotCounts } = useMemo(() => {
+  const { allNeedGroups, groupSlotCounts } = useMemo((): {
+    allNeedGroups: string[];
+    groupSlotCounts: Map<string, number>;
+  } => {
     if (!settings) return { allNeedGroups: [], groupSlotCounts: new Map() };
     const slots = expandRosterSlots(settings.rosterSlots);
     const counts = new Map<string, number>();
@@ -146,6 +155,24 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
       .sort((a, b) => POSITION_ORDER.indexOf(a) - POSITION_ORDER.indexOf(b));
     return { allNeedGroups: groups, groupSlotCounts: counts };
   }, [settings]);
+
+  // Groups the columns above into needs-badge columns, combining QB/SFLEX
+  // per QB_SFLEX_COMBO - every other group still gets its own column.
+  const needColumns = useMemo(() => {
+    const columns: { key: string; groups: string[] }[] = [];
+    const consumed = new Set<string>();
+    for (const group of allNeedGroups) {
+      if (consumed.has(group)) continue;
+      const partner = QB_SFLEX_COMBO[group];
+      if (partner && allNeedGroups.includes(partner)) {
+        columns.push({ key: `${group}-${partner}`, groups: [group, partner] });
+        consumed.add(partner);
+      } else {
+        columns.push({ key: group, groups: [group] });
+      }
+    }
+    return columns;
+  }, [allNeedGroups]);
 
   const sortedSummaries = useMemo(() => {
     const self = teamSummaries.filter((ts) => ts.team.isSelf);
@@ -262,26 +289,26 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                   gap="xs"
                   align="flex-start"
                 >
-                  {/* Every group renders in the same order, with the same
-                      number of badges (groupSlotCounts - the league-wide
-                      total for that group), for every team - so a group's
-                      badges always sit in the same spot whether or not this
-                      team still needs all of them. One badge per still-open
-                      slot in that group (openCountByGroup), stacked
-                      vertically within the group rather than side by side;
-                      the rest render invisible (same label, so same height)
-                      rather than disappearing, both so the row doesn't
-                      reflow as picks come in and so drafting e.g. a WR
-                      removes just the last WR badge instead of the whole
-                      group vanishing. */}
-                  {allNeedGroups.map((group) => {
-                    const openCount = openCountByGroup.get(group) ?? 0;
-                    const slotCount = groupSlotCounts.get(group) ?? 0;
-                    return (
-                      <Stack key={group} gap={2}>
-                        {Array.from({ length: slotCount }, (_, i) => (
+                  {/* Every column renders in the same order, with the same
+                      number of badges per group (groupSlotCounts - the
+                      league-wide total for that group), for every team - so
+                      a column's badges always sit in the same spot whether
+                      or not this team still needs all of them. One badge
+                      per still-open slot in that group (openCountByGroup),
+                      stacked vertically (QB/SFLEX sharing a column - see
+                      needColumns); the rest render invisible (same label,
+                      so same height) rather than disappearing, both so the
+                      row doesn't reflow as picks come in and so drafting
+                      e.g. a WR removes just the last WR badge instead of
+                      the whole group vanishing. */}
+                  {needColumns.map(({ key, groups }) => (
+                    <Stack key={key} gap={2}>
+                      {groups.map((group) => {
+                        const openCount = openCountByGroup.get(group) ?? 0;
+                        const slotCount = groupSlotCounts.get(group) ?? 0;
+                        return Array.from({ length: slotCount }, (_, i) => (
                           <Badge
-                            key={i}
+                            key={`${group}-${i}`}
                             color={positionColorOrDefault(group)}
                             size="xs"
                             variant="light"
@@ -293,10 +320,10 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                           >
                             {group}
                           </Badge>
-                        ))}
-                      </Stack>
-                    );
-                  })}
+                        ));
+                      })}
+                    </Stack>
+                  ))}
                 </Group>
                 {expandedTeamIds.has(team._id) && (
                   <TeamSlotDetail
