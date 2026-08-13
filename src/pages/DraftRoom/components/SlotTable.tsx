@@ -73,7 +73,7 @@ export function SlotTable({
                     (was 2 separate columns) - same compaction as
                     KeeperTable.tsx's Player column. */}
                 <Table.Td>
-                  <Group gap={6} wrap="wrap">
+                  <Group gap={6} wrap="nowrap" align="center">
                     <Badge
                       variant="light"
                       color={positionColorOrGray(slot.position)}
@@ -81,25 +81,38 @@ export function SlotTable({
                       {slot.label}
                     </Badge>
                     {player && pick ? (
-                      <Anchor
-                        component="button"
-                        type="button"
-                        size="sm"
-                        onClick={() => onSelectPlayer(pick.fpid)}
-                      >
-                        {player.name}
-                      </Anchor>
+                      // Keeper badge always stacks under the name (rather
+                      // than sharing the row with the position badge and
+                      // wrapping onto its own line only once it runs out of
+                      // room) so the position badge stays vertically
+                      // centered against a consistent 1- or 2-line block
+                      // instead of drifting depending on wrap width.
+                      <Stack gap={2}>
+                        <Anchor
+                          component="button"
+                          type="button"
+                          size="sm"
+                          onClick={() => onSelectPlayer(pick.fpid)}
+                        >
+                          {player.name}
+                        </Anchor>
+                        {pick.isKeeper && (
+                          <Badge
+                            variant="light"
+                            color="gray"
+                            size="sm"
+                            style={{ alignSelf: "flex-start" }}
+                          >
+                            {trackConsecutiveYears
+                              ? `Keeper · Yr ${pick.keeperStreak ?? 1}`
+                              : "Keeper"}
+                          </Badge>
+                        )}
+                      </Stack>
                     ) : (
                       <Text size="sm" c="dimmed">
                         —
                       </Text>
-                    )}
-                    {pick?.isKeeper && (
-                      <Badge variant="light" color="gray" size="sm">
-                        {trackConsecutiveYears
-                          ? `Keeper · Yr ${pick.keeperStreak ?? 1}`
-                          : "Keeper"}
-                      </Badge>
                     )}
                   </Group>
                 </Table.Td>
