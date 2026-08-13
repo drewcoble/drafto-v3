@@ -278,6 +278,7 @@ export function SettingsForm({
                         key={pos}
                         value={pos}
                         color={POSITION_COLORS[pos]}
+                        variant="light"
                         disabled={configLocked}
                       >
                         {pos}
@@ -315,6 +316,7 @@ export function SettingsForm({
                       key={pos}
                       value={pos}
                       color={POSITION_COLORS[pos]}
+                      variant="light"
                       disabled={configLocked}
                     >
                       {pos}
