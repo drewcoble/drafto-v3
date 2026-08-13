@@ -107,12 +107,11 @@ const PRE_DRAFT_ORDER: TabValue[] = [
   "league",
   "draft",
 ];
-const PRE_DRAFT_DIRECT = new Set<TabValue>([
-  "settings",
-  "keepers",
-  "budget",
-  "players",
-]);
+// The first N of the *visible* order fill the direct slots (see
+// visibleValues below) - positional rather than a fixed value set, so if
+// keepers is off and drops out of the list entirely, myTeam backfills the
+// 4th direct slot instead of leaving only 3.
+const PRE_DRAFT_DIRECT_COUNT = 4;
 
 const STARTED_ORDER: TabValue[] = [
   "budget",
@@ -127,7 +126,7 @@ const STARTED_ORDER: TabValue[] = [
 // Only 3 direct slots once started (not 4) - the nominate FAB takes the
 // bottom nav's center gap, so 3 tab buttons + the More button splits 2+2
 // around it instead of the pre-draft 4-tabs-no-FAB layout.
-const STARTED_DIRECT = new Set<TabValue>(["budget", "players", "league"]);
+const STARTED_DIRECT_COUNT = 3;
 
 const toBottomNavItem = (value: TabValue) => ({
   value,
@@ -174,7 +173,7 @@ function LeagueLayout() {
   // tab while settings is still loading, only once positively known off.
   const keepersEnabled = settings?.useKeepers !== false;
   const order = isStarted ? STARTED_ORDER : PRE_DRAFT_ORDER;
-  const directValues = isStarted ? STARTED_DIRECT : PRE_DRAFT_DIRECT;
+  const directCount = isStarted ? STARTED_DIRECT_COUNT : PRE_DRAFT_DIRECT_COUNT;
   const visibleValues = order.filter(
     (value) => value !== "keepers" || keepersEnabled,
   );
@@ -183,10 +182,10 @@ function LeagueLayout() {
     ...TAB_META[value],
   }));
   const bottomNavItems = visibleValues
-    .filter((value) => directValues.has(value))
+    .slice(0, directCount)
     .map(toBottomNavItem);
   const bottomNavMoreItems = visibleValues
-    .filter((value) => !directValues.has(value))
+    .slice(directCount)
     .map(toBottomNavItem);
 
   return (
