@@ -5,11 +5,16 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
-import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
+import {
+  filterRelevantPlayers,
+  scoringConfigFromSeason,
+} from "../../lib/relevantPlayers";
+import { computeNominationSuggestions } from "../../lib/nominationStrategies";
 import { WEEK } from "../../constants/general";
-import type { DraftTierRow } from "../../types";
+import { POSITIONS, type DraftTierRow, type ValueGap } from "../../types";
 import { RecentPicksTable } from "./components/RecentPicksTable";
 import { TargetsTable } from "./components/ShortlistTable";
+import { RecommendedNominations } from "./components/RecommendedNominations";
 import { getErrorMessage } from "../../lib/errors";
 
 interface DraftTabProps {
@@ -37,6 +42,27 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
   const playerTags = useQuery(api.draft.tags.listPlayerTags, {
     seasonId,
   });
+  const activeNomination = useQuery(api.draft.picks.getActiveNomination, {
+    seasonId,
+  });
+  const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
+  const valueGaps = useQuery(
+    api.valueGaps.getAllValueGaps,
+    settings
+      ? {
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+          lastSeason: String(Number(thisSeason) - 1),
+        }
+      : "skip",
+  );
+  const nominationConfig = useQuery(api.draft.nominationOrder.getNominationConfig, {
+    seasonId,
+  });
+  const currentNominator = useQuery(
+    api.draft.nominationOrder.getCurrentNominator,
+    nominationConfig?.nominationOrder ? { seasonId } : "skip",
+  );
   // Same query/args PlayersLeftTab uses - stable for the draft's duration
   // (season settings + projections only), so this is a shared subscription
   // whenever that tab is also mounted, not a second server-side compute.
@@ -56,6 +82,7 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
   const removePick = useMutation(api.draft.picks.removePick);
   const reorderShortlist = useMutation(api.draft.tags.reorderShortlist);
   const clearPlayerTag = useMutation(api.draft.tags.clearPlayerTag);
+  const nominate = useMutation(api.draft.picks.nominate);
 
   const nameByFpid = useMemo(() => {
     const map = new Map<number, { name: string; team: string | null }>();
@@ -137,6 +164,78 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
     runAction(() => reorderShortlist({ seasonId, fpids }));
   };
 
+  // draftStatus is a computed field listSeasons joins in from the real
+  // draft's status (see convex/leagues.ts) - "pre_draft" and "!isStarted"
+  // are exactly equivalent, same field useDraftPhase reads.
+  const isStarted = settings !== undefined && settings.draftStatus !== "pre_draft";
+
+  const activePositions = useMemo(() => {
+    if (!settings) return [];
+    return POSITIONS.filter(
+      (pos) =>
+        settings.rosterSlots[pos] > 0 ||
+        settings.flexPositions.includes(pos) ||
+        settings.superflexPositions.includes(pos),
+    );
+  }, [settings]);
+
+  const adpByFpid = useMemo(() => {
+    const map = new Map<number, { adpStd: number; adpHalf: number; adpPpr: number }>();
+    for (const row of allRankings ?? []) map.set(row.fpid, row);
+    return map;
+  }, [allRankings]);
+
+  const valueGapByFpid = useMemo(() => {
+    const map = new Map<number, ValueGap>();
+    for (const gap of valueGaps ?? []) map.set(gap.fpid, gap);
+    return map;
+  }, [valueGaps]);
+
+  const availableForNomination = useMemo(() => {
+    if (!settings || !tieredValues) return [];
+    const relevant = filterRelevantPlayers(
+      tieredValues,
+      activePositions,
+      settings.scoring,
+      adpByFpid,
+      (row) => row.points,
+    );
+    return relevant.filter(
+      (row) => !pickByFpid.has(row.fpid) && row.fpid !== activeNomination?.fpid,
+    );
+  }, [settings, tieredValues, activePositions, adpByFpid, pickByFpid, activeNomination]);
+
+  const selfTeamId = teams.find((team) => team.isSelf)?._id;
+  const nominatingTeamId = nominationConfig?.nominationOrder
+    ? (currentNominator?.currentTeamId ?? undefined)
+    : selfTeamId;
+
+  const nominationResults = useMemo(() => {
+    if (!settings) return undefined;
+    return computeNominationSuggestions({
+      available: availableForNomination,
+      teams,
+      picks: picks ?? [],
+      settings: {
+        salaryCap: settings.salaryCap,
+        rosterSlots: settings.rosterSlots,
+        flexPositions: settings.flexPositions,
+        superflexPositions: settings.superflexPositions,
+      },
+      valueGapByFpid,
+    });
+  }, [settings, availableForNomination, teams, picks, valueGapByFpid]);
+
+  const handleNominate = (fpid: number) =>
+    runAction(() =>
+      nominate({
+        seasonId,
+        fpid,
+        ...(nominatingTeamId ? { nominatingTeamId } : {}),
+        openingBid: 1,
+      }),
+    );
+
   return (
     <Stack gap="md" py="sm">
       {actionError && (
@@ -145,6 +244,14 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
         </Text>
       )}
       {usingGenericValues && <GenericValuesNotice />}
+      {isStarted && nominationResults && (
+        <RecommendedNominations
+          results={nominationResults}
+          hasActiveNomination={!!activeNomination}
+          onNominate={handleNominate}
+          onSelectPlayer={setSelectedFpid}
+        />
+      )}
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <RecentPicksTable
           picks={recentPicks}
