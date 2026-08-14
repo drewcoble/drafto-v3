@@ -221,7 +221,29 @@ export function PlayerTableRow({
       {isExpanded && (
         <Table.Tr>
           <Table.Td colSpan={COLUMN_COUNT}>
-            <Group gap={6} wrap="wrap" py={4}>
+            <Group justify="space-between" wrap="wrap" py={4}>
+              <Group gap={6} wrap="wrap">
+                <Button
+                  {...(tag === "target"
+                    ? playerTagStyle("target")
+                    : { variant: "default" })}
+                  size="xs"
+                  leftSection={<Crosshair size={14} />}
+                  onClick={() => onSetTag("target")}
+                >
+                  Target
+                </Button>
+                <Button
+                  {...(tag === "avoid"
+                    ? playerTagStyle("avoid")
+                    : { variant: "default" })}
+                  size="xs"
+                  leftSection={<CircleSlash size={14} />}
+                  onClick={() => onSetTag("avoid")}
+                >
+                  Avoid
+                </Button>
+              </Group>
               {!hasActiveNomination && (
                 <Button
                   variant="light"
@@ -232,26 +254,6 @@ export function PlayerTableRow({
                   Nominate
                 </Button>
               )}
-              <Button
-                {...(tag === "target"
-                  ? playerTagStyle("target")
-                  : { variant: "default" })}
-                size="xs"
-                leftSection={<Crosshair size={14} />}
-                onClick={() => onSetTag("target")}
-              >
-                Target
-              </Button>
-              <Button
-                {...(tag === "avoid"
-                  ? playerTagStyle("avoid")
-                  : { variant: "default" })}
-                size="xs"
-                leftSection={<CircleSlash size={14} />}
-                onClick={() => onSetTag("avoid")}
-              >
-                Avoid
-              </Button>
             </Group>
           </Table.Td>
         </Table.Tr>
