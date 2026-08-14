@@ -11,6 +11,33 @@ import { scoringValidator, Scoring } from "./scoring";
 
 type Position = (typeof POSITIONS)[number];
 
+// Downside semi-deviation of per-game points: same shape as the
+// stdDeviation calc below, but squared shortfalls below `mean` only (games
+// at or above the mean contribute 0). Can't be folded into the incremental
+// sum-of-squares trick above it, because whether a given game counts as
+// "below" depends on the season's final mean, which shifts with every new
+// game - so this rereads the season's games instead. Cheap in practice
+// (bounded by ~18 games/season) and only runs when a row's points actually
+// changed (applySeasonStatsDelta's early return above).
+async function computeDownsideDeviation(
+  ctx: MutationCtx,
+  args: { fpid: number; season: string; scoring: Scoring; mean: number; gamesPlayed: number },
+): Promise<number> {
+  if (args.gamesPlayed === 0) return 0;
+  const rows = await ctx.db
+    .query("playerPoints")
+    .withIndex("by_fpid_season_scoring", (q) =>
+      q.eq("fpid", args.fpid).eq("season", args.season).eq("scoring", args.scoring),
+    )
+    .collect();
+  const sumSquaredShortfall = rows.reduce((sum, row) => {
+    if (row.points <= 0) return sum; // didn't play - see rule below
+    const shortfall = Math.min(row.points - args.mean, 0);
+    return sum + shortfall * shortfall;
+  }, 0);
+  return Math.sqrt(sumSquaredShortfall / args.gamesPlayed);
+}
+
 // Mirrors valueGaps.ts's old in-query rule: Sleeper returns a 0-point stub
 // row for rostered-but-inactive players, so a 0-point week counts as "didn't
 // play" rather than a played game with 0 points.
@@ -59,6 +86,13 @@ async function applySeasonStatsDelta(
         )
       : 0;
   const stdDeviation = Math.sqrt(variance);
+  const downsideDeviation = await computeDownsideDeviation(ctx, {
+    fpid: args.fpid,
+    season: args.season,
+    scoring: args.scoring,
+    mean: gamesPlayed > 0 ? totalPoints / gamesPlayed : 0,
+    gamesPlayed,
+  });
 
   const fields = {
     totalPoints,
@@ -66,6 +100,7 @@ async function applySeasonStatsDelta(
     gamesPlayed,
     variance,
     stdDeviation,
+    downsideDeviation,
     updatedAt: Date.now(),
   };
 

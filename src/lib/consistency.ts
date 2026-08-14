@@ -45,21 +45,26 @@ function percentile(sortedAsc: number[], p: number): number {
 
 // PPG terciles for one position's season cohort (bottom third "low", top
 // third "high"), same as before. Week-to-week coefficient of variation
-// (stdDeviation / PPG) is then tercile-split *separately within* the
-// high-PPG and low-PPG cohorts, rather than once globally. CV correlates
-// with PPG - low scorers skew boom/bust (a deep-bench flier's variance is
-// large relative to their small mean) rather than "consistently bad" - so
-// a single global CV split stuffed the low-CV tercile with high-PPG
-// players almost by default: checked against real 2025 PPR stats, that
-// produced ~94 "Reliable" players against only ~39 "Low Output" for the
-// same cohort sizes. Splitting CV within each PPG cohort instead means
+// (downsideDeviation / PPG) is then tercile-split *separately within* the
+// high-PPG and low-PPG cohorts, rather than once globally. downsideDeviation
+// (see convex/playerPoints.ts) only counts games that fell short of the
+// player's own season PPG, unlike a plain symmetric stdDeviation - a player
+// with a high floor who occasionally has a monster game would get flagged
+// as high-variance by a symmetric measure even though they never actually
+// bust, which isn't what "Boom/Bust" is supposed to mean here. CV still
+// correlates with PPG - low scorers skew boom/bust (a deep-bench flier's
+// variance is large relative to their small mean) rather than "consistently
+// bad" - so a single global CV split stuffed the low-CV tercile with
+// high-PPG players almost by default: checked against real 2025 PPR stats,
+// that produced ~94 "Reliable" players against only ~39 "Low Output" for
+// the same cohort sizes. Splitting CV within each PPG cohort instead means
 // exactly the bottom third of the high-PPG group can be "Reliable" and
 // exactly the bottom third of the low-PPG group can be "Low Output",
 // which balances the two labels out (~59 each) without changing what
 // "average on either axis gets no label" means.
 export function computeConsistencyThresholds(
   position: Position,
-  rows: Array<{ totalPoints: number; gamesPlayed: number; stdDeviation: number }>,
+  rows: Array<{ totalPoints: number; gamesPlayed: number; downsideDeviation: number }>,
 ): ConsistencyThresholds | null {
   const minPpg = MIN_PPG_BY_POSITION[position];
   const eligible = rows.filter(
@@ -69,7 +74,7 @@ export function computeConsistencyThresholds(
   if (eligible.length === 0) return null;
   const withStats = eligible.map((row) => {
     const ppg = row.totalPoints / row.gamesPlayed;
-    return { ppg, cv: ppg > 0 ? row.stdDeviation / ppg : Infinity };
+    return { ppg, cv: ppg > 0 ? row.downsideDeviation / ppg : Infinity };
   });
   const ppgs = withStats.map((r) => r.ppg).sort((a, b) => a - b);
   const lowPpg = percentile(ppgs, 1 / 3);
@@ -101,13 +106,13 @@ export function computeConsistencyThresholds(
 // flier" - gets no label.
 export function getConsistencyLabel(
   position: Position,
-  player: { totalPoints: number; gamesPlayed: number; stdDeviation: number },
+  player: { totalPoints: number; gamesPlayed: number; downsideDeviation: number },
   thresholds: ConsistencyThresholds | null,
 ): ConsistencyLabel | null {
   if (player.gamesPlayed < MIN_GAMES || !thresholds) return null;
   const ppg = player.totalPoints / player.gamesPlayed;
   if (ppg < MIN_PPG_BY_POSITION[position]) return null;
-  const cv = ppg > 0 ? player.stdDeviation / ppg : Infinity;
+  const cv = ppg > 0 ? player.downsideDeviation / ppg : Infinity;
   if (ppg >= thresholds.highPpg) {
     if (cv <= thresholds.reliableCv) return "Reliable";
     if (cv >= thresholds.boomBustCv) return "Boom/Bust";

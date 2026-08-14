@@ -104,7 +104,7 @@ export function PlayerDetailModal({
   const seasonStatsBySeason = useMemo(() => {
     const map = new Map<
       string,
-      { totalPoints: number; gamesPlayed: number; stdDeviation: number }
+      { totalPoints: number; gamesPlayed: number; downsideDeviation: number }
     >();
     for (const row of seasonHistory ?? []) map.set(row.season, row);
     return map;

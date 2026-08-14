@@ -35,14 +35,16 @@ function percentile(sortedAsc: number[], p: number): number {
   return sortedAsc[Math.min(sortedAsc.length - 1, Math.floor(p * sortedAsc.length))]!;
 }
 
-// CV (stdDeviation / PPG) is tercile-split *separately within* the
+// CV (downsideDeviation / PPG) is tercile-split *separately within* the
 // high-PPG and low-PPG cohorts rather than once globally - see
 // src/lib/consistency.ts for why (a global CV split skewed heavily toward
 // "Reliable" over "Low Output" since low scorers trend boom/bust, not
-// consistently bad). Keep in sync with that file.
+// consistently bad), and for why downsideDeviation (only counting games
+// below the player's own PPG) replaced a symmetric stdDeviation. Keep in
+// sync with that file.
 export function computeConsistencyThresholds(
   position: Position,
-  rows: Array<{ totalPoints: number; gamesPlayed: number; stdDeviation: number }>,
+  rows: Array<{ totalPoints: number; gamesPlayed: number; downsideDeviation: number }>,
 ): ConsistencyThresholds | null {
   const minPpg = MIN_PPG_BY_POSITION[position];
   const eligible = rows.filter(
@@ -52,7 +54,7 @@ export function computeConsistencyThresholds(
   if (eligible.length === 0) return null;
   const withStats = eligible.map((row) => {
     const ppg = row.totalPoints / row.gamesPlayed;
-    return { ppg, cv: ppg > 0 ? row.stdDeviation / ppg : Infinity };
+    return { ppg, cv: ppg > 0 ? row.downsideDeviation / ppg : Infinity };
   });
   const ppgs = withStats.map((r) => r.ppg).sort((a, b) => a - b);
   const lowPpg = percentile(ppgs, 1 / 3);
@@ -78,13 +80,13 @@ export function computeConsistencyThresholds(
 
 export function getConsistencyLabel(
   position: Position,
-  player: { totalPoints: number; gamesPlayed: number; stdDeviation: number },
+  player: { totalPoints: number; gamesPlayed: number; downsideDeviation: number },
   thresholds: ConsistencyThresholds | null,
 ): ConsistencyLabel | null {
   if (player.gamesPlayed < MIN_GAMES || !thresholds) return null;
   const ppg = player.totalPoints / player.gamesPlayed;
   if (ppg < MIN_PPG_BY_POSITION[position]) return null;
-  const cv = ppg > 0 ? player.stdDeviation / ppg : Infinity;
+  const cv = ppg > 0 ? player.downsideDeviation / ppg : Infinity;
   if (ppg >= thresholds.highPpg) {
     if (cv <= thresholds.reliableCv) return "Reliable";
     if (cv >= thresholds.boomBustCv) return "Boom/Bust";

@@ -259,6 +259,17 @@ export default defineSchema({
     // convex/playerPoints.ts).
     variance: v.number(),
     stdDeviation: v.number(),
+    // Downside semi-deviation: same population-variance formula as
+    // stdDeviation above, but only over games that fell below the season's
+    // own PPG (games at or above the mean contribute 0). Unlike
+    // stdDeviation, this can't be derived from a running sum-of-squares -
+    // whether a given game counts as "below" depends on the season's final
+    // mean, which shifts with every new game - so it's recomputed from
+    // playerPoints on each write (see computeDownsideDeviation in
+    // convex/playerPoints.ts). Consistency labels (src/lib/consistency.ts)
+    // use this instead of stdDeviation so a player's occasional monster game
+    // doesn't inflate their variance the same way a genuine bust week does.
+    downsideDeviation: v.number(),
     updatedAt: v.number(),
   })
     // Read path: valueGaps.ts pulls every fpid for one position/season/scoring.
