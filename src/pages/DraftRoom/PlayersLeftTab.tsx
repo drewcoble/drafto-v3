@@ -375,7 +375,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
         <Text size="xs" c="dimmed" maw={640}>
           {view === "bar"
             ? "Bar length = projected cost · color = consistency rating · outline = target/avoid · faded = over your remaining budget · gold glow + gavel = currently on the block. Drafted players are hidden. Click a bar for player info, nominate, and target/avoid."
-            : `$ = projected cost, green = within $${BUDGET_MATCH_WINDOW} of an open budget spot at this position, orange = not close to one · gold row = currently on the block. Drafted players are hidden.`}
+            : `$ = projected cost, green = within $${BUDGET_MATCH_WINDOW} of an open budget spot at this position · gold row = currently on the block. Drafted players are hidden.`}
         </Text>
         <SegmentedControl
           size="sm"
@@ -564,35 +564,27 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                           </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
-                          {rows.map((row) => {
-                            const planMatch = planMatchByFpid.get(row.fpid);
-                            const budgetAmount =
-                              planMatch?.amount ?? stats?.perOpenSlot;
-                            return (
-                              <PlayerTableRow
-                                key={row.fpid}
-                                row={row}
-                                budgetAmount={budgetAmount}
-                                tag={tagByFpid.get(row.fpid)}
-                                valueGap={valueGapByFpid.get(row.fpid)}
-                                consistency={consistencyByFpid.get(row.fpid)}
-                                isNominated={
-                                  activeNomination?.fpid === row.fpid
-                                }
-                                hasActiveNomination={!!activeNomination}
-                                budgetMatch={
-                                  budgetMatchByFpid.get(row.fpid) ?? false
-                                }
-                                isExpanded={expandedFpids.has(row.fpid)}
-                                onSetTag={(nextTag) =>
-                                  handleSetTag(row.fpid, nextTag)
-                                }
-                                onNominate={() => handleNominate(row.fpid)}
-                                onSelectPlayer={setSelectedFpid}
-                                onToggleExpand={() => toggleExpanded(row.fpid)}
-                              />
-                            );
-                          })}
+                          {rows.map((row) => (
+                            <PlayerTableRow
+                              key={row.fpid}
+                              row={row}
+                              tag={tagByFpid.get(row.fpid)}
+                              valueGap={valueGapByFpid.get(row.fpid)}
+                              consistency={consistencyByFpid.get(row.fpid)}
+                              isNominated={activeNomination?.fpid === row.fpid}
+                              hasActiveNomination={!!activeNomination}
+                              budgetMatch={
+                                budgetMatchByFpid.get(row.fpid) ?? false
+                              }
+                              isExpanded={expandedFpids.has(row.fpid)}
+                              onSetTag={(nextTag) =>
+                                handleSetTag(row.fpid, nextTag)
+                              }
+                              onNominate={() => handleNominate(row.fpid)}
+                              onSelectPlayer={setSelectedFpid}
+                              onToggleExpand={() => toggleExpanded(row.fpid)}
+                            />
+                          ))}
                         </Table.Tbody>
                       </Table>
                     </Table.ScrollContainer>

@@ -44,7 +44,6 @@ const CONSISTENCY_ICON: Record<ConsistencyLabel, typeof ShieldCheck> = {
 
 interface PlayerTableRowProps {
   row: DraftBoardRow;
-  budgetAmount: number | undefined;
   tag: PlayerTag | undefined;
   valueGap: ValueGap | undefined;
   consistency: ConsistencyLabel | undefined;
@@ -76,7 +75,6 @@ const COLUMN_COUNT = 6;
 // PlayerBarDetails use so a player reads the same way in either view.
 export function PlayerTableRow({
   row,
-  budgetAmount,
   tag,
   valueGap,
   consistency,
@@ -89,15 +87,13 @@ export function PlayerTableRow({
   onSelectPlayer,
   onToggleExpand,
 }: PlayerTableRowProps) {
-  // No color at all until there's actually a budget plan to compare
-  // against (budgetAmount undefined) - green/orange only once budgetMatch
-  // is a real signal, not a default.
-  const priceColor =
-    budgetAmount === undefined
-      ? "inherit"
-      : budgetMatch
-        ? "green.6"
-        : "orange.6";
+  // Default (white) text unless this player's $ value is a budget match -
+  // green only once budgetMatch is a real signal (a plan exists and this
+  // price is close to an open slot's budget), not a default. Out-of-range
+  // values used to render orange as a warning, but that read as more
+  // alarming than intended - default text now covers both "no plan yet"
+  // and "not close to one".
+  const priceColor = budgetMatch ? "green.6" : "inherit";
   const ConsistencyIcon = consistency
     ? CONSISTENCY_ICON[consistency]
     : undefined;
