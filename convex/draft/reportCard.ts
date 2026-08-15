@@ -219,12 +219,9 @@ async function computeReportCardData(
   // weekly results - the season this draft just started has no games
   // played yet, so labeling off it would be empty for everyone.
   const priorSeason = String(Number(season.year) - 1);
-  // playerSeasonStats is base-scoring-only (not bonus-aware, see its schema
-  // comment) - consistency labels below are derived from raw historical
-  // output, so this deliberately stays on scoringConfig.scoring alone.
   const seasonStats = await ctx.runQuery(api.playerPoints.getAllSeasonStats, {
     season: priorSeason,
-    scoring: args.scoringConfig.scoring,
+    scoringConfig: args.scoringConfig,
   });
   const statsByPosition = new Map<Position, typeof seasonStats>();
   for (const row of seasonStats) {

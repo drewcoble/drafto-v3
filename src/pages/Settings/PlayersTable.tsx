@@ -103,7 +103,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   // selected (unlike the old replacement-rank cutoff, which did).
   const seasonStats = useQuery(api.playerPoints.getAllSeasonStats, {
     season: lastSeason,
-    scoring,
+    scoringConfig,
   });
   const consistencyByFpid = useMemo(() => {
     const map = new Map<number, ConsistencyLabel>();

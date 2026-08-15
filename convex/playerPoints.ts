@@ -7,32 +7,60 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { positionValidator, POSITIONS } from "./positions";
-import { scoringValidator, Scoring } from "./scoring";
+import {
+  bonusPoints,
+  scoringConfigValidator,
+  scoringValidator,
+  Scoring,
+  ScoringConfig,
+  TeScoring,
+} from "./scoring";
 
 type Position = (typeof POSITIONS)[number];
 
-// Downside semi-deviation of per-game points: same shape as the
-// stdDeviation calc below, but squared shortfalls below `mean` only (games
-// at or above the mean contribute 0). Can't be folded into the incremental
-// sum-of-squares trick above it, because whether a given game counts as
-// "below" depends on the season's final mean, which shifts with every new
-// game - so this rereads the season's games instead. Cheap in practice
-// (bounded by ~18 games/season) and only runs when a row's points actually
-// changed (applySeasonStatsDelta's early return above).
-async function computeDownsideDeviation(
-  ctx: MutationCtx,
-  args: { fpid: number; season: string; scoring: Scoring; mean: number; gamesPlayed: number },
-): Promise<number> {
+const TE_SCORINGS: TeScoring[] = ["NONE", "HALF", "FULL"];
+
+// Every teScoring x sixPointPassTds combination playerSeasonStats stores a
+// row for, on top of the 3-way base `scoring` already looped over by this
+// file's caller (see sleeper/playerPoints.ts). Uniform for every position
+// even though the TE bonus only ever changes a TE row's total and the
+// passing bonus only ever changes a row with pass_td stats (bonusPoints in
+// convex/scoring.ts is 0 for every other case) - branching per position to
+// skip the no-op combos would save rows but isn't worth the complexity for a
+// digest table this small (see playerSeasonStats's schema comment).
+const BONUS_VARIANTS: Array<Pick<ScoringConfig, "teScoring" | "sixPointPassTds">> =
+  TE_SCORINGS.flatMap((teScoring) =>
+    [false, true].map((sixPointPassTds) => ({ teScoring, sixPointPassTds })),
+  );
+
+function statsEqual(
+  a: Record<string, number> | undefined,
+  b: Record<string, number> | undefined,
+): boolean {
+  const aKeys = Object.keys(a ?? {});
+  const bKeys = Object.keys(b ?? {});
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key) => a![key] === b?.[key]);
+}
+
+// Downside semi-deviation of per-game points for one bonus variant: squared
+// shortfalls below `mean` only (games at or above the mean contribute 0).
+// Can't be folded into the incremental sum-of-squares trick below, because
+// whether a given game counts as "below" depends on the season's final mean,
+// which shifts with every new game. Takes the season's already-fetched
+// playerPoints rows (shared across every BONUS_VARIANTS combo by
+// applySeasonStatsDelta below) rather than re-querying per variant.
+function computeDownsideDeviation(
+  rows: Array<{ points: number; stats?: Record<string, number> }>,
+  args: { position: Position; config: ScoringConfig; mean: number; gamesPlayed: number },
+): number {
   if (args.gamesPlayed === 0) return 0;
-  const rows = await ctx.db
-    .query("playerPoints")
-    .withIndex("by_fpid_season_scoring", (q) =>
-      q.eq("fpid", args.fpid).eq("season", args.season).eq("scoring", args.scoring),
-    )
-    .collect();
   const sumSquaredShortfall = rows.reduce((sum, row) => {
     if (row.points <= 0) return sum; // didn't play - see rule below
-    const shortfall = Math.min(row.points - args.mean, 0);
+    const points =
+      row.points +
+      bonusPoints({ position: args.position, stats: row.stats ?? {} }, args.config);
+    const shortfall = Math.min(points - args.mean, 0);
     return sum + shortfall * shortfall;
   }, 0);
   return Math.sqrt(sumSquaredShortfall / args.gamesPlayed);
@@ -40,7 +68,11 @@ async function computeDownsideDeviation(
 
 // Mirrors valueGaps.ts's old in-query rule: Sleeper returns a 0-point stub
 // row for rostered-but-inactive players, so a 0-point week counts as "didn't
-// play" rather than a played game with 0 points.
+// play" rather than a played game with 0 points - `old`/`new` are null
+// exactly when that game doesn't count. Fans out to one playerSeasonStats
+// row per BONUS_VARIANTS combo, since bonusPoints (TE-premium reception
+// bonus, 6pt-passing-TD bump) depends on the raw stats blob, not just the
+// single scoring-resolved `points` value this used to take.
 async function applySeasonStatsDelta(
   ctx: MutationCtx,
   args: {
@@ -48,72 +80,100 @@ async function applySeasonStatsDelta(
     position: Position;
     season: string;
     scoring: Scoring;
-    pointsDelta: number;
-    pointsSquaredDelta: number;
-    gamesDelta: number;
+    old: { points: number; stats: Record<string, number> | undefined } | null;
+    new: { points: number; stats: Record<string, number> | undefined } | null;
   },
 ) {
-  if (
-    args.pointsDelta === 0 &&
-    args.pointsSquaredDelta === 0 &&
-    args.gamesDelta === 0
-  ) {
-    return;
-  }
+  const unchanged =
+    args.old === null
+      ? args.new === null
+      : args.new !== null &&
+        args.old.points === args.new.points &&
+        statsEqual(args.old.stats, args.new.stats);
+  if (unchanged) return;
 
-  const existing = await ctx.db
-    .query("playerSeasonStats")
+  const gamesDelta = (args.new ? 1 : 0) - (args.old ? 1 : 0);
+
+  // Shared across every bonus variant below - the set of games itself
+  // doesn't depend on teScoring/sixPointPassTds, only how each game's points
+  // are computed from it.
+  const seasonRows = await ctx.db
+    .query("playerPoints")
     .withIndex("by_fpid_season_scoring", (q) =>
-      q
-        .eq("fpid", args.fpid)
-        .eq("season", args.season)
-        .eq("scoring", args.scoring),
+      q.eq("fpid", args.fpid).eq("season", args.season).eq("scoring", args.scoring),
     )
-    .unique();
+    .collect();
 
-  const totalPoints = (existing?.totalPoints ?? 0) + args.pointsDelta;
-  const sumSquaredPoints =
-    (existing?.sumSquaredPoints ?? 0) + args.pointsSquaredDelta;
-  const gamesPlayed = (existing?.gamesPlayed ?? 0) + args.gamesDelta;
-  // Population variance of per-game points - E[X^2] - E[X]^2, computed from
-  // the running sums above rather than re-reading every week's row. Clamped
-  // to 0 to absorb floating-point drift for a player whose scores barely vary.
-  const variance =
-    gamesPlayed > 0
-      ? Math.max(
-          sumSquaredPoints / gamesPlayed - (totalPoints / gamesPlayed) ** 2,
-          0,
-        )
+  for (const { teScoring, sixPointPassTds } of BONUS_VARIANTS) {
+    const config: ScoringConfig = { scoring: args.scoring, teScoring, sixPointPassTds };
+    const oldPoints = args.old
+      ? args.old.points +
+        bonusPoints({ position: args.position, stats: args.old.stats ?? {} }, config)
       : 0;
-  const stdDeviation = Math.sqrt(variance);
-  const downsideDeviation = await computeDownsideDeviation(ctx, {
-    fpid: args.fpid,
-    season: args.season,
-    scoring: args.scoring,
-    mean: gamesPlayed > 0 ? totalPoints / gamesPlayed : 0,
-    gamesPlayed,
-  });
+    const newPoints = args.new
+      ? args.new.points +
+        bonusPoints({ position: args.position, stats: args.new.stats ?? {} }, config)
+      : 0;
+    const pointsDelta = newPoints - oldPoints;
+    const pointsSquaredDelta = newPoints ** 2 - oldPoints ** 2;
 
-  const fields = {
-    totalPoints,
-    sumSquaredPoints,
-    gamesPlayed,
-    variance,
-    stdDeviation,
-    downsideDeviation,
-    updatedAt: Date.now(),
-  };
+    const existing = await ctx.db
+      .query("playerSeasonStats")
+      .withIndex("by_fpid_season_scoring_teScoring_sixPointPassTds", (q) =>
+        q
+          .eq("fpid", args.fpid)
+          .eq("season", args.season)
+          .eq("scoring", args.scoring)
+          .eq("teScoring", teScoring)
+          .eq("sixPointPassTds", sixPointPassTds),
+      )
+      .unique();
 
-  if (existing) {
-    await ctx.db.patch(existing._id, fields);
-  } else {
-    await ctx.db.insert("playerSeasonStats", {
-      fpid: args.fpid,
-      season: args.season,
+    const totalPoints = (existing?.totalPoints ?? 0) + pointsDelta;
+    const sumSquaredPoints =
+      (existing?.sumSquaredPoints ?? 0) + pointsSquaredDelta;
+    const gamesPlayed = (existing?.gamesPlayed ?? 0) + gamesDelta;
+    // Population variance of per-game points - E[X^2] - E[X]^2, computed from
+    // the running sums above rather than re-reading every week's row. Clamped
+    // to 0 to absorb floating-point drift for a player whose scores barely vary.
+    const variance =
+      gamesPlayed > 0
+        ? Math.max(
+            sumSquaredPoints / gamesPlayed - (totalPoints / gamesPlayed) ** 2,
+            0,
+          )
+        : 0;
+    const stdDeviation = Math.sqrt(variance);
+    const downsideDeviation = computeDownsideDeviation(seasonRows, {
       position: args.position,
-      scoring: args.scoring,
-      ...fields,
+      config,
+      mean: gamesPlayed > 0 ? totalPoints / gamesPlayed : 0,
+      gamesPlayed,
     });
+
+    const fields = {
+      totalPoints,
+      sumSquaredPoints,
+      gamesPlayed,
+      variance,
+      stdDeviation,
+      downsideDeviation,
+      updatedAt: Date.now(),
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, fields);
+    } else {
+      await ctx.db.insert("playerSeasonStats", {
+        fpid: args.fpid,
+        season: args.season,
+        position: args.position,
+        scoring: args.scoring,
+        teScoring,
+        sixPointPassTds,
+        ...fields,
+      });
+    }
   }
 }
 
@@ -161,7 +221,7 @@ export const getPlayerGameLog = query({
 export const getPlayerSeasonStatsHistory = query({
   args: {
     fpid: v.number(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
     seasons: v.array(v.string()),
   },
   handler: async (ctx, args) => {
@@ -169,11 +229,13 @@ export const getPlayerSeasonStatsHistory = query({
       args.seasons.map((season) =>
         ctx.db
           .query("playerSeasonStats")
-          .withIndex("by_fpid_season_scoring", (q) =>
+          .withIndex("by_fpid_season_scoring_teScoring_sixPointPassTds", (q) =>
             q
               .eq("fpid", args.fpid)
               .eq("season", season)
-              .eq("scoring", args.scoring),
+              .eq("scoring", args.scoringConfig.scoring)
+              .eq("teScoring", args.scoringConfig.teScoring)
+              .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
           )
           .unique(),
       ),
@@ -182,16 +244,17 @@ export const getPlayerSeasonStatsHistory = query({
   },
 });
 
-// playerSeasonStats rows for one season/scoring, optionally scoped to one
-// position - powers the consistency rating (src/lib/consistency.ts), which
-// needs either one position's cohort (the player detail modal, scoped) or
-// every position's at once (PlayersTable/PlayersLeftTab, unfiltered).
-// Mirrors getAllRankings's loop-over-positions pattern (convex/rankings.ts)
-// since no single index covers "every position, one season" directly.
+// playerSeasonStats rows for one season/scoring config, optionally scoped to
+// one position - powers the consistency rating (src/lib/consistency.ts),
+// which needs either one position's cohort (the player detail modal,
+// scoped) or every position's at once (PlayersTable/PlayersLeftTab,
+// unfiltered). Mirrors getAllRankings's loop-over-positions pattern
+// (convex/rankings.ts) since no single index covers "every position, one
+// season" directly.
 export const getAllSeasonStats = query({
   args: {
     season: v.string(),
-    scoring: scoringValidator,
+    scoringConfig: scoringConfigValidator,
     position: v.optional(positionValidator),
   },
   handler: async (ctx, args) => {
@@ -200,11 +263,13 @@ export const getAllSeasonStats = query({
     for (const position of positions) {
       const rows = await ctx.db
         .query("playerSeasonStats")
-        .withIndex("by_position_season_scoring", (q) =>
+        .withIndex("by_position_season_scoring_teScoring_sixPointPassTds", (q) =>
           q
             .eq("position", position)
             .eq("season", args.season)
-            .eq("scoring", args.scoring),
+            .eq("scoring", args.scoringConfig.scoring)
+            .eq("teScoring", args.scoringConfig.teScoring)
+            .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
         )
         .collect();
       results.push(...rows);
@@ -274,10 +339,8 @@ export const upsertPlayerPoints = mutation({
         position: row.position,
         season: args.season,
         scoring: args.scoring,
-        pointsDelta: (newCounted ? row.points : 0) - (oldCounted ? oldPoints : 0),
-        pointsSquaredDelta:
-          (newCounted ? row.points ** 2 : 0) - (oldCounted ? oldPoints ** 2 : 0),
-        gamesDelta: (newCounted ? 1 : 0) - (oldCounted ? 1 : 0),
+        old: oldCounted ? { points: oldPoints, stats: existing!.stats } : null,
+        new: newCounted ? { points: row.points, stats: row.stats } : null,
       });
     }
 
@@ -318,9 +381,8 @@ export const backfillSeasonStats = internalMutation({
         position: row.position,
         season: row.season,
         scoring: row.scoring,
-        pointsDelta: row.points,
-        pointsSquaredDelta: row.points ** 2,
-        gamesDelta: 1,
+        old: null,
+        new: { points: row.points, stats: row.stats },
       });
     }
 

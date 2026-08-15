@@ -227,8 +227,11 @@ export default defineSchema({
     .index("by_position_week", ["position", "week"])
     .index("by_season_week_fpid", ["season", "week", "fpid"])
     // Powers "this player's whole game log for one season" (see
-    // getPlayerGameLog in convex/playerPoints.ts) - mirrors
-    // playerSeasonStats's by_fpid_season_scoring index.
+    // getPlayerGameLog in convex/playerPoints.ts) - same 3-field key as
+    // playerSeasonStats's write-path index below, since playerPoints itself
+    // is still only ever stored per base scoring (3 rows/week), never per
+    // teScoring/sixPointPassTds (those bonuses are derived at read time from
+    // this row's `stats` blob, not stored as separate rows here).
     .index("by_fpid_season_scoring", ["fpid", "season", "scoring"]),
 
   // Season-long digest of playerPoints, maintained incrementally by
@@ -245,6 +248,16 @@ export default defineSchema({
     season: v.string(),
     position: positionValidator,
     scoring: scoringValidator,
+    // teScoring/sixPointPassTds extend the key alongside scoring so every
+    // league-scoring combination (base PPR tier x TE-premium tier x passing-TD
+    // value) gets its own row instead of one bonus-unaware row per base
+    // scoring - see bonusPoints in convex/scoring.ts, which this table now
+    // folds in rather than ignoring. A prior-season row's totals never change
+    // once that season is over, so precomputing every combination here is
+    // strictly cheaper than recomputing bonusPoints against raw playerPoints
+    // rows on every read.
+    teScoring: teScoringValidator,
+    sixPointPassTds: v.boolean(),
     totalPoints: v.number(),
     gamesPlayed: v.number(),
     // Running sum of points^2 across counted games - not itself a consumer
@@ -272,11 +285,24 @@ export default defineSchema({
     downsideDeviation: v.number(),
     updatedAt: v.number(),
   })
-    // Read path: valueGaps.ts pulls every fpid for one position/season/scoring.
-    .index("by_position_season_scoring", ["position", "season", "scoring"])
+    // Read path: valueGaps.ts pulls every fpid for one
+    // position/season/scoring-config combination.
+    .index("by_position_season_scoring_teScoring_sixPointPassTds", [
+      "position",
+      "season",
+      "scoring",
+      "teScoring",
+      "sixPointPassTds",
+    ])
     // Write path: upsertPlayerPoints looks up (and updates) one player's row
-    // at a time as each week's points come in.
-    .index("by_fpid_season_scoring", ["fpid", "season", "scoring"]),
+    // per scoring-config combination as each week's points come in.
+    .index("by_fpid_season_scoring_teScoring_sixPointPassTds", [
+      "fpid",
+      "season",
+      "scoring",
+      "teScoring",
+      "sixPointPassTds",
+    ]),
 
   // From /nfl/injuries. Current-status only (the endpoint has no season/week)
   // - one row per currently-injured player, deleted when they drop off the

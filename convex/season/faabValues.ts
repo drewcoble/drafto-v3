@@ -65,19 +65,15 @@ async function computePlayerValues(
           q.eq("position", pos).eq("week", args.week),
         )
         .collect(),
-      // playerSeasonStats is base-scoring-only (not bonus-aware, see its
-      // schema comment), so actualPPG below stays bonus-exclusive even in a
-      // TE-premium/6pt-passing league while projectedPPG is bonus-inclusive -
-      // an internally inconsistent blend that gets more pronounced as the
-      // season goes on and projectionWeight shifts toward actualPPG. Known
-      // limitation, same shape as valueGaps.ts's lastYearPpg.
       ctx.db
         .query("playerSeasonStats")
-        .withIndex("by_position_season_scoring", (q) =>
+        .withIndex("by_position_season_scoring_teScoring_sixPointPassTds", (q) =>
           q
             .eq("position", pos)
             .eq("season", args.season)
-            .eq("scoring", args.scoringConfig.scoring),
+            .eq("scoring", args.scoringConfig.scoring)
+            .eq("teScoring", args.scoringConfig.teScoring)
+            .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
         )
         .collect(),
     ]);

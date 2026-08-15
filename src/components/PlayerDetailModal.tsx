@@ -97,9 +97,7 @@ export function PlayerDetailModal({
   const [openSeasons, setOpenSeasons] = useState<string[]>([]);
   const seasonHistory = useQuery(
     api.playerPoints.getPlayerSeasonStatsHistory,
-    fpid !== null
-      ? { fpid, scoring: scoringConfig.scoring, seasons: recentSeasons }
-      : "skip",
+    fpid !== null ? { fpid, scoringConfig, seasons: recentSeasons } : "skip",
   );
   const seasonStatsBySeason = useMemo(() => {
     const map = new Map<
@@ -119,7 +117,7 @@ export function PlayerDetailModal({
     detail?.player
       ? {
           season: lastSeason,
-          scoring: scoringConfig.scoring,
+          scoringConfig,
           position: detail.player.position,
         }
       : "skip",

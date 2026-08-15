@@ -148,7 +148,10 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   const seasonStats = useQuery(
     api.playerPoints.getAllSeasonStats,
     settings
-      ? { season: String(Number(thisSeason) - 1), scoring: settings.scoring }
+      ? {
+          season: String(Number(thisSeason) - 1),
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
       : "skip",
   );
   const setPlayerTag = useMutation(api.draft.tags.setPlayerTag);
@@ -374,8 +377,8 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
       <Group justify="space-between" wrap="wrap" gap="sm" px={4}>
         <Text size="xs" c="dimmed" maw={640}>
           {view === "bar"
-            ? "Bar length = projected cost · color = consistency rating · outline = target/avoid · faded = over your remaining budget · gold glow + gavel = currently on the block. Drafted players are hidden. Click a bar for player info, nominate, and target/avoid."
-            : `$ = projected cost, green = within $${BUDGET_MATCH_WINDOW} of an open budget spot at this position · gold row = currently on the block. Drafted players are hidden.`}
+            ? "Length = cost · color = consistency · outline = target/avoid · faded = over budget · gold = on the block"
+            : "$ = cost · green = fits budget · gold row = on the block"}
         </Text>
         <SegmentedControl
           size="sm"

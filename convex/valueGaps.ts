@@ -169,18 +169,18 @@ async function computeValueGaps(
     // exceeding the 32k-documents-per-transaction limit. playerSeasonStats
     // is maintained incrementally by upsertPlayerPoints (see
     // convex/playerPoints.ts), including the same "0-point week doesn't
-    // count as a game" rule this file used to apply inline. Deliberately
-    // keyed by base scoring only, not the full ScoringConfig - it isn't
-    // bonus-aware (see its schema comment), so lastYearPpg below compares a
-    // bonus-inclusive projection against a bonus-exclusive track record for
-    // TE-premium/6pt-passing leagues. Known limitation, not fixed here.
+    // count as a game" rule this file used to apply inline, and keyed by the
+    // full ScoringConfig (not just base scoring) so lastYearPpg below is
+    // bonus-aware in TE-premium/6pt-passing leagues too.
     const seasonStats = await ctx.db
       .query("playerSeasonStats")
-      .withIndex("by_position_season_scoring", (q) =>
+      .withIndex("by_position_season_scoring_teScoring_sixPointPassTds", (q) =>
         q
           .eq("position", position)
           .eq("season", args.lastSeason)
-          .eq("scoring", args.scoringConfig.scoring),
+          .eq("scoring", args.scoringConfig.scoring)
+          .eq("teScoring", args.scoringConfig.teScoring)
+          .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
       )
       .collect();
     const pointsByFpid = new Map(
