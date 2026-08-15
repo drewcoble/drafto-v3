@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { requireDraftOwner } from "./auth";
+import { requireDraftOwner, requireRealDraft } from "./auth";
 
 // Single, unchecked step - given the configured order/mode and who's
 // currently up, computes who's up next with no regard for roster capacity.
@@ -92,6 +92,32 @@ export const getNominationConfig = query({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
     const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    return {
+      nominationOrder: draft.nominationOrder,
+      nominationOrderMode: draft.nominationOrderMode,
+    };
+  },
+});
+
+// Read-only, no-ownership-check counterparts to getCurrentNominator and
+// getNominationConfig for the TV board (src/pages/DraftBoard/DraftBoard.tsx)
+// - meant to be viewable by anyone with the link, not just the league's
+// owner (see convex/leagues.ts's getSeasonPublic for the same reasoning).
+export const getCurrentNominatorPublic = query({
+  args: { seasonId: v.id("seasons") },
+  handler: async (ctx, args) => {
+    const draft = await requireRealDraft(ctx, args.seasonId);
+    return await ctx.db
+      .query("draftNominationTurns")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .first();
+  },
+});
+
+export const getNominationConfigPublic = query({
+  args: { seasonId: v.id("seasons") },
+  handler: async (ctx, args) => {
+    const draft = await requireRealDraft(ctx, args.seasonId);
     return {
       nominationOrder: draft.nominationOrder,
       nominationOrderMode: draft.nominationOrderMode,

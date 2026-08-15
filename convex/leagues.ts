@@ -97,6 +97,32 @@ export const listSeasons = query({
   },
 });
 
+// Read-only, no-ownership-check counterpart to listSeasons for a single
+// season - powers the TV board (src/pages/DraftBoard/DraftBoard.tsx), which
+// is meant to be viewable by anyone with the link (e.g. a draft-night TV),
+// not just the league's owner. The seasonId itself (an unguessable Convex
+// id) is what gates access, same as any other "share this link" pattern.
+export const getSeasonPublic = query({
+  args: { seasonId: v.id("seasons") },
+  handler: async (ctx, args): Promise<SeasonWithLeagueName | null> => {
+    const season = await ctx.db.get(args.seasonId);
+    if (!season) return null;
+    const league = await ctx.db.get(season.leagueId);
+    if (!league) return null;
+    const draft = await ctx.db
+      .query("drafts")
+      .withIndex("by_season_kind", (q) =>
+        q.eq("seasonId", season._id).eq("kind", "real"),
+      )
+      .first();
+    return {
+      ...season,
+      name: league.name,
+      draftStatus: draft?.status ?? "pre_draft",
+    };
+  },
+});
+
 // Every season across every owner, no auth scoping - only for
 // fetchAllData's daily draftValues cache refresh (convex/fetchAllData.ts),
 // which runs as a super-admin action with no signed-in "owner" of its own.

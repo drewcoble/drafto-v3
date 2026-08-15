@@ -19,6 +19,21 @@ export const listSeasonTeams = query({
   },
 });
 
+// Read-only, no-ownership-check counterpart to listSeasonTeams for the TV
+// board (src/pages/DraftBoard/DraftBoard.tsx) - meant to be viewable by
+// anyone with the link, not just the league's owner (see
+// convex/leagues.ts's getSeasonPublic for the same reasoning).
+export const listSeasonTeamsPublic = query({
+  args: { seasonId: v.id("seasons") },
+  handler: async (ctx, args) => {
+    const teams = await ctx.db
+      .query("seasonTeams")
+      .withIndex("by_season", (q) => q.eq("seasonId", args.seasonId))
+      .collect();
+    return teams.sort((a, b) => a.order - b.order);
+  },
+});
+
 // No-auth counterpart to listSeasonTeams, for server-side callers that have
 // already checked ownership themselves - specifically convex/sleeper/
 // league.ts's syncLeagueRoster action, which can't call the QueryCtx-typed

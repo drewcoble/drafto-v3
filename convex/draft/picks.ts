@@ -7,6 +7,7 @@ import {
   requireDraftNotStarted,
   requireDraftStarted,
   requireSeasonOwner,
+  requireRealDraft,
 } from "./auth";
 import { nextNominator } from "./nominationOrder";
 import { expandRosterSlots, isEligibleForSlot } from "./slots";
@@ -30,6 +31,32 @@ export const getActiveNomination = query({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
     const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    return await ctx.db
+      .query("draftNominations")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .first();
+  },
+});
+
+// Read-only, no-ownership-check counterparts to listDraftPicks and
+// getActiveNomination for the TV board (src/pages/DraftBoard/DraftBoard.tsx)
+// - meant to be viewable by anyone with the link, not just the league's
+// owner (see convex/leagues.ts's getSeasonPublic for the same reasoning).
+export const listDraftPicksPublic = query({
+  args: { seasonId: v.id("seasons") },
+  handler: async (ctx, args) => {
+    const draft = await requireRealDraft(ctx, args.seasonId);
+    return await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft_sequence", (q) => q.eq("draftId", draft._id))
+      .collect();
+  },
+});
+
+export const getActiveNominationPublic = query({
+  args: { seasonId: v.id("seasons") },
+  handler: async (ctx, args) => {
+    const draft = await requireRealDraft(ctx, args.seasonId);
     return await ctx.db
       .query("draftNominations")
       .withIndex("by_draft", (q) => q.eq("draftId", draft._id))

@@ -62,19 +62,23 @@ const REFERENCE_CARD_WIDTH = 320;
 // draft gets a plain "Draft not started" badge instead of chasing whatever
 // stale nominatingTeam/turnTeam state happens to be sitting around.
 export function DraftBoard({ seasonId }: DraftBoardProps) {
-  const settingsList = useQuery(api.leagues.listSeasons, {});
-  const settings = settingsList?.find((s) => s._id === seasonId);
-  const teams = useQuery(api.draft.teams.listSeasonTeams, { seasonId });
-  const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
-  const activeNomination = useQuery(api.draft.picks.getActiveNomination, {
-    seasonId,
-  });
+  // All queries below use their *Public variants (no ownership check) -
+  // this page is meant to be opened by anyone with the link (see the file
+  // comment above and src/routes/__root.tsx's isPublicRoute exemption for
+  // /board/*), not just the signed-in league owner.
+  const settings = useQuery(api.leagues.getSeasonPublic, { seasonId });
+  const teams = useQuery(api.draft.teams.listSeasonTeamsPublic, { seasonId });
+  const picks = useQuery(api.draft.picks.listDraftPicksPublic, { seasonId });
+  const activeNomination = useQuery(
+    api.draft.picks.getActiveNominationPublic,
+    { seasonId },
+  );
   const nominationConfig = useQuery(
-    api.draft.nominationOrder.getNominationConfig,
+    api.draft.nominationOrder.getNominationConfigPublic,
     { seasonId },
   );
   const currentNominator = useQuery(
-    api.draft.nominationOrder.getCurrentNominator,
+    api.draft.nominationOrder.getCurrentNominatorPublic,
     nominationConfig?.nominationOrder ? { seasonId } : "skip",
   );
   const allProjections = useQuery(api.projections.getAllProjections, {

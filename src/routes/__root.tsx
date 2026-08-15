@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { createRootRoute, Outlet } from "@tanstack/react-router";
+import { createRootRoute, Outlet, useLocation } from "@tanstack/react-router";
 import { Center, Loader, Stack, Text } from "@mantine/core";
 // convex/react's useConvexAuth, NOT @convex-dev/auth/react's - the latter's
 // isAuthenticated only means "we have some token value in local state"
@@ -29,12 +29,23 @@ function RootComponent() {
     () => getConfiguredSuperAdminEmails(),
     [],
   );
+  // The TV board (/board/$leagueId) is a readonly page meant to be shared
+  // with anyone via link (e.g. cast on a TV during a live auction) - it
+  // must never sit behind this sign-in wall, so it's exempted here rather
+  // than nested under a protected layout route (see that route file's
+  // comment for why it isn't nested under one already).
+  const { pathname } = useLocation();
+  const isPublicRoute = pathname.startsWith("/board/");
 
   useEffect(() => {
     if (isAuthenticated) {
       void ensureUser({ allowlistedEmails: configuredSuperAdminEmails });
     }
   }, [ensureUser, isAuthenticated, configuredSuperAdminEmails]);
+
+  if (isPublicRoute) {
+    return <Outlet />;
+  }
 
   if (isLoading) {
     return (
