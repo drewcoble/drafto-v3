@@ -368,11 +368,6 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
 
   const body = (
     <>
-      <Text size="xs" c="dimmed">
-        Configures the suggested cost when adding a keeper on the Keepers tab,
-        plus optional league-wide limits. Leaving a max blank means unlimited.
-      </Text>
-
       <Card withBorder padding="sm">
         <Group gap="sm" wrap="wrap">
           <Stack gap={4}>
@@ -400,10 +395,6 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
               value={maxConsecutiveYears}
               onChange={setMaxConsecutiveYears}
             />
-            <Text size="xs" c="dimmed">
-              Also controls the Yrs Kept field on the Keepers tab - leave
-              unlimited to hide it.
-            </Text>
           </Stack>
         </Group>
       </Card>
@@ -414,8 +405,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
             Default rule
           </Text>
           <Text size="xs" c="dimmed">
-            Cost = multiplier × last season's price + flat add, floored at the
-            minimum if set. Applies to any player not in another rule below.
+            Cost = multiplier × last season's price + flat add
           </Text>
           <Group gap="sm" wrap="wrap">
             <NumberInput
@@ -651,7 +641,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
                     </>
                   ) : (
                     <Text size="xs" c="dimmed">
-                      Save Keeper Rules below to add players to this new rule.
+                      Save to add players to this rule.
                     </Text>
                   )}
                 </Stack>

@@ -133,9 +133,7 @@ export function RecommendedKeepers({
             Recommended Keepers
           </Text>
           <Text size="xs" c="dimmed">
-            No previous season data on file yet, so there's nothing to base a
-            keeper suggestion on. Enter last season's results by hand to get
-            started.
+            No previous season data yet.
           </Text>
           <Button
             variant="light"
@@ -177,9 +175,7 @@ export function RecommendedKeepers({
         ) : (
           <>
             <Text size="xs" c="dimmed">
-              Best value vs. this year's fair price, based on last season's cost
-              - team-less, since last season's draft doesn't tell us who still
-              has them.
+              Best value vs. this year's fair price.
             </Text>
             <Table.ScrollContainer minWidth={320}>
               <Table verticalSpacing={4}>

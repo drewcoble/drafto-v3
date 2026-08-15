@@ -57,8 +57,7 @@ export function DataPanel({ week }: DataPanelProps) {
     {
       key: "projections",
       label: "Fetch projections",
-      description:
-        "Players + season/weekly projections, ADP/rankings, and injury statuses for QB, RB, WR, TE, DST, and K, from Sleeper.",
+      description: "Players, projections, ADP/rankings, and injuries.",
       run: () => fetchProjections({ week }),
       successMessage: `Projections refreshed for week "${week}".`,
     },
@@ -72,10 +71,7 @@ export function DataPanel({ week }: DataPanelProps) {
     {
       key: "playerPoints",
       label: "Fetch player points",
-      description:
-        "Actual (not projected) fantasy points + per-week stat breakdown " +
-        "scored, from Sleeper. Defaults to the current season - set a " +
-        "year below to backfill a past season instead.",
+      description: "Actual scored fantasy points, per week.",
       run: () =>
         fetchPlayerPoints(
           playerPointsYear.trim() ? { year: playerPointsYear.trim() } : {},
@@ -87,13 +83,7 @@ export function DataPanel({ week }: DataPanelProps) {
     {
       key: "caches",
       label: "Refresh value caches",
-      description:
-        "Recomputes the value-gap and $-value caches every Draft Room screen " +
-        "reads from - no external calls, just recomputes from whatever " +
-        "projections/rankings/player-stats data is already in the database. " +
-        "Use this if those caches are empty or stale (e.g. the daily fetch " +
-        "hasn't run yet) - an empty cache forces every draft screen onto a " +
-        "much more expensive live recompute.",
+      description: "Recomputes value-gap and $-value caches.",
       run: () => refreshCaches({ week }),
       successMessage: "Value caches refreshed.",
     },
@@ -125,12 +115,6 @@ export function DataPanel({ week }: DataPanelProps) {
 
   return (
     <Stack gap="md" py="sm">
-      <Text c="dimmed">
-        Pull fresh data from Sleeper (players/projections/rankings/injuries/
-        player points) and FantasyPros (news only). Each button only fetches
-        its own data, so you don't need to refresh everything just to pull
-        one update.
-      </Text>
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         {actions.map((action) => {
           const state = states[action.key];

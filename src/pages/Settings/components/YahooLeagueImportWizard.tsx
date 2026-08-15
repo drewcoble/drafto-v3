@@ -210,11 +210,6 @@ export function YahooLeagueImportWizard({
     return (
       <Stack gap="md" py="sm" maw={500}>
         <Title order={4}>Import from Yahoo</Title>
-        <Text size="sm" c="dimmed">
-          Connect your Yahoo account first, then come back here to pick a
-          league. You'll be redirected to Yahoo and then back to the app -
-          re-open "+ New League &gt; Import from Yahoo" once you're back.
-        </Text>
         {connectError && <Alert color="red">{connectError}</Alert>}
         <Group>
           <Button onClick={() => void handleConnect()} loading={connecting}>
@@ -232,9 +227,6 @@ export function YahooLeagueImportWizard({
     return (
       <Stack gap="md" py="sm" maw={500}>
         <Title order={4}>Import from Yahoo</Title>
-        <Text size="sm" c="dimmed">
-          Load your Yahoo leagues for this season and pick one.
-        </Text>
         <Group>
           <Button
             onClick={() => void handleFindLeagues()}
@@ -279,9 +271,6 @@ export function YahooLeagueImportWizard({
       <Card withBorder padding="md">
         <Stack gap="sm">
           <Text fw={500}>Teams</Text>
-          <Text size="sm" c="dimmed">
-            Rename as needed, and mark which one is you.
-          </Text>
           <Radio.Group value={selfTeamKey} onChange={setSelfTeamKey}>
             <Stack gap={6}>
               {preview.teams.map((team) => (

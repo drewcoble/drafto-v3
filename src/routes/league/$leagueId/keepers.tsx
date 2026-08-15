@@ -92,10 +92,7 @@ function KeepersRoute() {
         // ordinary page content but below all of that global chrome.
         zIndex={190}
       >
-        <UpgradePrompt
-          title="Keepers is a Pro feature"
-          message="Upgrade to Pro to set up keeper rules for this league."
-        />
+        <UpgradePrompt title="Keepers is a Pro feature" />
       </Modal>
     );
   }
@@ -111,10 +108,7 @@ function KeepersRoute() {
   return (
     <Stack gap="md">
       {phase?.isStarted && (
-        <LockedNotice>
-          This draft has started - keeper rules are locked, and keepers can no
-          longer be added or removed.
-        </LockedNotice>
+        <LockedNotice>Keeper rules are locked once the draft starts.</LockedNotice>
       )}
       <KeepersTab seasonId={leagueId as Id<"seasons">} />
     </Stack>

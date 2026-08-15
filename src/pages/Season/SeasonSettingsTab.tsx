@@ -309,9 +309,6 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
         <Card withBorder padding="md">
           <Stack gap="sm">
             <Text fw={500}>Sleeper league</Text>
-            <Text size="sm" c="dimmed">
-              Enter your Sleeper username to find your leagues.
-            </Text>
             <Group gap="xs" wrap="nowrap">
               <TextInput
                 value={sleeperUsernameInput}
@@ -361,9 +358,6 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
             <Text fw={500}>Yahoo league</Text>
             {!yahooStatus?.connected ? (
               <>
-                <Text size="sm" c="dimmed">
-                  Connect your Yahoo account to see your leagues.
-                </Text>
                 <Button
                   onClick={() => void handleConnectYahoo()}
                   loading={connectingYahoo}
@@ -421,10 +415,6 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
                 {mappedCount}/{teams.length} mapped
               </Badge>
             </Group>
-            <Text size="sm" c="dimmed">
-              Match each of your app's teams to its real {provider === "sleeper" ? "Sleeper roster" : "Yahoo team"} so
-              rosters and FAAB spend can sync correctly.
-            </Text>
             {teamOptions === null ? (
               <Text size="sm" c="dimmed">
                 Click "Load {provider === "sleeper" ? "Sleeper" : "Yahoo"} teams" above to see options.
@@ -465,11 +455,6 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
       <Card withBorder padding="md">
         <Stack gap="sm">
           <Text fw={500}>FAAB budget</Text>
-          <Text size="sm" c="dimmed">
-            Default per-team FAAB pool for this league, separate from the
-            draft's salary cap. Individual teams can be overridden from the
-            Teams panel.
-          </Text>
           <Group gap="xs" wrap="nowrap">
             <EditableNumberStepper
               label="FAAB budget"

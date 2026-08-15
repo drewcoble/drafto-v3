@@ -198,9 +198,6 @@ export function LeagueImportWizard({
     return (
       <Stack gap="md" py="sm" maw={500}>
         <Title order={4}>Import from Sleeper</Title>
-        <Text size="sm" c="dimmed">
-          Enter your Sleeper username to find your leagues.
-        </Text>
         <Group gap="xs" wrap="nowrap">
           <TextInput
             value={usernameInput}
@@ -252,9 +249,6 @@ export function LeagueImportWizard({
       <Card withBorder padding="md">
         <Stack gap="sm">
           <Text fw={500}>Teams</Text>
-          <Text size="sm" c="dimmed">
-            Rename as needed, and mark which one is you.
-          </Text>
           <Radio.Group value={selfOwnerId} onChange={setSelfOwnerId}>
             <Stack gap={6}>
               {preview.teams.map((team) => (

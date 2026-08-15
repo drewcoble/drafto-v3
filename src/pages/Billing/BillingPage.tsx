@@ -179,9 +179,6 @@ export function BillingPage() {
                     </Text>
                   )}
                 </Group>
-                <Text size="sm" c="dimmed">
-                  Unlock everything the free plan limits.
-                </Text>
                 <List size="sm" spacing={4}>
                   {PRO_FEATURES.map((feature) => (
                     <List.Item key={feature}>{feature}</List.Item>

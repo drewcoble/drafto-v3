@@ -97,10 +97,7 @@ export function SettingsForm({
   return (
     <Stack gap="md" py="sm" maw={500}>
       {configLocked && (
-        <LockedNotice>
-          This draft has started - scoring, roster, and keeper rules are locked.
-          Reopen pre-draft (Settings tab) to change them.
-        </LockedNotice>
+        <LockedNotice>Scoring, roster, and keeper rules are locked.</LockedNotice>
       )}
       <Card withBorder padding="md">
         <Stack gap="md">
@@ -346,7 +343,7 @@ export function SettingsForm({
                           </Anchor>
                         </>
                       ))
-                    : "Shows or hides the Keepers tab, where keeper rules are configured."
+                    : undefined
                 }
                 checked={useKeepersControl.checked}
                 disabled={useKeepersControl.disabled}

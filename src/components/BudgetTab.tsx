@@ -475,12 +475,6 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
         <Text fw={700} size="lg">
           {mode === "live" ? "Live Budget" : "Draft Budget"}
         </Text>
-        {mode === "live" && (
-          <Text size="xs" c="dimmed">
-            Slots you haven't touched keep following your original budget. Only
-            the ones you adjust here get saved as overrides.
-          </Text>
-        )}
       </Stack>
 
       {/* Two columns from "md" up - side panel (presets/overspend/sanity

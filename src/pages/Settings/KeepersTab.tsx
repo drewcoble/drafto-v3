@@ -301,19 +301,12 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
 
   if (draftTeams.length === 0) {
     return (
-      <Text c="dimmed">
-        Set up your draft teams on the Settings tab before assigning keepers.
-      </Text>
+      <Text c="dimmed">No draft teams yet.</Text>
     );
   }
 
   return (
     <Stack gap="md" py="sm">
-      <Text size="sm" c="dimmed">
-        Assign players to teams before the draft starts. Kept players are
-        pre-loaded onto their team's roster and won't appear in the nomination
-        pool or Players Left board.
-      </Text>
       {/* 6/6 split from "md" up - keeper rules on the left, add-a-keeper
           stacked on top of current keepers on the right. Single stacked
           column below that where there isn't room. */}

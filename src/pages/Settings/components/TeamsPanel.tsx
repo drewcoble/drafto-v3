@@ -286,11 +286,6 @@ export function TeamsPanel({
           </Menu>
         </Group>
       </Group>
-      <Text size="xs" c="dimmed">
-        Rename teams and reorder to set who the nominate form suggests next
-        during the live draft - always overridable in the moment, so it's fine
-        if the room deviates.
-      </Text>
       {renameError && (
         <Text c="red" size="sm">
           {renameError}
@@ -372,8 +367,7 @@ export function TeamsPanel({
         <Stack gap="md">
           <Text size="sm">
             Remove {teamById.get(pendingRemoveId ?? "")?.name ?? "this team"}{" "}
-            from this league? This can't be undone, and only works while it has
-            no draft picks yet.
+            from this league? This can't be undone.
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setPendingRemoveId(null)}>

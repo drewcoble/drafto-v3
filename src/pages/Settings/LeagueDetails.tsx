@@ -321,10 +321,7 @@ export function LeagueDetails({
     !entitlement.canCreateFreeLeague
   ) {
     return (
-      <UpgradePrompt
-        title="Free plan is limited to 1 league per year"
-        message="You've already created your free league for this year. Upgrade to Pro for more, or come back next year."
-      />
+      <UpgradePrompt title="Free plan is limited to 1 league per year" />
     );
   }
 
@@ -471,9 +468,7 @@ export function LeagueDetails({
       )}
       {isStarted && (
         <LockedNotice>
-          This draft has started - scoring, roster, and keeper rules are locked,
-          and teams can no longer be added or removed. Team names, salary cap
-          overrides, and nomination order still stay editable.
+          Scoring, roster, keeper rules, and teams are locked.
         </LockedNotice>
       )}
 
@@ -484,11 +479,8 @@ export function LeagueDetails({
       >
         <Stack gap="md">
           <Text size="sm">
-            This locks league scoring, roster slots, and keeper rules for the
-            rest of the draft, and enables nominating/bidding on players. Team
-            names, salary cap overrides, and nomination order stay editable. You
-            can reopen pre-draft afterward, but only until the first player is
-            actually drafted.
+            This locks scoring, roster slots, and keeper rules. You can reopen
+            pre-draft until the first player is drafted.
           </Text>
           {startError && (
             <Text c="red" size="sm">
@@ -626,11 +618,6 @@ export function LeagueDetails({
             <Stack gap="sm" maw={420}>
               <Text size="md" fw={500}>
                 Teams
-              </Text>
-              <Text size="sm" c="dimmed">
-                Enter your team name and the other {opponentNames.length} teams
-                in this draft before entering the Draft Room. You can rename
-                teams later.
               </Text>
               <TextInput
                 label="Your team name"

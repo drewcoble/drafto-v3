@@ -352,9 +352,6 @@ export function ManualPreviousSeasonModal({
       size="lg"
     >
       <Stack gap="md">
-        <Text size="sm" c="dimmed">
-          Enter {year} prices so we can recommend keepers.
-        </Text>
         <div ref={setPortalTarget} />
         <ScrollArea.Autosize mah={420}>
           <Stack gap="sm">

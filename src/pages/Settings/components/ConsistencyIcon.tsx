@@ -9,9 +9,9 @@ interface ConsistencyIconProps {
 export function ConsistencyIcon({ label }: ConsistencyIconProps) {
   const tooltip =
     label === "Reliable"
-      ? "Reliable - consistently high scoring, low week-to-week variance"
+      ? "Reliable - consistently high scoring"
       : label === "Boom/Bust"
-        ? "Boom/Bust - high scoring, but a real toss-up between a dud and a monster week"
+        ? "Boom/Bust - high scoring, high variance"
         : "Low Output - consistently low scoring";
 
   return (

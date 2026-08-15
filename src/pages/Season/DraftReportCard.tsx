@@ -332,10 +332,7 @@ function ReportCardTeaser() {
         </Stack>
       </Box>
       <Box pos="absolute" inset={0} style={{ display: "flex" }}>
-        <UpgradePrompt
-          title="Report Card is a Pro feature"
-          message="Upgrade to Pro to see draft grades, value surplus, and lineup efficiency for every team."
-        />
+        <UpgradePrompt title="Report Card is a Pro feature" />
       </Box>
     </Box>
   );

@@ -23,10 +23,6 @@ export function LeagueCreateChoice({
         <Group justify="space-between" wrap="nowrap">
           <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
             <Text fw={500}>Custom Setup</Text>
-            <Text size="sm" c="dimmed">
-              Start from a blank league and set roster slots, scoring, and
-              teams by hand.
-            </Text>
           </Stack>
           <Button
             variant="default"
@@ -42,11 +38,6 @@ export function LeagueCreateChoice({
         <Group justify="space-between" wrap="nowrap">
           <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
             <Text fw={500}>Import from Sleeper</Text>
-            <Text size="sm" c="dimmed">
-              Pull roster slots, scoring, and team names from a real Sleeper
-              league, with an option to seed keeper suggestions from last
-              season's roster.
-            </Text>
           </Stack>
           <Button
             leftSection={<Import size={16} />}
@@ -63,11 +54,6 @@ export function LeagueCreateChoice({
           <Group justify="space-between" wrap="nowrap">
             <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
               <Text fw={500}>Import from Yahoo</Text>
-              <Text size="sm" c="dimmed">
-                Same as above, from a real Yahoo league. Connects your Yahoo
-                account first if you haven't already (Season Settings also
-                offers this).
-              </Text>
             </Stack>
             <Button
               leftSection={<Import size={16} />}

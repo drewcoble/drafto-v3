@@ -10,12 +10,10 @@ import { Link } from "@tanstack/react-router";
 export function GenericValuesNotice() {
   return (
     <Text size="xs" c="dimmed">
-      Showing estimated values based on a standard 12-team/$200 league, not
-      your league's actual settings.{" "}
+      Showing estimated values.{" "}
       <Anchor component={Link} to="/billing" size="xs">
         Upgrade to Pro
-      </Anchor>{" "}
-      for accurate values.
+      </Anchor>
     </Text>
   );
 }
