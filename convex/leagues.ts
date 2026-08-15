@@ -24,7 +24,8 @@ import {
   requireDraftNotStarted,
 } from "./draft/auth";
 import {
-  hasFreeLeagueGrantForYear,
+  countFreeLeagueGrantsForYear,
+  FREE_LEAGUES_PER_YEAR,
   hasProAccess,
 } from "./billing/entitlements";
 
@@ -164,9 +165,15 @@ export const createLeague = mutation({
     const now = Date.now();
     const thisSeason = String(new Date().getFullYear());
     const isPro = await hasProAccess(ctx, userId);
-    if (!isPro && (await hasFreeLeagueGrantForYear(ctx, userId, thisSeason))) {
+    const freeLeaguesUsed = await countFreeLeagueGrantsForYear(
+      ctx,
+      userId,
+      thisSeason,
+    );
+    if (!isPro && freeLeaguesUsed >= FREE_LEAGUES_PER_YEAR) {
       throw new Error(
-        `Free plan includes 1 league per year, and you've already used ${thisSeason}'s. ` +
+        `Free plan includes ${FREE_LEAGUES_PER_YEAR} leagues per year, and ` +
+          `you've already created ${freeLeaguesUsed} for ${thisSeason}. ` +
           "Upgrade to Pro for more, or come back next year.",
       );
     }

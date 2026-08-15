@@ -32,20 +32,23 @@ export async function hasProAccess(
   );
 }
 
-// Free tier is 1 league per calendar year, enforced via a permanent grant
-// record (see convex/schema.ts's freeLeagueGrants) rather than a live count
-// of leagues.by_owner - a live count let a free user delete a completed
-// league and immediately create another one, resetting their "free slot"
-// indefinitely. `year` should be the same calendar-year string
-// convex/leagues.ts's createLeague uses for the new season's `year` field.
-export async function hasFreeLeagueGrantForYear(
+export const FREE_LEAGUES_PER_YEAR = 5;
+
+// Free tier is FREE_LEAGUES_PER_YEAR leagues per calendar year, enforced via
+// a permanent grant record per creation (see convex/schema.ts's
+// freeLeagueGrants) rather than a live count of leagues.by_owner - a live
+// count let a free user delete a completed league and immediately create
+// another one, resetting their "free slot" indefinitely. `year` should be
+// the same calendar-year string convex/leagues.ts's createLeague uses for
+// the new season's `year` field.
+export async function countFreeLeagueGrantsForYear(
   ctx: QueryCtx | MutationCtx,
   userId: Id<"users">,
   year: string,
-): Promise<boolean> {
-  const grant = await ctx.db
+): Promise<number> {
+  const grants = await ctx.db
     .query("freeLeagueGrants")
     .withIndex("by_user_year", (q) => q.eq("userId", userId).eq("year", year))
-    .unique();
-  return grant !== null;
+    .collect();
+  return grants.length;
 }

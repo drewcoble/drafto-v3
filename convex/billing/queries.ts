@@ -2,8 +2,9 @@ import { v } from "convex/values";
 import { query, internalQuery } from "../_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
+  countFreeLeagueGrantsForYear,
+  FREE_LEAGUES_PER_YEAR,
   getSubscription,
-  hasFreeLeagueGrantForYear,
   hasProAccess,
 } from "./entitlements";
 
@@ -11,20 +12,32 @@ import {
 // gated action (e.g. disabling "+ New League" instead of letting the
 // createLeague mutation throw) - a UX nicety, not the enforcement boundary.
 // The real checks live server-side in convex/leagues.ts's createLeague and
-// convex/draft/reportCard.ts's getDraftReportCard.
+// convex/draft/reportCard.ts's getDraftReportCard. Also surfaces
+// freeLeaguesUsed/freeLeagueLimit so the delete-league warning
+// (LeagueDetails.tsx) can show a free-tier user's standing.
 export const getMyEntitlement = query({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
-      return { hasProAccess: false, canCreateFreeLeague: true };
+      return {
+        hasProAccess: false,
+        canCreateFreeLeague: true,
+        freeLeaguesUsed: 0,
+        freeLeagueLimit: FREE_LEAGUES_PER_YEAR,
+      };
     }
     const thisYear = String(new Date().getFullYear());
-    const [proAccess, hasGrant] = await Promise.all([
+    const [proAccess, freeLeaguesUsed] = await Promise.all([
       hasProAccess(ctx, userId),
-      hasFreeLeagueGrantForYear(ctx, userId, thisYear),
+      countFreeLeagueGrantsForYear(ctx, userId, thisYear),
     ]);
-    return { hasProAccess: proAccess, canCreateFreeLeague: !hasGrant };
+    return {
+      hasProAccess: proAccess,
+      canCreateFreeLeague: freeLeaguesUsed < FREE_LEAGUES_PER_YEAR,
+      freeLeaguesUsed,
+      freeLeagueLimit: FREE_LEAGUES_PER_YEAR,
+    };
   },
 });
 

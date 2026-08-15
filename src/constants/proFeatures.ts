@@ -9,7 +9,7 @@
 // but not confident enough in its output yet to advertise it as a selling
 // point.
 export const PRO_FEATURES: string[] = [
-  "Unlimited leagues - the free plan is capped at 1 new league per year",
+  "Unlimited leagues - the free plan is capped at 5 new leagues per year",
   "Real $ player values tuned to your league's actual settings, instead of a generic 12-team/$200 estimate",
   "In-depth keeper support - custom formulas/tiers, per-team keeper limits, and consecutive-year tracking",
   "Draft Report Card - grades, value surplus, VOR, and lineup efficiency for every team, plus an AI-written recap",

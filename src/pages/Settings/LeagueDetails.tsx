@@ -321,7 +321,9 @@ export function LeagueDetails({
     !entitlement.canCreateFreeLeague
   ) {
     return (
-      <UpgradePrompt title="Free plan is limited to 1 league per year" />
+      <UpgradePrompt
+        title={`Free plan is limited to ${entitlement.freeLeagueLimit} leagues per year`}
+      />
     );
   }
 
@@ -689,8 +691,9 @@ export function LeagueDetails({
           </List>
           {entitlement && !entitlement.hasProAccess && (
             <Text size="sm" c="orange.6">
-              You're on the free plan (1 new league per year) - deleting this
-              league won't free up this year's slot for a new one.{" "}
+              You're on the free plan ({entitlement.freeLeaguesUsed} of{" "}
+              {entitlement.freeLeagueLimit} leagues created this year) -
+              deleting this league won't free up a slot for a new one.{" "}
               <Anchor component={Link} to="/billing" size="sm">
                 Upgrade to Pro
               </Anchor>{" "}

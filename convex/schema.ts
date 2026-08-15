@@ -382,16 +382,17 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_owner", ["ownerId"]),
 
-  // Permanent, non-decrementing record of "this user used their free-tier
-  // league slot for this calendar year" - see convex/leagues.ts's
+  // Permanent, non-decrementing record of "this user used one of their
+  // free-tier league slots for this calendar year" - see convex/leagues.ts's
   // createLeague. Rows are never deleted, not even when the league they
   // were granted for is later deleted via deleteLeague - that's the whole
-  // point: the free-tier gate checks for an existing grant row here, not
-  // how many leagues currently exist, so deleting a league and immediately
-  // creating a new one doesn't refund the free slot. One row per (userId,
-  // year) at most - a Pro user never gets a row written (see hasProAccess
-  // check in createLeague), so downgrading back to free later still
-  // starts fresh based only on actual free-tier usage history.
+  // point: the free-tier gate counts grant rows here, not how many leagues
+  // currently exist, so deleting a league and immediately creating a new
+  // one doesn't refund the free slot. One row per free league creation (up
+  // to FREE_LEAGUES_PER_YEAR per (userId, year) - see convex/billing/
+  // entitlements.ts) - a Pro user never gets a row written (see
+  // hasProAccess check in createLeague), so downgrading back to free later
+  // still starts fresh based only on actual free-tier usage history.
   freeLeagueGrants: defineTable({
     userId: v.id("users"),
     year: v.string(),
