@@ -570,16 +570,18 @@ export function LeagueDetails({
                 Roster Slots
               </Text>
               <Group gap="xs">
-                {rosterEntries.map(([slot, count]) => (
-                  <Badge
-                    key={slot}
-                    variant="light"
-                    size="lg"
-                    color={positionColorOrDefault(slot)}
-                  >
-                    {slot}: {count}
-                  </Badge>
-                ))}
+                {rosterEntries
+                  .filter(([, count]) => count > 0)
+                  .map(([slot, count]) => (
+                    <Badge
+                      key={slot}
+                      variant="light"
+                      size="lg"
+                      color={positionColorOrDefault(slot)}
+                    >
+                      {slot}: {count}
+                    </Badge>
+                  ))}
               </Group>
             </Stack>
             <Group gap="lg">
