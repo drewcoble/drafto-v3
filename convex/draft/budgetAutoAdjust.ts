@@ -22,11 +22,11 @@ function shouldAutoAdjust(
 // everywhere else in the budget system (lib/budgetPresets.ts's
 // generatePresetAmounts, etc.). Re-spreads in passes so one low-budget
 // slot hitting its floor doesn't strand the rest of a clawback onto it
-// alone. If the target slots collectively can't absorb a full clawback,
-// whatever's left over just isn't redistributed anywhere - the team is
-// genuinely over cap at that point, and the Budget tab's "$X over" badge
-// is the honest signal for that, not something this should paper over by
-// reaching into slots outside `targetSlots`.
+// alone. If `targetSlots` collectively can't absorb a full clawback,
+// whatever's left over just isn't touched here - callers that want a
+// fallback tier (see `redistributeAcrossTiers`) handle that; a lone call
+// site leaves it genuinely over cap, and the Budget tab's "$X over" badge
+// is the honest signal for that.
 function redistribute(
   targetSlots: readonly SlotDescriptor[],
   diff: number,
@@ -76,18 +76,60 @@ function redistribute(
   return changes;
 }
 
+// How much of the requested diff `changes` actually accounts for, relative
+// to `currentAmounts` - lets a caller tell whether `redistribute` fully
+// absorbed what it asked for or came up short (only possible on a
+// clawback that ran every slot in `targetSlots` down to the $1 floor).
+function appliedDiff(
+  changes: Record<string, number>,
+  targetSlots: readonly SlotDescriptor[],
+  currentAmounts: Record<string, number>,
+): number {
+  let total = 0;
+  for (const slot of targetSlots) {
+    const changed = changes[slot.key];
+    if (changed !== undefined) {
+      total += changed - (currentAmounts[slot.key] ?? 0);
+    }
+  }
+  return total;
+}
+
+// Tries each tier of slots in order, only spilling into the next tier with
+// whatever's still left over once the previous one hits its floor (or, on
+// the add-money side, there's never a shortfall to spill in the first
+// place since slots have no ceiling). This is what makes "bench" mean
+// "bench first, then starters" instead of "bench only".
+function redistributeAcrossTiers(
+  tiers: readonly (readonly SlotDescriptor[])[],
+  diff: number,
+  currentAmounts: Record<string, number>,
+): Record<string, number> {
+  const changes: Record<string, number> = {};
+  let remainingDiff = diff;
+  for (const tier of tiers) {
+    if (remainingDiff === 0) break;
+    const tierChanges = redistribute(tier, remainingDiff, currentAmounts);
+    Object.assign(changes, tierChanges);
+    remainingDiff -= appliedDiff(tierChanges, tier, currentAmounts);
+  }
+  return changes;
+}
+
 // Called from resolvePick right after a self-team pick lands in a tracked
 // plan slot - compares what was actually paid against that slot's current
 // budgeted amount and, per `behavior`, redistributes the difference:
-// "bench" only touches open bench slots (so starters keep their money
-// either direction - over or under), "spread" touches every slot still
-// open. Returns the full set of override patches to write, including the
-// filled slot's own entry (set to the real price paid, not the stale
-// plan amount) - that's what keeps the team's total budget conserved
-// exactly when the target slots have enough room to absorb the diff; it
-// falls short (visibly, via the unallocated badge) only when they don't.
-// Returns null when there's nothing to do (manual mode, or price already
-// matched the plan exactly).
+// "bench" tries open bench slots first and only spills into starter slots
+// once the bench can't absorb any more (so starters are protected as long
+// as there's bench room, but a big enough clawback still reaches them
+// rather than leaving the team silently over cap), "spread" touches every
+// slot still open in one tier. Returns the full set of override patches to
+// write, including the filled slot's own entry (set to the real price
+// paid, not the stale plan amount) - that's what keeps the team's total
+// budget conserved exactly when the target slots have enough room to
+// absorb the diff; it falls short (visibly, via the unallocated badge)
+// only when every tier is floored out. Returns null when there's nothing
+// to do (manual mode, or price already matched the plan exactly).
 export function computeAutoAdjustedOverrides({
   behavior,
   rosterSlots,
@@ -112,12 +154,15 @@ export function computeAutoAdjustedOverrides({
   const openSlots = expandRosterSlots(rosterSlots).filter((slot) =>
     otherOpenSlotKeys.has(slot.key),
   );
-  const targetSlots =
+  const tiers =
     behavior === "bench"
-      ? openSlots.filter((slot) => slot.label.startsWith("BN"))
-      : openSlots;
+      ? [
+          openSlots.filter((slot) => slot.label.startsWith("BN")),
+          openSlots.filter((slot) => !slot.label.startsWith("BN")),
+        ]
+      : [openSlots];
 
-  const changes = redistribute(targetSlots, diff, currentAmounts);
+  const changes = redistributeAcrossTiers(tiers, diff, currentAmounts);
   changes[filledSlotKey] = price;
   return changes;
 }

@@ -17,7 +17,7 @@ export const OVERSPEND_OPTIONS: Array<{
     value: "bench",
     label: "Auto-adjust: bench pool first",
     caption:
-      "Going over or under plan on a pick adjusts the bench pool first, so starters keep their money either way.",
+      "Going over or under plan on a pick adjusts the bench pool first, only reaching into starters if the bench runs out.",
   },
   {
     value: "spread",
