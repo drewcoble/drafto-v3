@@ -146,6 +146,7 @@ function LeagueLayout() {
 
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === leagueId);
+  const entitlement = useQuery(api.billing.queries.getMyEntitlement);
   const phase = useDraftPhase(seasonId);
   // Only mounted once started (see below) - no teams/no self team pre-start
   // is completely normal (teams are created on the Settings tab, in this
@@ -171,7 +172,12 @@ function LeagueLayout() {
 
   // Absent means true (see schema.ts's useKeepers comment) - don't hide the
   // tab while settings is still loading, only once positively known off.
-  const keepersEnabled = settings?.useKeepers !== false;
+  // Only applies to Pro leagues though - a free-tier league always shows
+  // the tab (regardless of the setting) so clicking it lands on the
+  // non-dismissible upgrade prompt (see keepers.tsx's Pro gate) instead of
+  // the tab just vanishing, which read as the feature not existing at all.
+  const hasProAccess = entitlement?.hasProAccess ?? false;
+  const keepersEnabled = !hasProAccess || settings?.useKeepers !== false;
   const order = isStarted ? STARTED_ORDER : PRE_DRAFT_ORDER;
   const directCount = isStarted ? STARTED_DIRECT_COUNT : PRE_DRAFT_DIRECT_COUNT;
   const visibleValues = order.filter(

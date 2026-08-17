@@ -165,6 +165,10 @@ export function LeagueDetails({
             rosterSlots: { ...settings.rosterSlots },
             flexPositions: [...settings.flexPositions],
             superflexPositions: [...settings.superflexPositions],
+            // Not actually used once editing (the live useKeepersControl
+            // below drives it instead) - kept in sync anyway so form always
+            // reflects settings.useKeepers if anything ever reads it.
+            useKeepers: settings.useKeepers ?? true,
           }
         : DEFAULT_FORM,
     );
@@ -188,7 +192,10 @@ export function LeagueDetails({
         superflexPositions: form.superflexPositions,
       };
       if (isCreatingLeague || !settings) {
-        const newId = await createSettings(payload);
+        const newId = await createSettings({
+          ...payload,
+          useKeepers: form.useKeepers,
+        });
         onLeagueSaved(newId);
       } else {
         await updateSettings({ id: settings._id, ...payload });
@@ -388,9 +395,11 @@ export function LeagueDetails({
         }}
         teamsLocked={!!draftTeams && draftTeams.length > 0}
         configLocked={isStarted}
-        {...(settings
-          ? {
-              useKeepersControl: {
+        useKeepersControl={
+          settings
+            ? {
+                // Existing league - live-toggles via setUseKeepers,
+                // independent of this form's own Save/Cancel.
                 checked: settings.useKeepers ?? true,
                 onChange: handleToggleUseKeepers,
                 error: useKeepersError,
@@ -401,9 +410,17 @@ export function LeagueDetails({
                         "This draft has started - reopen pre-draft to change it.",
                     }
                   : {}),
-              },
-            }
-          : {})}
+              }
+            : {
+                // Brand-new league - no id yet to toggle a live mutation
+                // against, so this just sets local form state and rides
+                // along with the rest of the form on Save (see handleSave).
+                checked: form.useKeepers,
+                onChange: (checked) => setForm({ ...form, useKeepers: checked }),
+                error: null,
+                disabled: !entitlement?.hasProAccess,
+              }
+        }
       />
     );
   }

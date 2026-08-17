@@ -148,6 +148,10 @@ export const createLeague = mutation({
     rosterSlots: rosterSlotsValidator,
     flexPositions: v.array(positionValidator),
     superflexPositions: v.array(positionValidator),
+    // Opt in to keepers at creation time instead of only via the separate
+    // setUseKeepers mutation after the fact - defaults to false (same as
+    // before this existed). Pro-gated the same way setUseKeepers is below.
+    useKeepers: v.optional(v.boolean()),
     // Set when this league is created via the "Import from Sleeper" wizard
     // (see convex/sleeper/league.ts's previewSleeperImport) - the league is
     // linked from creation, so it never needs the separate Season Settings
@@ -177,8 +181,12 @@ export const createLeague = mutation({
           "Upgrade to Pro for more, or come back next year.",
       );
     }
+    if (args.useKeepers && !isPro) {
+      throw new Error("Keepers is a Pro feature. Upgrade to enable it.");
+    }
 
-    const { name, sleeperLeagueId, yahooLeagueKey, ...seasonFields } = args;
+    const { name, sleeperLeagueId, yahooLeagueKey, useKeepers, ...seasonFields } =
+      args;
 
     const leagueId = await ctx.db.insert("leagues", {
       ownerId: userId,
@@ -194,7 +202,7 @@ export const createLeague = mutation({
       // leagues start with it explicitly off rather than relying on
       // "absent means true" (which stays true for every league created
       // before this, so existing leagues that rely on it keep working).
-      useKeepers: false,
+      useKeepers: useKeepers ?? false,
       ...(sleeperLeagueId ? { sleeperLeagueId } : {}),
       ...(yahooLeagueKey ? { yahooLeagueKey } : {}),
       createdAt: now,

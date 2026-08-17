@@ -63,12 +63,15 @@ interface SettingsFormProps {
   // team names/salary cap overrides/nomination order live in TeamsPanel, not
   // here, and stay editable regardless (see LeagueDetails.tsx).
   configLocked?: boolean;
-  // Only supplied by LeagueDetails.tsx's edit-an-existing-league usage -
-  // the import wizards (LeagueImportWizard/YahooLeagueImportWizard) create
-  // a brand-new league, which has no id yet to toggle useKeepers against.
-  // Saves immediately on change (the same live mutation the old read-only
-  // info card's Switch called directly), independent of this form's own
-  // Save/Cancel - not part of `form`/onSave's payload.
+  // Only supplied by LeagueDetails.tsx, for both its create and edit
+  // usages - not by the import wizards (LeagueImportWizard/
+  // YahooLeagueImportWizard), which don't offer this toggle at all.
+  // Editing an existing league saves immediately on change (a live
+  // setUseKeepers mutation), independent of this form's own Save/Cancel -
+  // not part of `form`/onSave's payload. Creating a brand-new league has
+  // no id yet for that live mutation, so LeagueDetails.tsx wires this to
+  // local form.useKeepers state instead, which rides along with the rest
+  // of the form on Save.
   useKeepersControl?: {
     checked: boolean;
     onChange: (checked: boolean) => void;

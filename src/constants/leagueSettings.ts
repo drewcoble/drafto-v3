@@ -46,6 +46,10 @@ export interface LeagueSettingsFormValues {
   rosterSlots: Record<(typeof ROSTER_SLOT_KEYS)[number], number>;
   flexPositions: Position[];
   superflexPositions: Position[];
+  // Only meaningful during creation (see LeagueDetails.tsx's handleSave) -
+  // an existing league's keepers setting is toggled live via the separate
+  // setUseKeepers mutation instead, independent of this form's Save/Cancel.
+  useKeepers: boolean;
 }
 
 export const DEFAULT_FORM: LeagueSettingsFormValues = {
@@ -68,6 +72,7 @@ export const DEFAULT_FORM: LeagueSettingsFormValues = {
   },
   flexPositions: ["RB", "WR", "TE"],
   superflexPositions: ["QB", "RB", "WR", "TE"],
+  useKeepers: false,
 };
 
 export const DEFAULT_KEEPER_RULES: KeeperRules = {

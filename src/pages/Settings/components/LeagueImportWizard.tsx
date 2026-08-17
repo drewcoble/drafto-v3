@@ -116,6 +116,7 @@ export function LeagueImportWizard({
         rosterSlots: result.rosterSlots,
         flexPositions: result.flexPositions,
         superflexPositions: result.superflexPositions,
+        useKeepers: DEFAULT_FORM.useKeepers,
       });
     } catch (err) {
       setLoadError(
