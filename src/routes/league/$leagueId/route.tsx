@@ -211,7 +211,14 @@ function LeagueLayout() {
             selfTeamId={selfTeamResult.selfTeam._id}
           />
         )}
-        <Box visibleFrom="sm">
+        {/* pos="relative" + zIndex needed so this outranks the Keepers
+            route's non-dismissible free-plan upgrade Modal (zIndex 190,
+            see keepers.tsx) - without a positioned ancestor here, this Box
+            has no stacking context of its own and renders underneath the
+            modal's fixed overlay, same reasoning as BottomNav's zIndex
+            below, so a free-plan visitor could open Keepers but never
+            click back out to another tab on desktop. */}
+        <Box visibleFrom="sm" pos="relative" style={{ zIndex: 200 }}>
           <Tabs value={activeTab ?? null}>
             <Tabs.List>
               {visibleTabs.map((tab) => (
