@@ -71,7 +71,7 @@ export function SlotTable({
               <Table.Tr key={slot.key}>
                 {/* Slot badge + player name + keeper badge all in one cell
                     (was 2 separate columns) - same compaction as
-                    KeeperTable.tsx's Player column. */}
+                    KeeperCardList.tsx's player row. */}
                 <Table.Td>
                   <Group gap={6} wrap="nowrap" align="center">
                     <Badge

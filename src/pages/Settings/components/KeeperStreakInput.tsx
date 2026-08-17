@@ -12,8 +12,7 @@ interface KeeperStreakCellProps {
 // Inline-editable "years kept" stepper - mirrors how setPickSlot lets a pick
 // be corrected after the fact rather than requiring remove-and-re-add. Each
 // +/- click commits immediately (there's no typed draft to debounce, unlike
-// the old NumberInput version). Shared between the desktop table and mobile
-// card layouts (KeeperTable.tsx / KeeperCardList.tsx).
+// the old NumberInput version). Used by KeeperEditModal.tsx.
 export function KeeperStreakCell({ pick, onSetStreak }: KeeperStreakCellProps) {
   const streak = pick.keeperStreak ?? 1;
   const [showSaved, flashSaved] = useSaveFlash();

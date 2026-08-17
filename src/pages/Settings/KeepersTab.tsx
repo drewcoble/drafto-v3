@@ -1,14 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import {
-  Card,
-  Center,
-  Divider,
-  Grid,
-  Loader,
-  Stack,
-  Text,
-} from "@mantine/core";
+import { Center, Divider, Grid, Loader, Stack, Text } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { POSITIONS, type Position } from "../../types";
@@ -21,7 +13,6 @@ import { assignSlotForPick } from "../../lib/slotAssignment";
 import { WEEK } from "../../constants/general";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
-import { KeeperTable } from "./components/KeeperTable";
 import { KeeperCardList } from "./components/KeeperCardList";
 import { KeeperEditModal } from "./components/KeeperEditModal";
 import { KeeperSearchForm } from "./components/KeeperSearchForm";
@@ -383,39 +374,18 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                   No keepers assigned yet.
                 </Text>
               ) : (
-                <>
-                  {/* Desktop table gets its own single-level border - the
-                      mobile card list below already boxes each keeper
-                      individually (KeeperCardList), so it isn't also wrapped
-                      in a Card here (that would nest a Card inside a
-                      Card). */}
-                  <Card withBorder padding="md" visibleFrom="sm">
-                    <KeeperTable
-                      keepers={keepers}
-                      nameByFpid={nameByFpid}
-                      teams={draftTeams}
-                      draftValueByFpid={draftValueByFpid}
-                      onRemove={handleRemoveKeeper}
-                      onEdit={(pick) => setEditingPickId(pick._id)}
-                      onSelectPlayer={setSelectedFpid}
-                      showStreakInput={
-                        settings.keeperRules?.maxConsecutiveYears !== undefined
-                      }
-                    />
-                  </Card>
-                  <KeeperCardList
-                    keepers={keepers}
-                    nameByFpid={nameByFpid}
-                    teams={draftTeams}
-                    draftValueByFpid={draftValueByFpid}
-                    onRemove={handleRemoveKeeper}
-                    onEdit={(pick) => setEditingPickId(pick._id)}
-                    onSelectPlayer={setSelectedFpid}
-                    showStreakInput={
-                      settings.keeperRules?.maxConsecutiveYears !== undefined
-                    }
-                  />
-                </>
+                <KeeperCardList
+                  keepers={keepers}
+                  nameByFpid={nameByFpid}
+                  teams={draftTeams}
+                  draftValueByFpid={draftValueByFpid}
+                  onRemove={handleRemoveKeeper}
+                  onEdit={(pick) => setEditingPickId(pick._id)}
+                  onSelectPlayer={setSelectedFpid}
+                  showStreakInput={
+                    settings.keeperRules?.maxConsecutiveYears !== undefined
+                  }
+                />
               )}
             </Stack>
           </Stack>

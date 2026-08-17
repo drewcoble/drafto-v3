@@ -31,15 +31,14 @@ interface KeeperCardListProps {
   showStreakInput: boolean;
 }
 
-// Mobile replacement for KeeperTable.tsx (hidden from "sm" up via
-// hiddenFrom="sm" on this component - see KeepersTab.tsx). One card per
-// team - each kept player is a row inside that team's card rather than its
-// own card, so adding a second keeper to a team grows the existing card
-// instead of adding a new one. Deliberately a compact read-only summary
-// rather than inline dropdowns/steppers per row - team/price/streak are all
-// edited through KeeperEditModal.tsx instead, opened via the pencil icon
-// here. Roster slot assignment isn't shown at all anymore - now that My
-// Team is browsable pre-draft too, that's handled there instead of
+// Renders every keeper as one card per team (used at every breakpoint - see
+// KeepersTab.tsx), each kept player a row inside that team's card rather
+// than its own card, so adding a second keeper to a team grows the existing
+// card instead of adding a new one. Deliberately a compact read-only
+// summary rather than inline dropdowns/steppers per row - team/price/streak
+// are all edited through KeeperEditModal.tsx instead, opened via the pencil
+// icon here. Roster slot assignment isn't shown at all anymore - now that
+// My Team is browsable pre-draft too, that's handled there instead of
 // duplicating a slot picker on this page.
 export function KeeperCardList({
   keepers,
@@ -67,7 +66,7 @@ export function KeeperCardList({
   if (keepers.length === 0) return null;
 
   return (
-    <Stack gap="sm" hiddenFrom="sm">
+    <Stack gap="sm">
       {teams.map((team) => {
         const teamKeepers = keepersByTeamId.get(team._id);
         if (!teamKeepers || teamKeepers.length === 0) return null;

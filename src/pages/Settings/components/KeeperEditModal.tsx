@@ -25,8 +25,8 @@ interface KeeperEditModalProps {
 }
 
 // Edit surface for a single keeper's team/price/streak, opened from the
-// compact rows in KeeperTable.tsx/KeeperCardList.tsx instead of exposing an
-// inline dropdown + two steppers in every row/card. Every field here still
+// compact rows in KeeperCardList.tsx instead of exposing an inline dropdown
+// + two steppers in every card. Every field here still
 // commits immediately per-change through the same mutations those inline
 // cells used (setKeeperPrice/setKeeperTeam/setKeeperStreak) - there's
 // nothing to save, so Done just closes.
