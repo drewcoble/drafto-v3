@@ -359,7 +359,9 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
       {draftValuesResult?.isGeneric && <GenericValuesNotice />}
 
       <Card withBorder padding={0}>
-        {allProjections === undefined || isInitialValuesLoad ? (
+        {allProjections === undefined ||
+        allRankings === undefined ||
+        isInitialValuesLoad ? (
           <Center py="xl">
             <Loader />
           </Center>
