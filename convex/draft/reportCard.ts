@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { query, mutation, internalQuery, type QueryCtx } from "../_generated/server";
+import {
+  query,
+  mutation,
+  internalQuery,
+  type QueryCtx,
+} from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { POSITIONS } from "../positions";
@@ -8,7 +13,11 @@ import {
   pointsForScoringConfig,
   type ScoringConfig,
 } from "../scoring";
-import type { DraftValueRow } from "../draftValues";
+import {
+  buildValueCurveByPosition,
+  estimateMarketValue,
+  type DraftValueRow,
+} from "../draftValues";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireDraftOwner } from "./auth";
 import { optimizeLineup, type LineupResult } from "./lineupOptimizer";
@@ -56,66 +65,6 @@ interface RosterAward {
   teamId: Id<"seasonTeams">;
   teamName: string;
   count: number;
-}
-
-interface ValueCurvePoint {
-  vor: number;
-  dollarValue: number;
-}
-
-// Per-position VOR -> $ curve built from this draft's actual auctioned
-// (non-keeper) players, anchored at (0, $1) since that's exactly the floor
-// computeDraftValues' formula converges to as VOR approaches 0 (weight =
-// VOR^FALLOFF_EXPONENT -> 0). Used to estimate what a keeper's production
-// would have cost at auction, since keepers are excluded from the real
-// value engine's pool entirely and have no dollarValue of their own.
-function buildValueCurveByPosition(
-  values: DraftValueRow[],
-): Map<Position, ValueCurvePoint[]> {
-  const byPosition = new Map<Position, ValueCurvePoint[]>();
-  for (const row of values) {
-    if (!byPosition.has(row.position)) {
-      byPosition.set(row.position, [{ vor: 0, dollarValue: 1 }]);
-    }
-    byPosition
-      .get(row.position)!
-      .push({ vor: row.valueOverReplacement, dollarValue: row.dollarValue });
-  }
-  for (const curve of byPosition.values()) {
-    curve.sort((a, b) => a.vor - b.vor);
-  }
-  return byPosition;
-}
-
-// Linear interpolation (or, past the best auctioned player at a position,
-// extrapolation off the last two points' slope - rare, only hit when a
-// top-tier player was kept) along one position's value curve. This is
-// necessarily an estimate, not a real market price - keepers were never
-// actually bid on.
-function estimateMarketValue(
-  vor: number,
-  curve: ValueCurvePoint[] | undefined,
-): number | null {
-  if (!curve || curve.length === 0) return null;
-  if (vor <= curve[0]!.vor) return curve[0]!.dollarValue;
-
-  for (let i = 0; i < curve.length - 1; i++) {
-    const a = curve[i]!;
-    const b = curve[i + 1]!;
-    if (vor <= b.vor) {
-      if (b.vor === a.vor) return b.dollarValue;
-      const t = (vor - a.vor) / (b.vor - a.vor);
-      return a.dollarValue + t * (b.dollarValue - a.dollarValue);
-    }
-  }
-
-  const last = curve[curve.length - 1]!;
-  const prev = curve[curve.length - 2] ?? { vor: 0, dollarValue: 1 };
-  const slope =
-    last.vor === prev.vor
-      ? 0
-      : (last.dollarValue - prev.dollarValue) / (last.vor - prev.vor);
-  return last.dollarValue + slope * (vor - last.vor);
 }
 
 // Value surplus, VOR, and lineup-efficiency are on different scales, so each
@@ -347,7 +296,8 @@ async function computeReportCardData(
       undefined,
     );
     const worstPick = nonKeeperPicks.reduce<ResolvedPick | undefined>(
-      (worst, p) => (!worst || (p.surplus ?? 0) < (worst.surplus ?? 0) ? p : worst),
+      (worst, p) =>
+        !worst || (p.surplus ?? 0) < (worst.surplus ?? 0) ? p : worst,
       undefined,
     );
 
@@ -356,9 +306,7 @@ async function computeReportCardData(
     );
     const bestKeeper = keeperPicks.reduce<ResolvedPick | undefined>(
       (best, p) =>
-        !best || (p.keeperSurplus ?? 0) > (best.keeperSurplus ?? 0)
-          ? p
-          : best,
+        !best || (p.keeperSurplus ?? 0) > (best.keeperSurplus ?? 0) ? p : best,
       undefined,
     );
     const worstKeeper = keeperPicks.reduce<ResolvedPick | undefined>(
@@ -384,9 +332,7 @@ async function computeReportCardData(
         position: p.position,
         points: p.points,
         sequence: p.sequence,
-        ...(p.planSlotKey !== undefined
-          ? { planSlotKey: p.planSlotKey }
-          : {}),
+        ...(p.planSlotKey !== undefined ? { planSlotKey: p.planSlotKey } : {}),
       })),
       season.rosterSlots,
       season.flexPositions,
@@ -606,7 +552,11 @@ export const ensureReportSummaryGenerated = mutation({
     await ctx.scheduler.runAfter(
       0,
       internal.gemini.reportSummary.generateReportSummary,
-      { draftId: draft._id, week: args.week, scoringConfig: args.scoringConfig },
+      {
+        draftId: draft._id,
+        week: args.week,
+        scoringConfig: args.scoringConfig,
+      },
     );
   },
 });
@@ -649,7 +599,11 @@ export const regenerateReportSummary = mutation({
     await ctx.scheduler.runAfter(
       0,
       internal.gemini.reportSummary.generateReportSummary,
-      { draftId: draft._id, week: args.week, scoringConfig: args.scoringConfig },
+      {
+        draftId: draft._id,
+        week: args.week,
+        scoringConfig: args.scoringConfig,
+      },
     );
   },
 });

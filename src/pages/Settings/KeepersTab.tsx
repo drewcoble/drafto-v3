@@ -112,8 +112,16 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     for (const value of draftValues ?? []) {
       map.set(value.fpid, value);
     }
+    // Kept players are excluded from `draftValues` itself (they're off the
+    // auction board - see convex/draftValues.ts's computeDraftValues), so
+    // their fair value comes from a separate interpolated estimate instead.
+    // Fpids never overlap between the two sources, so this merge can't
+    // clobber a real auctioned value.
+    for (const value of draftValuesResult?.keeperValues ?? []) {
+      map.set(value.fpid, value);
+    }
     return map;
-  }, [draftValues]);
+  }, [draftValues, draftValuesResult]);
 
   const draftedFpids = useMemo(
     () => new Set((picks ?? []).map((pick) => pick.fpid)),

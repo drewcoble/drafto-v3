@@ -129,7 +129,9 @@ async function computeDraftValuesForSettings(
   for (const pos of activePositions) {
     const rows = await ctx.db
       .query("projections")
-      .withIndex("by_position_week", (q) => q.eq("position", pos).eq("week", week))
+      .withIndex("by_position_week", (q) =>
+        q.eq("position", pos).eq("week", week),
+      )
       .collect();
     const available = rows.filter((row) => !keptFpids.has(row.fpid));
     available.sort(
@@ -176,7 +178,10 @@ async function computeDraftValuesForSettings(
 
   const flexWonCount = new Map<Position, number>();
   for (const candidate of wonFlex) {
-    flexWonCount.set(candidate.position, (flexWonCount.get(candidate.position) ?? 0) + 1);
+    flexWonCount.set(
+      candidate.position,
+      (flexWonCount.get(candidate.position) ?? 0) + 1,
+    );
   }
 
   // SUPERFLEX candidates: same idea as FLEX, one tier up - pooled from
@@ -230,7 +235,10 @@ async function computeDraftValuesForSettings(
     const last = sorted[sorted.length - 1];
 
     if (replacement) {
-      replacementPoints[pos] = pointsForScoringConfig(replacement, scoringConfig);
+      replacementPoints[pos] = pointsForScoringConfig(
+        replacement,
+        scoringConfig,
+      );
       usedFallback[pos] = false;
     } else if (last) {
       replacementPoints[pos] = pointsForScoringConfig(last, scoringConfig);
@@ -317,6 +325,69 @@ async function computeDraftValuesForSettings(
   return output;
 }
 
+interface ValueCurvePoint {
+  vor: number;
+  dollarValue: number;
+}
+
+// Per-position VOR -> $ curve built from a set of already-auctioned
+// (non-keeper) DraftValueRows, anchored at (0, $1) since that's exactly the
+// floor computeDraftValuesForSettings' formula converges to as VOR
+// approaches 0 (weight = VOR^FALLOFF_EXPONENT -> 0). Used to estimate what a
+// keeper's production would have cost at auction, since keepers are
+// excluded from the real value engine's pool entirely and have no
+// dollarValue of their own - see estimateMarketValue below and its callers
+// (reportCard.ts's best/worst keeper grading, getDraftValues' keeperValues
+// field for the Keepers tab).
+export function buildValueCurveByPosition(
+  values: DraftValueRow[],
+): Map<Position, ValueCurvePoint[]> {
+  const byPosition = new Map<Position, ValueCurvePoint[]>();
+  for (const row of values) {
+    if (!byPosition.has(row.position)) {
+      byPosition.set(row.position, [{ vor: 0, dollarValue: 1 }]);
+    }
+    byPosition
+      .get(row.position)!
+      .push({ vor: row.valueOverReplacement, dollarValue: row.dollarValue });
+  }
+  for (const curve of byPosition.values()) {
+    curve.sort((a, b) => a.vor - b.vor);
+  }
+  return byPosition;
+}
+
+// Linear interpolation (or, past the best auctioned player at a position,
+// extrapolation off the last two points' slope - rare, only hit when a
+// top-tier player was kept) along one position's value curve. This is
+// necessarily an estimate, not a real market price - keepers were never
+// actually bid on.
+export function estimateMarketValue(
+  vor: number,
+  curve: ValueCurvePoint[] | undefined,
+): number | null {
+  if (!curve || curve.length === 0) return null;
+  if (vor <= curve[0]!.vor) return curve[0]!.dollarValue;
+
+  for (let i = 0; i < curve.length - 1; i++) {
+    const a = curve[i]!;
+    const b = curve[i + 1]!;
+    if (vor <= b.vor) {
+      if (b.vor === a.vor) return b.dollarValue;
+      const t = (vor - a.vor) / (b.vor - a.vor);
+      return a.dollarValue + t * (b.dollarValue - a.dollarValue);
+    }
+  }
+
+  const last = curve[curve.length - 1]!;
+  const prev = curve[curve.length - 2] ?? { vor: 0, dollarValue: 1 };
+  const slope =
+    last.vor === prev.vor
+      ? 0
+      : (last.dollarValue - prev.dollarValue) / (last.vor - prev.vor);
+  return last.dollarValue + slope * (vor - last.vor);
+}
+
 // Real per-league values - loads this draft's actual season settings,
 // keepers, and teams (for any per-team salary cap overrides), then defers to
 // computeDraftValuesForSettings for the shared VBD math. Only Pro users see
@@ -359,7 +430,8 @@ async function computeDraftValues(
   const keptCountByPos: Partial<Record<Position, number>> = {};
   let keptDollars = 0;
   for (const keeper of keepers) {
-    keptCountByPos[keeper.position] = (keptCountByPos[keeper.position] ?? 0) + 1;
+    keptCountByPos[keeper.position] =
+      (keptCountByPos[keeper.position] ?? 0) + 1;
     keptDollars += keeper.price;
   }
 
@@ -375,7 +447,10 @@ async function computeDraftValues(
     .collect();
   const totalCapDollars =
     teams.length > 0
-      ? teams.reduce((sum, team) => sum + (team.salaryCapOverride ?? settings.salaryCap), 0)
+      ? teams.reduce(
+          (sum, team) => sum + (team.salaryCapOverride ?? settings.salaryCap),
+          0,
+        )
       : settings.teamCount * settings.salaryCap;
 
   return await computeDraftValuesForSettings(ctx, {
@@ -482,9 +557,16 @@ export const getDraftValues = query({
         week: args.week,
         scoringConfig: args.scoringConfig,
       });
+      // No keeperValues here: generic values never exclude any specific
+      // league's keepers in the first place (computeGenericDraftValues
+      // always runs with an empty keptFpids set), so a kept player already
+      // has a normal dollarValue entry in `values` above.
       return {
         isGeneric: true,
-        values: args.position ? rows.filter((row) => row.position === args.position) : rows,
+        values: args.position
+          ? rows.filter((row) => row.position === args.position)
+          : rows,
+        keeperValues: [] as { fpid: number; dollarValue: number }[],
       };
     }
 
@@ -528,12 +610,84 @@ export const getDraftValues = query({
             scoringConfig: args.scoringConfig,
           });
 
+    const keeperValues = await estimateKeeperValues(ctx, {
+      draftId: draft._id,
+      week: args.week,
+      scoringConfig: args.scoringConfig,
+      values: rows,
+    });
+
     return {
       isGeneric: false,
-      values: args.position ? rows.filter((row) => row.position === args.position) : rows,
+      values: args.position
+        ? rows.filter((row) => row.position === args.position)
+        : rows,
+      keeperValues,
     };
   },
 });
+
+// Kept players have no dollarValue in `values` above - computeDraftValues
+// excludes them from the auction pool entirely (see its comment). This
+// estimates what each currently-kept player's projected production would
+// have cost at this draft's auction, by interpolating along the real
+// (non-keeper) pool's own VOR -> $ curve. Used by the Keepers tab to show a
+// keeper's surplus value (estimate minus what they actually cost) - not
+// needed by anything that only cares about the live "available to draft"
+// board, so it's returned as its own field rather than folded into `values`
+// (which several other callers - board.ts, reportCard.ts - key off the
+// assumption that it's exactly the auctionable pool).
+async function estimateKeeperValues(
+  ctx: QueryCtx,
+  args: {
+    draftId: Id<"drafts">;
+    week: string;
+    scoringConfig: ScoringConfig;
+    values: DraftValueRow[];
+  },
+): Promise<{ fpid: number; dollarValue: number }[]> {
+  const keepers = await ctx.db
+    .query("draftPicks")
+    .withIndex("by_draft_keeper", (q) =>
+      q.eq("draftId", args.draftId).eq("isKeeper", true),
+    )
+    .collect();
+  if (keepers.length === 0) return [];
+
+  const curveByPosition = buildValueCurveByPosition(args.values);
+  const replacementByPosition = new Map<Position, number>();
+  for (const row of args.values) {
+    if (!replacementByPosition.has(row.position)) {
+      replacementByPosition.set(row.position, row.replacementPoints);
+    }
+  }
+
+  const results: { fpid: number; dollarValue: number }[] = [];
+  for (const keeper of keepers) {
+    const projection = await ctx.db
+      .query("projections")
+      .withIndex("by_position_week_fpid", (q) =>
+        q
+          .eq("position", keeper.position)
+          .eq("week", args.week)
+          .eq("fpid", keeper.fpid),
+      )
+      .unique();
+    if (!projection) continue;
+
+    const points = pointsForScoringConfig(projection, args.scoringConfig);
+    const replacementPoints = replacementByPosition.get(keeper.position) ?? 0;
+    const vor = Math.max(points - replacementPoints, 0);
+    const dollarValue = estimateMarketValue(
+      vor,
+      curveByPosition.get(keeper.position),
+    );
+    if (dollarValue !== null) {
+      results.push({ fpid: keeper.fpid, dollarValue });
+    }
+  }
+  return results;
+}
 
 // Recomputes getDraftValues for one (draftId, week, scoring) combo and
 // replaces its cached rows - called once daily per draft from fetchAllData
