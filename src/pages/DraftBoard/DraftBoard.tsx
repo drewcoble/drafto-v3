@@ -11,9 +11,10 @@ import {
   Stack,
   Text,
   Title,
+  Transition,
 } from "@mantine/core";
 import { useQuery } from "convex/react";
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ColorSchemeToggle } from "../../components/ColorSchemeToggle";
@@ -151,6 +152,44 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
   const turnTeam = teams?.find(
     (team) => team._id === currentNominator?.currentTeamId,
   );
+
+  // The nomination badges below animate in/out with Transition, which keeps
+  // rendering its children for the duration of the exit animation even
+  // after the underlying query result that drove them (nominatingTeam,
+  // turnTeam, activeNomination) has already gone undefined. Without
+  // remembering the last real value here, a badge would slide out showing
+  // blank/undefined text instead of the info it was just displaying. Each
+  // sticky value only updates while its source is defined, so it always
+  // holds "the last real content" for its badge to animate away with.
+  const [stickyNominatedTeam, setStickyNominatedTeam] = useState<{
+    id: Id<"seasonTeams">;
+    name: string;
+  } | null>(null);
+  if (nominatingTeam && nominatingTeam._id !== stickyNominatedTeam?.id) {
+    setStickyNominatedTeam({ id: nominatingTeam._id, name: nominatingTeam.name });
+  }
+  const [stickyTurnTeam, setStickyTurnTeam] = useState<{
+    id: Id<"seasonTeams">;
+    name: string;
+  } | null>(null);
+  if (turnTeam && turnTeam._id !== stickyTurnTeam?.id) {
+    setStickyTurnTeam({ id: turnTeam._id, name: turnTeam.name });
+  }
+  const [stickyOnBlock, setStickyOnBlock] = useState<{
+    fpid: number;
+    name: string;
+    team: string | null;
+    position: NonNullable<typeof activeNomination>["position"];
+  } | null>(null);
+  if (activeNomination && activeNomination.fpid !== stickyOnBlock?.fpid) {
+    const player = playerByFpid.get(activeNomination.fpid);
+    setStickyOnBlock({
+      fpid: activeNomination.fpid,
+      name: player?.name ?? `#${activeNomination.fpid}`,
+      team: player?.team ?? null,
+      position: activeNomination.position,
+    });
+  }
   // Whichever team the nominator indicator (below) is currently pointing
   // at - nominatingTeam while a player's up for bids, turnTeam once it's
   // resolved/passed and the board is waiting on the next nomination.
@@ -226,40 +265,73 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                   </Badge>
                 ) : (
                   <>
-                    {activeNomination && nominatingTeam && (
-                      <Badge
-                        size="xl"
-                        radius="md"
-                        variant="light"
-                        color="burlywood"
-                      >
-                        {nominatingTeam.name} nominated
-                      </Badge>
-                    )}
-                    {!activeNomination && turnTeam && (
-                      <Badge
-                        size="xl"
-                        radius="md"
-                        variant="light"
-                        color="saddlebrown.6"
-                      >
-                        {turnTeam.name} is nominating
-                      </Badge>
-                    )}
-                    {activeNomination && (
-                      <Badge
-                        size="xl"
-                        radius="md"
-                        variant="light"
-                        color={`${POSITION_COLORS[activeNomination.position]}`}
-                      >
-                        On the block:{" "}
-                        {playerByFpid.get(activeNomination.fpid)?.name ??
-                          `#${activeNomination.fpid}`}{" "}
-                        ({activeNomination.position}) -{" "}
-                        {playerByFpid.get(activeNomination.fpid)?.team}
-                      </Badge>
-                    )}
+                    <Transition
+                      mounted={!!(activeNomination && nominatingTeam)}
+                      transition="slide-down"
+                      duration={220}
+                      timingFunction="ease-out"
+                    >
+                      {(styles) =>
+                        stickyNominatedTeam ? (
+                          <Badge
+                            size="xl"
+                            radius="md"
+                            variant="light"
+                            color="burlywood"
+                            style={styles}
+                          >
+                            {stickyNominatedTeam.name} nominated
+                          </Badge>
+                        ) : (
+                          <></>
+                        )
+                      }
+                    </Transition>
+                    <Transition
+                      mounted={!!(!activeNomination && turnTeam)}
+                      transition="slide-down"
+                      duration={220}
+                      timingFunction="ease-out"
+                    >
+                      {(styles) =>
+                        stickyTurnTeam ? (
+                          <Badge
+                            size="xl"
+                            radius="md"
+                            variant="light"
+                            color="saddlebrown.6"
+                            style={styles}
+                          >
+                            {stickyTurnTeam.name} is nominating
+                          </Badge>
+                        ) : (
+                          <></>
+                        )
+                      }
+                    </Transition>
+                    <Transition
+                      mounted={!!activeNomination}
+                      transition="slide-down"
+                      duration={220}
+                      timingFunction="ease-out"
+                    >
+                      {(styles) =>
+                        stickyOnBlock ? (
+                          <Badge
+                            size="xl"
+                            radius="md"
+                            variant="light"
+                            color={`${POSITION_COLORS[stickyOnBlock.position]}`}
+                            style={styles}
+                          >
+                            On the block: {stickyOnBlock.name} (
+                            {stickyOnBlock.position}) - {stickyOnBlock.team}
+                          </Badge>
+                        ) : (
+                          <></>
+                        )
+                      }
+                    </Transition>
                   </>
                 )}
               </Group>
