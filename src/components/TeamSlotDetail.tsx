@@ -25,8 +25,8 @@ interface TeamSlotDetailProps {
   onRemove?: (pickId: Id<"draftPicks">) => void;
   onMove?: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer?: (fpid: number) => void;
-  // Gates the ", yr X" suffix on a keeper's inline label below - true when
-  // the league has a maxConsecutiveYears cap set (see schema.ts's
+  // Gates the "· Yr X" suffix on the Keeper badge below - true when the
+  // league has a maxConsecutiveYears cap set (see schema.ts's
   // trackConsecutiveYears comment).
   trackConsecutiveYears: boolean;
 }
@@ -82,30 +82,34 @@ export function TeamSlotDetail({
             >
               {slot.label}
             </Badge>
-            <Text size="xs" c="dimmed" style={{ flex: 1 }}>
-              {player && pick && onSelectPlayer ? (
-                <Anchor
-                  component="button"
-                  type="button"
-                  size="xs"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelectPlayer(pick.fpid);
-                  }}
-                >
-                  {player.name}
-                </Anchor>
-              ) : (
-                (player?.name ?? "—")
+            <Group gap={4} wrap="wrap" style={{ flex: 1, minWidth: 0 }}>
+              <Text size="xs" c="dimmed">
+                {player && pick && onSelectPlayer ? (
+                  <Anchor
+                    component="button"
+                    type="button"
+                    size="xs"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectPlayer(pick.fpid);
+                    }}
+                  >
+                    {player.name}
+                  </Anchor>
+                ) : (
+                  (player?.name ?? "—")
+                )}
+                {pick && rookieFpids.has(pick.fpid) && <RookieBadge />}
+                {pick ? ` · $${pick.price}` : ""}
+              </Text>
+              {pick?.isKeeper && (
+                <Badge variant="light" color="gray" size="sm">
+                  {trackConsecutiveYears
+                    ? `Keeper · Yr ${pick.keeperStreak ?? 1}`
+                    : "Keeper"}
+                </Badge>
               )}
-              {pick && rookieFpids.has(pick.fpid) && <RookieBadge />}
-              {pick ? ` · $${pick.price}` : ""}
-              {pick?.isKeeper
-                ? trackConsecutiveYears
-                  ? ` (keeper, yr ${pick.keeperStreak ?? 1})`
-                  : " (keeper)"
-                : ""}
-            </Text>
+            </Group>
             {hasActions && (
               <Menu shadow="md" width={170} position="bottom-end">
                 <Menu.Target>
