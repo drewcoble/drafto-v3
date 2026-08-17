@@ -39,6 +39,18 @@ export function useFitScale({
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [content, setContent] = useState<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
+  // The content width to render at (before the transform above shrinks/grows
+  // it back down to `scale`), distinct from content's own natural/intrinsic
+  // width. When one axis is the binding constraint (say content is
+  // relatively taller than the container, so scale ends up height-bound),
+  // sizing the unscaled content to exactly `naturalWidth` leaves dead space
+  // on the non-binding axis once scaled - the rendered width comes out
+  // smaller than the container. Solving for the width that, once multiplied
+  // by `scale`, exactly equals the container's width instead lets whatever
+  // flexible content is inside (e.g. a grid's columns, or a flex cell inside
+  // a row) stretch to fill it, so the binding axis still determines
+  // font/padding size but no width goes unused. Null until first measured.
+  const [contentWidth, setContentWidth] = useState<number | null>(null);
 
   const containerRef = useCallback((node: HTMLDivElement | null) => {
     setContainer(node);
@@ -59,7 +71,14 @@ export function useFitScale({
         containerRect.width / naturalWidth,
         containerRect.height / naturalHeight,
       );
-      setScale(Math.min(maxScale, Math.max(minScale, fitScale)));
+      const clampedScale = Math.min(maxScale, Math.max(minScale, fitScale));
+      setScale((prev) => (prev === clampedScale ? prev : clampedScale));
+      const stretchedWidth = containerRect.width / clampedScale;
+      setContentWidth((prev) =>
+        prev !== null && Math.abs(prev - stretchedWidth) < 0.5
+          ? prev
+          : stretchedWidth,
+      );
     };
 
     recompute();
@@ -69,5 +88,5 @@ export function useFitScale({
     return () => observer.disconnect();
   }, [container, content, minScale, maxScale]);
 
-  return { containerRef, contentRef, scale };
+  return { containerRef, contentRef, scale, contentWidth };
 }

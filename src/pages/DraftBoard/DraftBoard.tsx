@@ -3,6 +3,7 @@ import {
   Box,
   Card,
   Center,
+  Divider,
   Group,
   Image,
   Loader,
@@ -12,7 +13,7 @@ import {
   Title,
 } from "@mantine/core";
 import { useQuery } from "convex/react";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ColorSchemeToggle } from "../../components/ColorSchemeToggle";
@@ -37,15 +38,19 @@ interface DraftBoardProps {
   seasonId: Id<"seasons">;
 }
 
-// Reference width (unscaled) for one team card - boardCols * this is the
-// content's natural/designed width, which useFitScale then measures and
-// scales as a whole (fonts, padding, gaps, borders together) to fill
-// whatever screen it's actually displayed on. Pinned explicitly rather than
-// left to size intrinsically - Mantine's SimpleGrid stretches its columns
-// to fill 100% of whatever width its container is given, so without an
-// explicit reference width here there'd be nothing for the grid to size
-// itself against before useFitScale can measure a "natural" size (a
-// circular fill-to-my-own-intrinsic-size dependency).
+// Reference width (unscaled) for one team card, used only for the very
+// first paint - boardCols * this is a starting width for the content box so
+// useFitScale has something to measure a "natural" size against before it's
+// had a chance to compute anything itself (without it there'd be nothing
+// for Mantine's SimpleGrid, which stretches its columns to fill 100% of
+// whatever width its container is given, to size itself against - a
+// circular fill-to-my-own-intrinsic-size dependency). Every render after
+// that, useFitScale's `contentWidth` takes over and replaces this: it
+// solves for whichever width, once scaled down/up by `scale`, exactly fills
+// the container, so if height ends up the binding constraint (as it does on
+// a squarer/taller screen where 2 rows of cards run tall relative to their
+// width) the grid's columns stretch to use the leftover horizontal space
+// instead of leaving it as a dead margin.
 const REFERENCE_CARD_WIDTH = 320;
 
 // Read-only, TV/projector-friendly view of every team's roster - meant to be
@@ -158,7 +163,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
   // matters more here than reflowing nicely on a narrow screen.
   const boardCols = Math.max(1, Math.ceil(teamSummaries.length / 2));
 
-  const { containerRef, contentRef, scale } = useFitScale();
+  const { containerRef, contentRef, scale, contentWidth } = useFitScale();
 
   if (!settings || !teams || !picks) {
     return (
@@ -183,7 +188,17 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
       <Box
         ref={contentRef}
         style={{
-          width: boardCols * REFERENCE_CARD_WIDTH,
+          width: contentWidth ?? boardCols * REFERENCE_CARD_WIDTH,
+          // The container above is a flex row centering this box - without
+          // this, the browser's default flex-shrink: 1 silently shrinks
+          // this box down to the container's width whenever its own width
+          // (set above) exceeds it, *before* useFitScale ever gets to
+          // measure a natural size. That makes every measurement come back
+          // capped at the container's width, which both breaks the scale
+          // math (width always looks like a perfect fit, whatever the
+          // content actually needs) and defeats contentWidth's attempt to
+          // stretch into unused space.
+          flexShrink: 0,
           transform: `scale(${scale})`,
         }}
       >
@@ -196,15 +211,14 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
               league name since that's the thing actually worth reading from
               across the room. */}
               <Group gap={8} wrap="nowrap">
-                <Image src={logo} alt="InfiniDraft" h={36} w="auto" />
-                <Title order={4} c="var(--mantine-color-text)">
+                <Image src={logo} alt="InfiniDraft" h={40} w="auto" />
+                <Title order={3} c="var(--mantine-color-text)">
                   <Text component="span" inherit c="saddlebrown.7">
                     infini
                   </Text>
                   draft
                 </Title>
               </Group>
-              <Title order={2}>{settings.name}</Title>
               <Group gap="xs" wrap="wrap">
                 {settings.draftStatus === "pre_draft" ? (
                   <Badge size="xl" radius="md" variant="light" color="gray">
@@ -250,7 +264,10 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                 )}
               </Group>
             </Group>
-            <ColorSchemeToggle />
+            <Group align="center" gap="md" wrap="wrap">
+              <Title order={2}>{settings.name}</Title>
+              <ColorSchemeToggle />
+            </Group>
           </Group>
           <SimpleGrid cols={boardCols} spacing="md">
             {teamSummaries.map(({ team, stats, slots, bySlot }, index) => (
@@ -278,13 +295,21 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                     <BudgetStats stats={stats} position="top" />
                   )}
 
-                  {slots.map((slot) => {
+                  {slots.map((slot, slotIndex) => {
                     const pick = bySlot.get(slot.key);
                     const player = pick
                       ? playerByFpid.get(pick.fpid)
                       : undefined;
+                    // Bench slots are always last (see SLOT_ORDER in
+                    // rosterSlots.ts) and always labelled "BN<n>" - the
+                    // divider marks the boundary the moment the label
+                    // switches from a starter slot to the first bench one.
+                    const isFirstBenchSlot =
+                      slot.label.startsWith("BN") &&
+                      !slots[slotIndex - 1]?.label.startsWith("BN");
                     return (
-                      <>
+                      <Fragment key={slot.key}>
+                        {isFirstBenchSlot && <Divider color="dark.7" />}
                         <Group
                           gap={10}
                           w="100%"
@@ -317,6 +342,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                             <Text
                               truncate
                               size="sm"
+                              fw={700}
                               ta="left"
                               style={{ flex: 1, minWidth: 0 }}
                             >
@@ -343,13 +369,13 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                             size="sm"
                             ta="right"
                             w={35}
-                            fw={600}
+                            fw={700}
                             style={{ flexShrink: 0 }}
                           >
                             {pick ? `$${pick.price}` : ""}
                           </Text>
                         </Group>
-                      </>
+                      </Fragment>
                     );
                   })}
 
