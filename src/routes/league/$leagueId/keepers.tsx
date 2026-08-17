@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { Center, Loader, Modal, Stack, Text } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { KeepersTab } from "../../../pages/Settings/KeepersTab";
@@ -34,6 +35,9 @@ function KeepersRoute() {
   // Absent means true - see schema.ts's useKeepers comment.
   const keepersEnabled = settings?.useKeepers !== false;
   const hasProAccess = entitlement?.hasProAccess ?? false;
+  // Matches the "sm" breakpoint route.tsx's Tabs bar appears at
+  // (visibleFrom="sm") - see the upgrade Modal's styles below.
+  const isDesktop = useMediaQuery("(min-width: 48em)");
 
   useEffect(() => {
     if (
@@ -91,6 +95,19 @@ function KeepersRoute() {
         // of just blocking the Keepers content itself. 190 keeps it above
         // ordinary page content but below all of that global chrome.
         zIndex={190}
+        // On desktop, route.tsx's AppHeader + Tabs bar sit in normal flow
+        // above the Outlet (not fixed), so `centered`'s default full-
+        // viewport centering could visually collide with the tab bar -
+        // especially now that the tab bar outranks this modal's zIndex
+        // (200 vs. 190, see route.tsx) so it renders on top of whatever
+        // the modal draws underneath it. Biasing the inner container's top
+        // padding down (instead of Mantine's symmetric 5dvh) keeps this
+        // centered in the content area below the tab bar instead. Mobile
+        // has no tab bar to clear (Tabs.List is visibleFrom="sm"), so this
+        // only applies at that breakpoint.
+        {...(isDesktop
+          ? { styles: { inner: { paddingTop: 160 } } }
+          : {})}
       >
         <UpgradePrompt title="Keepers is a Pro feature" />
       </Modal>
