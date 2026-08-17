@@ -13,11 +13,15 @@ import { Pencil, Trash2 } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { STEPPER_BUTTON_SIZE } from "../../../constants/general";
+import { formatSignedDollar, keeperValueColor } from "../../../lib/keeperValue";
 
 interface KeeperCardListProps {
   keepers: Doc<"draftPicks">[];
   nameByFpid: Map<number, { name: string; team: string | null }>;
   teams: { _id: Id<"seasonTeams">; name: string }[];
+  // This year's fair-market price per player, used to compute each
+  // keeper's value (fair price - what's actually being paid to keep them).
+  draftValueByFpid: Map<number, { dollarValue: number }>;
   onRemove: (pickId: Id<"draftPicks">) => void;
   onEdit: (pick: Doc<"draftPicks">) => void;
   onSelectPlayer: (fpid: number) => void;
@@ -41,6 +45,7 @@ export function KeeperCardList({
   keepers,
   nameByFpid,
   teams,
+  draftValueByFpid,
   onRemove,
   onEdit,
   onSelectPlayer,
@@ -71,19 +76,33 @@ export function KeeperCardList({
           (sum, pick) => sum + pick.price,
           0,
         );
+        const totalValue = teamKeepers.reduce(
+          (sum, pick) =>
+            sum +
+            ((draftValueByFpid.get(pick.fpid)?.dollarValue ?? 0) - pick.price),
+          0,
+        );
 
         return (
           <Card key={team._id} withBorder padding="sm" radius="md">
             <Stack gap={2} mb="xs">
               <Text fw={600}>{team.name}</Text>
-              <Text size="sm" c="dimmed">
-                {teamKeepers.length} keeper{teamKeepers.length === 1 ? "" : "s"}{" "}
-                · ${totalCost}
-              </Text>
+              <Group gap={6} wrap="wrap">
+                <Text size="sm" c="dimmed">
+                  {teamKeepers.length} keeper
+                  {teamKeepers.length === 1 ? "" : "s"} · ${totalCost}
+                </Text>
+                <Text size="sm" fw={600} c={keeperValueColor(totalValue)}>
+                  {formatSignedDollar(totalValue)} value
+                </Text>
+              </Group>
             </Stack>
             <Stack gap="xs">
               {teamKeepers.map((pick, index) => {
                 const streak = pick.keeperStreak ?? 1;
+                const value =
+                  (draftValueByFpid.get(pick.fpid)?.dollarValue ?? 0) -
+                  pick.price;
                 return (
                   <Stack key={pick._id} gap={0}>
                     {index > 0 && <Divider mb="xs" />}
@@ -125,12 +144,17 @@ export function KeeperCardList({
                         </ActionIcon>
                       </Group>
                     </Group>
-                    <Text size="sm" c="dimmed" mt={4}>
-                      ${pick.price}
-                      {showStreakInput
-                        ? ` · ${streak} yr${streak === 1 ? "" : "s"} kept`
-                        : ""}
-                    </Text>
+                    <Group gap={6} wrap="wrap" mt={4}>
+                      <Text size="sm" c="dimmed">
+                        ${pick.price}
+                        {showStreakInput
+                          ? ` · ${streak} yr${streak === 1 ? "" : "s"} kept`
+                          : ""}
+                      </Text>
+                      <Text size="sm" c={keeperValueColor(value)}>
+                        {formatSignedDollar(value)} value
+                      </Text>
+                    </Group>
                   </Stack>
                 );
               })}

@@ -300,9 +300,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   }
 
   if (draftTeams.length === 0) {
-    return (
-      <Text c="dimmed">No draft teams yet.</Text>
-    );
+    return <Text c="dimmed">No draft teams yet.</Text>;
   }
 
   return (
@@ -388,6 +386,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                       keepers={keepers}
                       nameByFpid={nameByFpid}
                       teams={draftTeams}
+                      draftValueByFpid={draftValueByFpid}
                       onRemove={handleRemoveKeeper}
                       onEdit={(pick) => setEditingPickId(pick._id)}
                       onSelectPlayer={setSelectedFpid}
@@ -400,6 +399,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                     keepers={keepers}
                     nameByFpid={nameByFpid}
                     teams={draftTeams}
+                    draftValueByFpid={draftValueByFpid}
                     onRemove={handleRemoveKeeper}
                     onEdit={(pick) => setEditingPickId(pick._id)}
                     onSelectPlayer={setSelectedFpid}

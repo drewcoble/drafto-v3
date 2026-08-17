@@ -5,11 +5,15 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { STEPPER_BUTTON_SIZE } from "../../../constants/general";
+import { formatSignedDollar, keeperValueColor } from "../../../lib/keeperValue";
 
 interface KeeperTableProps {
   keepers: Doc<"draftPicks">[];
   nameByFpid: Map<number, { name: string; team: string | null }>;
   teams: { _id: Id<"seasonTeams">; name: string }[];
+  // This year's fair-market price per player, used to compute each
+  // keeper's value (fair price - what's actually being paid to keep them).
+  draftValueByFpid: Map<number, { dollarValue: number }>;
   onRemove: (pickId: Id<"draftPicks">) => void;
   onEdit: (pick: Doc<"draftPicks">) => void;
   onSelectPlayer: (fpid: number) => void;
@@ -32,6 +36,7 @@ export function KeeperTable({
   keepers,
   nameByFpid,
   teams,
+  draftValueByFpid,
   onRemove,
   onEdit,
   onSelectPlayer,
@@ -52,7 +57,7 @@ export function KeeperTable({
 
   if (keepers.length === 0) return null;
 
-  const columnCount = showStreakInput ? 4 : 3;
+  const columnCount = showStreakInput ? 5 : 4;
 
   return (
     <Table.ScrollContainer minWidth={420} visibleFrom="sm">
@@ -61,6 +66,7 @@ export function KeeperTable({
           <Table.Tr>
             <Table.Th>Player</Table.Th>
             <Table.Th>Price</Table.Th>
+            <Table.Th>Value</Table.Th>
             {showStreakInput && <Table.Th>Yrs kept</Table.Th>}
             <Table.Th />
           </Table.Tr>
@@ -74,6 +80,13 @@ export function KeeperTable({
               (sum, pick) => sum + pick.price,
               0,
             );
+            const totalValue = teamKeepers.reduce(
+              (sum, pick) =>
+                sum +
+                ((draftValueByFpid.get(pick.fpid)?.dollarValue ?? 0) -
+                  pick.price),
+              0,
+            );
 
             return (
               <Fragment key={team._id}>
@@ -81,60 +94,79 @@ export function KeeperTable({
                   <Table.Td colSpan={columnCount}>
                     <Group justify="space-between" wrap="nowrap">
                       <Text fw={600}>{team.name}</Text>
-                      <Text size="sm" c="dimmed">
-                        {teamKeepers.length} keeper
-                        {teamKeepers.length === 1 ? "" : "s"} · ${totalCost}
-                      </Text>
+                      <Group gap={6} wrap="nowrap">
+                        <Text size="sm" c="dimmed">
+                          {teamKeepers.length} keeper
+                          {teamKeepers.length === 1 ? "" : "s"} · ${totalCost}
+                        </Text>
+                        <Text
+                          size="sm"
+                          fw={600}
+                          c={keeperValueColor(totalValue)}
+                        >
+                          {formatSignedDollar(totalValue)} value
+                        </Text>
+                      </Group>
                     </Group>
                   </Table.Td>
                 </Table.Tr>
-                {teamKeepers.map((pick) => (
-                  <Table.Tr key={pick._id}>
-                    <Table.Td>
-                      <Group gap={6} wrap="nowrap">
-                        <Badge
-                          variant="light"
-                          color={POSITION_COLORS[pick.position]}
-                        >
-                          {pick.position}
-                        </Badge>
-                        <Anchor
-                          component="button"
-                          type="button"
-                          onClick={() => onSelectPlayer(pick.fpid)}
-                        >
-                          {nameByFpid.get(pick.fpid)?.name ?? `#${pick.fpid}`}
-                        </Anchor>
-                      </Group>
-                    </Table.Td>
-                    <Table.Td>${pick.price}</Table.Td>
-                    {showStreakInput && (
-                      <Table.Td>{pick.keeperStreak ?? 1}</Table.Td>
-                    )}
-                    <Table.Td>
-                      <Group gap={4} wrap="nowrap" justify="flex-end">
-                        <ActionIcon
-                          size={STEPPER_BUTTON_SIZE}
-                          variant="subtle"
-                          color="gray"
-                          aria-label="Edit keeper"
-                          onClick={() => onEdit(pick)}
-                        >
-                          <Pencil size={16} />
-                        </ActionIcon>
-                        <ActionIcon
-                          size={STEPPER_BUTTON_SIZE}
-                          variant="subtle"
-                          color="red"
-                          aria-label="Remove keeper"
-                          onClick={() => onRemove(pick._id)}
-                        >
-                          <Trash2 size={16} />
-                        </ActionIcon>
-                      </Group>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
+                {teamKeepers.map((pick) => {
+                  const value =
+                    (draftValueByFpid.get(pick.fpid)?.dollarValue ?? 0) -
+                    pick.price;
+                  return (
+                    <Table.Tr key={pick._id}>
+                      <Table.Td>
+                        <Group gap={6} wrap="nowrap">
+                          <Badge
+                            variant="light"
+                            color={POSITION_COLORS[pick.position]}
+                          >
+                            {pick.position}
+                          </Badge>
+                          <Anchor
+                            component="button"
+                            type="button"
+                            onClick={() => onSelectPlayer(pick.fpid)}
+                          >
+                            {nameByFpid.get(pick.fpid)?.name ?? `#${pick.fpid}`}
+                          </Anchor>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td>${pick.price}</Table.Td>
+                      <Table.Td>
+                        <Text size="sm" c={keeperValueColor(value)}>
+                          {formatSignedDollar(value)}
+                        </Text>
+                      </Table.Td>
+                      {showStreakInput && (
+                        <Table.Td>{pick.keeperStreak ?? 1}</Table.Td>
+                      )}
+                      <Table.Td>
+                        <Group gap={4} wrap="nowrap" justify="flex-end">
+                          <ActionIcon
+                            size={STEPPER_BUTTON_SIZE}
+                            variant="subtle"
+                            color="gray"
+                            aria-label="Edit keeper"
+                            onClick={() => onEdit(pick)}
+                          >
+                            <Pencil size={16} />
+                          </ActionIcon>
+                          <ActionIcon
+                            size={STEPPER_BUTTON_SIZE}
+                            variant="subtle"
+                            color="red"
+                            aria-label="Remove keeper"
+                            onClick={() => onRemove(pick._id)}
+                          >
+                            <Trash2 size={16} />
+                          </ActionIcon>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
               </Fragment>
             );
           })}
