@@ -25,6 +25,7 @@ import { barStyle, barWidth } from "../../../lib/draftRecommendation";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
 import { playerTagStyle } from "../../../lib/playerTagStyle";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
+import { RookieBadge } from "../../../components/RookieBadge";
 import { PlayerBarDetails } from "./PlayerBarDetails";
 
 // Budget-based fade (see budgetOpacity in draftRecommendation.ts) can drop
@@ -55,6 +56,7 @@ interface PlayerBarProps {
   tag: PlayerTag | undefined;
   valueGap: ValueGap | undefined;
   consistency: ConsistencyLabel | undefined;
+  isRookie: boolean;
   // True for the one player (across the whole board) currently up for bids -
   // called out with a gold glow + gavel icon so it doesn't get lost among
   // dozens of same-sized bars while the room's attention is on the auction.
@@ -84,6 +86,7 @@ export function PlayerBar({
   tag,
   valueGap,
   consistency,
+  isRookie,
   isNominated,
   hasActiveNomination,
   onSetTag,
@@ -109,7 +112,7 @@ export function PlayerBar({
     const measured = measureRef.current?.offsetWidth;
     if (measured === undefined) return;
     setExpandedWidth(Math.max(width, measured));
-  }, [row.name, isNominated, valueGap, consistency, tag, width]);
+  }, [row.name, isNominated, valueGap, consistency, isRookie, tag, width]);
   const fitsBudget =
     budgetAmount === undefined || row.dollarValue <= budgetAmount;
   const style = barStyle(consistency, row.dollarValue, budgetAmount);
@@ -163,6 +166,7 @@ export function PlayerBar({
           </Text>
         </Box>
         <Group gap={3} wrap="nowrap">
+          {isRookie && <RookieBadge />}
           {isNominated && (
             <Tooltip label="Currently up for bids" position="top" withArrow>
               <ThemeIcon color="yellow" variant="light">
@@ -240,6 +244,7 @@ export function PlayerBar({
             fitsBudget={fitsBudget}
             consistency={consistency}
             valueGap={valueGap}
+            isRookie={isRookie}
             tag={tag}
             onSetTag={onSetTag}
             canNominate={!hasActiveNomination}

@@ -14,6 +14,8 @@ import type { Position } from "../../../types";
 import type { SlotDescriptor } from "../../../lib/rosterSlots";
 import { eligibleSlotsForPosition } from "../../../lib/slotAssignment";
 import { positionColorOrDefault } from "../../../lib/positionColors";
+import { RookieBadge } from "../../../components/RookieBadge";
+import { useRookieFpids } from "../../../hooks/useRookieFpids";
 
 interface SlotTableProps {
   slots: SlotDescriptor[];
@@ -43,6 +45,7 @@ export function SlotTable({
   onSelectPlayer,
   trackConsecutiveYears,
 }: SlotTableProps) {
+  const rookieFpids = useRookieFpids();
   return (
     <Table.ScrollContainer minWidth={340}>
       <Table highlightOnHover>
@@ -88,14 +91,17 @@ export function SlotTable({
                       // centered against a consistent 1- or 2-line block
                       // instead of drifting depending on wrap width.
                       <Stack gap={2}>
-                        <Anchor
-                          component="button"
-                          type="button"
-                          size="sm"
-                          onClick={() => onSelectPlayer(pick.fpid)}
-                        >
-                          {player.name}
-                        </Anchor>
+                        <Group gap={6} wrap="nowrap">
+                          <Anchor
+                            component="button"
+                            type="button"
+                            size="sm"
+                            onClick={() => onSelectPlayer(pick.fpid)}
+                          >
+                            {player.name}
+                          </Anchor>
+                          {rookieFpids.has(pick.fpid) && <RookieBadge />}
+                        </Group>
                         {pick.isKeeper && (
                           <Badge
                             variant="light"

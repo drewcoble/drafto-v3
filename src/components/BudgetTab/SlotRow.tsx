@@ -16,6 +16,8 @@ import { categoryForSlot } from "../../lib/budgetCategories";
 import { CATEGORY_COLORS } from "../../constants/budget";
 import { POSITION_COLORS } from "../../lib/positionColors";
 import { useHoldRepeat } from "../../hooks/useHoldRepeat";
+import { useRookieFpids } from "../../hooks/useRookieFpids";
+import { RookieBadge } from "../RookieBadge";
 import type { DraftValueRow, Position } from "../../types";
 
 // How many closest-priced players the popover shows - "3-5" was the ask;
@@ -76,6 +78,7 @@ export function SlotRow({
   eligiblePositions,
   onSelectPlayer,
 }: SlotRowProps) {
+  const rookieFpids = useRookieFpids();
   const color = CATEGORY_COLORS[categoryForSlot(slot)];
   const isFilled = filledPlayer !== undefined;
   // Exact match, not "close enough" - the budgeted amount should equal what
@@ -196,6 +199,7 @@ export function SlotRow({
                   >
                     {filledPlayer.name}
                   </Anchor>
+                  {rookieFpids.has(filledPlayer.fpid) && <RookieBadge />}
                 </Group>
                 <Text size="xs" fw={600} style={{ whiteSpace: "nowrap" }}>
                   ${filledPlayer.price}
@@ -231,6 +235,7 @@ export function SlotRow({
                     >
                       {player.name}
                     </Anchor>
+                    {rookieFpids.has(player.fpid) && <RookieBadge />}
                   </Group>
                   <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
                     {player.points.toFixed(1)} pts

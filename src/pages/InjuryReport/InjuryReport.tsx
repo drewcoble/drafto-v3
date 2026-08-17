@@ -27,7 +27,9 @@ import {
 } from "../../lib/relevantPlayers";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
+import { RookieBadge } from "../../components/RookieBadge";
 import { POSITION_FILTER_BAR_HEIGHT } from "../../constants/general";
+import { useRookieFpids } from "../../hooks/useRookieFpids";
 
 interface InjuryReportProps {
   week: string;
@@ -67,6 +69,7 @@ export function InjuryReport({
   };
 
   const injuries = useQuery(api.injuries.getInjuries, {});
+  const rookieFpids = useRookieFpids();
   const allProjections = useQuery(api.projections.getAllProjections, {
     week,
   });
@@ -213,16 +216,19 @@ export function InjuryReport({
                         style={{ cursor: "pointer" }}
                       >
                         <Table.Td>
-                          <Anchor
-                            component="button"
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setSelectedFpid(injury.fpid);
-                            }}
-                          >
-                            {player.name}
-                          </Anchor>
+                          <Group gap={6} wrap="nowrap">
+                            <Anchor
+                              component="button"
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedFpid(injury.fpid);
+                              }}
+                            >
+                              {player.name}
+                            </Anchor>
+                            {rookieFpids.has(player.fpid) && <RookieBadge />}
+                          </Group>
                         </Table.Td>
                         <Table.Td>
                           <Badge

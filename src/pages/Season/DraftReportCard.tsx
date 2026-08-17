@@ -26,9 +26,11 @@ import {
   type TeamCard,
 } from "../../lib/reportCardSummary";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { RookieBadge } from "../../components/RookieBadge";
 import { UpgradePrompt } from "../../components/UpgradePrompt";
 import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
 import { WEEK } from "../../constants/general";
+import { useRookieFpids } from "../../hooks/useRookieFpids";
 
 interface DraftReportCardProps {
   seasonId: Id<"seasons">;
@@ -66,6 +68,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
     new Set(),
   );
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
+  const rookieFpids = useRookieFpids();
 
   const ensureSummaryGenerated = useMutation(
     api.draft.reportCard.ensureReportSummaryGenerated,
@@ -191,11 +194,13 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
           title="Biggest Steals"
           picks={data.leagueSteals}
           onSelectPlayer={setSelectedFpid}
+          rookieFpids={rookieFpids}
         />
         <PickCallouts
           title="Biggest Reaches"
           picks={data.leagueReaches}
           onSelectPlayer={setSelectedFpid}
+          rookieFpids={rookieFpids}
         />
       </SimpleGrid>
 
@@ -208,6 +213,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
             onSelectPlayer={setSelectedFpid}
             getValue={(pick) => pick.keeperEstimatedValue}
             getSurplus={(pick) => pick.keeperSurplus}
+            rookieFpids={rookieFpids}
           />
           <PickCallouts
             title="Worst Keeper Value"
@@ -215,6 +221,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
             onSelectPlayer={setSelectedFpid}
             getValue={(pick) => pick.keeperEstimatedValue}
             getSurplus={(pick) => pick.keeperSurplus}
+            rookieFpids={rookieFpids}
           />
         </SimpleGrid>
       )}
@@ -244,6 +251,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
             expanded={expandedTeamIds.has(team.teamId)}
             onToggle={() => toggleExpanded(team.teamId)}
             onSelectPlayer={setSelectedFpid}
+            rookieFpids={rookieFpids}
           />
         ))}
       </SimpleGrid>
@@ -344,6 +352,7 @@ function PickCallouts({
   onSelectPlayer,
   getValue = (pick) => pick.dollarValue,
   getSurplus = (pick) => pick.surplus,
+  rookieFpids,
 }: {
   title: string;
   picks: PickRow[];
@@ -353,6 +362,7 @@ function PickCallouts({
   // compare price against an interpolated keeperEstimatedValue.
   getValue?: (pick: PickRow) => number | null;
   getSurplus?: (pick: PickRow) => number | null;
+  rookieFpids: Set<number>;
 }) {
   return (
     <Card withBorder padding="md">
@@ -379,6 +389,7 @@ function PickCallouts({
                 >
                   {pick.name}
                 </Text>
+                {rookieFpids.has(pick.fpid) && <RookieBadge />}
               </Group>
               <Group gap={6} wrap="nowrap">
                 <Text size="sm" c="dimmed">
@@ -436,11 +447,13 @@ function TeamReportCard({
   expanded,
   onToggle,
   onSelectPlayer,
+  rookieFpids,
 }: {
   team: TeamCard;
   expanded: boolean;
   onToggle: () => void;
   onSelectPlayer: (fpid: number) => void;
+  rookieFpids: Set<number>;
 }) {
   return (
     <Card
@@ -560,6 +573,7 @@ function TeamReportCard({
                             {pick.name}
                             {pick.isKeeper ? " (K)" : ""}
                           </Text>
+                          {rookieFpids.has(pick.fpid) && <RookieBadge />}
                           {pick.consistencyLabel && (
                             <Badge
                               color={consistencyColor(pick.consistencyLabel)}

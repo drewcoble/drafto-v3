@@ -14,10 +14,12 @@ import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { STEPPER_BUTTON_SIZE } from "../../../constants/general";
 import { formatSignedDollar, keeperValueColor } from "../../../lib/keeperValue";
+import { RookieBadge } from "../../../components/RookieBadge";
 
 interface KeeperCardListProps {
   keepers: Doc<"draftPicks">[];
   nameByFpid: Map<number, { name: string; team: string | null }>;
+  rookieFpids: Set<number>;
   teams: { _id: Id<"seasonTeams">; name: string }[];
   // This year's fair-market price per player, used to compute each
   // keeper's value (fair price - what's actually being paid to keep them).
@@ -43,6 +45,7 @@ interface KeeperCardListProps {
 export function KeeperCardList({
   keepers,
   nameByFpid,
+  rookieFpids,
   teams,
   draftValueByFpid,
   onRemove,
@@ -121,6 +124,7 @@ export function KeeperCardList({
                         >
                           {nameByFpid.get(pick.fpid)?.name ?? `#${pick.fpid}`}
                         </Anchor>
+                        {rookieFpids.has(pick.fpid) && <RookieBadge />}
                       </Group>
                       <Group gap={4} wrap="nowrap">
                         <ActionIcon

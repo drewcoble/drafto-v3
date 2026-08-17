@@ -11,6 +11,8 @@ import {
 } from "@mantine/core";
 import type { Position } from "../../../types";
 import { POSITION_COLORS } from "../../../lib/positionColors";
+import { RookieBadge } from "../../../components/RookieBadge";
+import { useRookieFpids } from "../../../hooks/useRookieFpids";
 import {
   computeKeeperCost,
   formulaForFpid,
@@ -69,6 +71,7 @@ export function RecommendedKeepers({
   onSelectPlayer,
   onOpenManualEntry,
 }: RecommendedKeepersProps) {
+  const rookieFpids = useRookieFpids();
   const recommendations = useMemo(() => {
     if (!priceHistory || !keeperRules || !allProjections) return [];
     const projectionByFpid = new Map(
@@ -214,6 +217,7 @@ export function RecommendedKeepers({
                             >
                               {player.name}
                             </Anchor>
+                            {rookieFpids.has(player.fpid) && <RookieBadge />}
                             {player.team && (
                               <Text size="xs" c="dimmed">
                                 {player.team}

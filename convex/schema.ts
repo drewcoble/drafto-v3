@@ -143,6 +143,10 @@ export default defineSchema({
     name: v.string(),
     position: positionValidator,
     team: v.union(v.string(), v.null()),
+    // From Sleeper's player.years_exp (0 = rookie season). Absent for DST
+    // (synthetic team-defense fpids have no underlying Sleeper player
+    // object) and for any player fetched before this field existed.
+    yearsExp: v.optional(v.number()),
     updatedAt: v.number(),
   }).index("by_fpid", ["fpid"]),
 

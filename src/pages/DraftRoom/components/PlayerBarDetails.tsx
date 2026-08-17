@@ -25,6 +25,7 @@ import {
   consistencyColor,
   type ConsistencyLabel,
 } from "../../../lib/consistency";
+import { RookieBadge } from "../../../components/RookieBadge";
 
 // Matches the icon choices already used for the bar's own corner badges
 // (see PlayerBar.tsx) - kept in sync there rather than imported, since that
@@ -53,6 +54,7 @@ interface PlayerBarDetailsProps {
   fitsBudget: boolean;
   consistency: ConsistencyLabel | undefined;
   valueGap: ValueGap | undefined;
+  isRookie: boolean;
   tag: PlayerTag | undefined;
   onSelectPlayer: () => void;
   onSetTag: (tag: PlayerTag) => void;
@@ -72,6 +74,7 @@ export function PlayerBarDetails({
   fitsBudget,
   consistency,
   valueGap,
+  isRookie,
   tag,
   onSelectPlayer,
   onSetTag,
@@ -98,6 +101,7 @@ export function PlayerBarDetails({
         >
           {row.name}
         </Anchor>
+        {isRookie && <RookieBadge />}
         {row.team && (
           <Text size="xs" c="dimmed">
             {row.team}

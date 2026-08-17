@@ -20,6 +20,7 @@ import { KeeperRulesPanel } from "./components/KeeperRulesPanel";
 import { RecommendedKeepers } from "./components/RecommendedKeepers";
 import { ManualPreviousSeasonModal } from "./components/ManualPreviousSeasonModal";
 import { getErrorMessage } from "../../lib/errors";
+import { useRookieFpids } from "../../hooks/useRookieFpids";
 
 interface KeepersTabProps {
   seasonId: Id<"seasons">;
@@ -35,6 +36,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
     week: WEEK,
   });
   const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
+  const rookieFpids = useRookieFpids();
   const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
@@ -354,6 +356,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 onKeeperPriceChange={setKeeperPrice}
                 keeperError={keeperError}
                 keeperSearchResults={keeperSearchResults}
+                rookieFpids={rookieFpids}
                 draftValueByFpid={draftValueByFpid}
                 priceHistory={priceHistory}
                 keeperRules={settings.keeperRules}
@@ -377,6 +380,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 <KeeperCardList
                   keepers={keepers}
                   nameByFpid={nameByFpid}
+                  rookieFpids={rookieFpids}
                   teams={draftTeams}
                   draftValueByFpid={draftValueByFpid}
                   onRemove={handleRemoveKeeper}

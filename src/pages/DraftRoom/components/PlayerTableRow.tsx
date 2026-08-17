@@ -32,6 +32,7 @@ import {
 } from "../../../lib/consistency";
 import { playerTagStyle } from "../../../lib/playerTagStyle";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
+import { RookieBadge } from "../../../components/RookieBadge";
 
 // Matches the icon choices PlayerBar.tsx/PlayerBarDetails.tsx use for the
 // same consistency ratings - kept in sync there rather than imported, same
@@ -47,6 +48,7 @@ interface PlayerTableRowProps {
   tag: PlayerTag | undefined;
   valueGap: ValueGap | undefined;
   consistency: ConsistencyLabel | undefined;
+  isRookie: boolean;
   isNominated: boolean;
   hasActiveNomination: boolean;
   // True when this player's $ value fits under the budget for at least one
@@ -78,6 +80,7 @@ export function PlayerTableRow({
   tag,
   valueGap,
   consistency,
+  isRookie,
   isNominated,
   hasActiveNomination,
   budgetMatch,
@@ -179,6 +182,7 @@ export function PlayerTableRow({
             >
               {row.name}
             </Anchor>
+            {isRookie && <RookieBadge />}
             {row.team && (
               <Text size="xs" c="dimmed">
                 {row.team}

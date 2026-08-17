@@ -23,6 +23,7 @@ import {
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { useTeamBudget } from "../../hooks/useTeamBudget";
 import { usePlanSlots } from "../../hooks/usePlanSlots";
+import { useRookieFpids } from "../../hooks/useRookieFpids";
 import {
   isNearAnyOpenSlot,
   matchPlanSlot,
@@ -193,6 +194,8 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
     for (const row of playerTags ?? []) map.set(row.fpid, row.tag);
     return map;
   }, [playerTags]);
+
+  const rookieFpids = useRookieFpids();
 
   const adpByFpid = useMemo(() => {
     const map = new Map<
@@ -533,6 +536,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                                   tag={tagByFpid.get(row.fpid)}
                                   valueGap={valueGapByFpid.get(row.fpid)}
                                   consistency={consistencyByFpid.get(row.fpid)}
+                                  isRookie={rookieFpids.has(row.fpid)}
                                   isNominated={
                                     activeNomination?.fpid === row.fpid
                                   }
@@ -574,6 +578,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                               tag={tagByFpid.get(row.fpid)}
                               valueGap={valueGapByFpid.get(row.fpid)}
                               consistency={consistencyByFpid.get(row.fpid)}
+                              isRookie={rookieFpids.has(row.fpid)}
                               isNominated={activeNomination?.fpid === row.fpid}
                               hasActiveNomination={!!activeNomination}
                               budgetMatch={

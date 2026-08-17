@@ -16,7 +16,9 @@ import { POSITIONS, type Position } from "../../types";
 import { POSITION_COLORS } from "../../lib/positionColors";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { RookieBadge } from "../../components/RookieBadge";
 import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
+import { useRookieFpids } from "../../hooks/useRookieFpids";
 import {
   MOBILE_HEADER_HEIGHT,
   POSITION_FILTER_BAR_HEIGHT,
@@ -41,6 +43,7 @@ export function FreeAgentsTab({
     ...POSITIONS,
   ]);
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
+  const rookieFpids = useRookieFpids();
 
   const result = useQuery(api.season.faabValues.getFaabSuggestions, {
     seasonId,
@@ -108,6 +111,7 @@ export function FreeAgentsTab({
                 <Table.Td>
                   <Group gap={6} wrap="nowrap">
                     <Text fw={500}>{row.name}</Text>
+                    {rookieFpids.has(row.fpid) && <RookieBadge />}
                     {row.team && (
                       <Text c="dimmed" size="sm">
                         {row.team}

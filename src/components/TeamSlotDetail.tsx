@@ -13,6 +13,8 @@ import type { Position } from "../types";
 import type { SlotDescriptor } from "../lib/rosterSlots";
 import { eligibleSlotsForPosition } from "../lib/slotAssignment";
 import { positionColorOrDefault } from "../lib/positionColors";
+import { RookieBadge } from "./RookieBadge";
+import { useRookieFpids } from "../hooks/useRookieFpids";
 
 interface TeamSlotDetailProps {
   slots: SlotDescriptor[];
@@ -48,6 +50,7 @@ export function TeamSlotDetail({
   trackConsecutiveYears,
 }: TeamSlotDetailProps) {
   const canMove = onMove && flexPositions && superflexPositions;
+  const rookieFpids = useRookieFpids();
   return (
     <Stack gap={10} mt="xs">
       {slots.map((slot) => {
@@ -95,6 +98,7 @@ export function TeamSlotDetail({
               ) : (
                 (player?.name ?? "—")
               )}
+              {pick && rookieFpids.has(pick.fpid) && <RookieBadge />}
               {pick ? ` · $${pick.price}` : ""}
               {pick?.isKeeper
                 ? trackConsecutiveYears

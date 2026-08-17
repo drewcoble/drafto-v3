@@ -23,6 +23,7 @@ import { formatStatKey, injuryColor } from "../lib/playerFormatting";
 import { adpForScoring, pointsForScoringConfig } from "../lib/relevantPlayers";
 import { ValueGapIcon } from "../pages/Settings/components/ValueGapIcon";
 import { GenericValueBadge } from "./GenericValueBadge";
+import { RookieBadge } from "./RookieBadge";
 import { PlayerSeasonGameLog } from "./PlayerSeasonGameLog";
 import {
   computeConsistencyThresholds,
@@ -181,6 +182,7 @@ export function PlayerDetailModal({
               {detail.player.position}
             </Badge>
             <Text c="dimmed">{detail.player.team ?? "Free agent"}</Text>
+            {detail.player.yearsExp === 0 && <RookieBadge />}
             {detail.injury && (
               <Badge color={injuryColor(detail.injury.status)} variant="light">
                 {detail.injury.statusShort}

@@ -16,8 +16,10 @@ import { useMemo } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ColorSchemeToggle } from "../../components/ColorSchemeToggle";
+import { RookieBadge } from "../../components/RookieBadge";
 import { WEEK } from "../../constants/general";
 import { useFitScale } from "../../hooks/useFitScale";
+import { useRookieFpids } from "../../hooks/useRookieFpids";
 import logo from "../../infinidraft_v1_noBg.png";
 import {
   POSITION_COLORS,
@@ -84,6 +86,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
+  const rookieFpids = useRookieFpids();
 
   const playerByFpid = useMemo(() => {
     const map = new Map<number, { name: string; team: string | null }>();
@@ -319,6 +322,9 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                             >
                               {player?.name ?? "-"}
                             </Text>
+                            {pick && rookieFpids.has(pick.fpid) && (
+                              <RookieBadge />
+                            )}
                             {pick?.isKeeper && (
                               <Badge
                                 size="sm"

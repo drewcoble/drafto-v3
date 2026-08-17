@@ -21,6 +21,7 @@ import type { ConsistencyLabel } from "../../../lib/consistency";
 import { playerTagStyle } from "../../../lib/playerTagStyle";
 import { ConsistencyIcon } from "./ConsistencyIcon";
 import { ValueGapIcon } from "./ValueGapIcon";
+import { RookieBadge } from "../../../components/RookieBadge";
 
 // One player's keeper status for the pre-draft rankings' Keeper column - the
 // actual price/streak entered on the Keepers tab (see KeepersTab.tsx's
@@ -38,6 +39,7 @@ interface PlayerRowProps {
   index: number;
   scoringConfig: ScoringConfig;
   injury: { status: string; statusShort: string } | undefined;
+  isRookie: boolean;
   latestNews: { title: string; publishedAt: number } | undefined;
   draftValue: { dollarValue: number; usedFallback: boolean } | undefined;
   valueGap: ValueGap | undefined;
@@ -59,6 +61,7 @@ export function PlayerRow({
   index,
   scoringConfig,
   injury,
+  isRookie,
   latestNews,
   draftValue,
   valueGap,
@@ -110,6 +113,7 @@ export function PlayerRow({
             >
               {row.name}
             </Anchor>
+            {isRookie && <RookieBadge />}
             {injury && (
               <Badge
                 color={injuryColor(injury.status)}

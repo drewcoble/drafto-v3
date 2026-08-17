@@ -16,6 +16,7 @@ import {
 } from "@mantine/core";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { EditableNumberStepper } from "../../../components/NumberStepper";
+import { RookieBadge } from "../../../components/RookieBadge";
 import type { Position } from "../../../types";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import {
@@ -42,6 +43,7 @@ interface KeeperSearchFormProps {
   onKeeperPriceChange: (price: number) => void;
   keeperError: string | null;
   keeperSearchResults: KeeperSearchResult[];
+  rookieFpids: Set<number>;
   draftValueByFpid: Map<number, { dollarValue: number }>;
   priceHistory: Record<number, KeeperPriceHistoryEntry> | undefined;
   keeperRules: KeeperRules | undefined;
@@ -64,6 +66,7 @@ export function KeeperSearchForm({
   onKeeperPriceChange,
   keeperError,
   keeperSearchResults,
+  rookieFpids,
   draftValueByFpid,
   priceHistory,
   keeperRules,
@@ -178,6 +181,7 @@ export function KeeperSearchForm({
                   <Group justify="space-between" wrap="nowrap" gap="sm">
                     <Group gap={6} wrap="nowrap">
                       <Text size="sm">{row.name}</Text>
+                      {rookieFpids.has(row.fpid) && <RookieBadge />}
                       <Badge
                         size="sm"
                         variant="light"
@@ -229,6 +233,7 @@ export function KeeperSearchForm({
               >
                 {selectedCandidate.name}
               </Anchor>
+              {rookieFpids.has(selectedCandidate.fpid) && <RookieBadge />}
               <Badge
                 variant="light"
                 color={POSITION_COLORS[selectedCandidate.position]}

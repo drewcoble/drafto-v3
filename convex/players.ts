@@ -34,6 +34,7 @@ export const upsertPlayers = mutation({
         name: v.string(),
         position: positionValidator,
         team: v.union(v.string(), v.null()),
+        yearsExp: v.optional(v.number()),
       }),
     ),
   },
@@ -53,6 +54,7 @@ export const upsertPlayers = mutation({
           name: row.name,
           position: row.position,
           team: row.team,
+          ...(row.yearsExp !== undefined ? { yearsExp: row.yearsExp } : {}),
           updatedAt: now,
         });
         updated += 1;
@@ -62,6 +64,7 @@ export const upsertPlayers = mutation({
           name: row.name,
           position: row.position,
           team: row.team,
+          ...(row.yearsExp !== undefined ? { yearsExp: row.yearsExp } : {}),
           updatedAt: now,
         });
         inserted += 1;
@@ -69,5 +72,19 @@ export const upsertPlayers = mutation({
     }
 
     return { inserted, updated };
+  },
+});
+
+// Rookie fpids (years_exp === 0), for badge lookups anywhere a player row
+// only carries an fpid (projections/draftValues/faabValues rows all
+// snapshot identity independently and don't otherwise carry yearsExp) - see
+// src/hooks/useRookieFpids.ts, the sole client of this query.
+export const getRookieFpids = query({
+  args: {},
+  handler: async (ctx) => {
+    const players = await ctx.db.query("players").collect();
+    return players
+      .filter((player) => player.yearsExp === 0)
+      .map((player) => player.fpid);
   },
 });

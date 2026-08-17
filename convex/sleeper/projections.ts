@@ -20,6 +20,7 @@ interface SleeperPlayer {
   injury_status?: string;
   injury_body_part?: string;
   injury_notes?: string;
+  years_exp?: number;
 }
 
 interface SleeperProjectionRecord {
@@ -175,6 +176,7 @@ async function fetchProjectionsHandler(
       const name =
         `${record.player?.first_name ?? ""} ${record.player?.last_name ?? ""}`.trim();
       const team = record.team ?? null;
+      const yearsExp = record.player?.years_exp;
       const stats = { ...(record.stats ?? {}) };
 
       const pointsStd = stats.pts_std ?? 0;
@@ -205,7 +207,13 @@ async function fetchProjectionsHandler(
         }
       }
 
-      playerRows.push({ fpid, name, position, team });
+      playerRows.push({
+        fpid,
+        name,
+        position,
+        team,
+        ...(yearsExp !== undefined ? { yearsExp } : {}),
+      });
       projectionRows.push({
         fpid,
         name,

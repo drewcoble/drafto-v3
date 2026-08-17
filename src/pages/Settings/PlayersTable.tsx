@@ -41,6 +41,7 @@ import {
   type ConsistencyLabel,
 } from "../../lib/consistency";
 import { PlayerRow, type KeeperInfo } from "./components/PlayerRow";
+import { useRookieFpids } from "../../hooks/useRookieFpids";
 
 interface PlayersTableProps {
   week: string;
@@ -75,6 +76,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   });
   const allRankings = useQuery(api.rankings.getAllRankings, { week });
   const injuries = useQuery(api.injuries.getInjuries, {});
+  const rookieFpids = useRookieFpids();
   const draftSettingsList = useQuery(api.leagues.listSeasons, {});
   const selectedSettings = draftSettingsList?.find(
     (league) => league._id === selectedLeagueId,
@@ -396,6 +398,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                     index={index}
                     scoringConfig={scoringConfig}
                     injury={injuriesByFpid.get(row.fpid)}
+                    isRookie={rookieFpids.has(row.fpid)}
                     latestNews={latestNewsByFpid.get(row.fpid)}
                     draftValue={draftValueByFpid.get(row.fpid)}
                     valueGap={valueGapByFpid.get(row.fpid)}
