@@ -10,12 +10,34 @@ import {
   NumberInput,
   Stack,
   Text,
+  ThemeIcon,
+  Tooltip,
 } from "@mantine/core";
-import { ChevronDown, ChevronUp, UserPlus, X } from "lucide-react";
+import {
+  BanknoteArrowDown,
+  BatteryLow,
+  ChevronDown,
+  ChevronUp,
+  CircleSlash,
+  Crosshair,
+  HandCoins,
+  Rocket,
+  ShieldCheck,
+  TrendingDown,
+  TrendingUpDown,
+  UserPlus,
+  X,
+} from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
+import {
+  consistencyColor,
+  type ConsistencyLabel,
+} from "../../../lib/consistency";
+import { playerTagStyle } from "../../../lib/playerTagStyle";
+import type { PlayerTag, ValueGap } from "../../../types";
 import {
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
@@ -35,6 +57,13 @@ interface MobileNominationProps {
   nominatedPlayer: { name: string; team: string | null } | undefined;
   nominatedValue: { dollarValue: number } | undefined;
   planMatch: PlanSlotMatch | undefined;
+  // Same target/avoid tag, value-gap, and consistency badges SearchBody's
+  // touchFriendly rows show, but for whichever player is actively
+  // nominated - see DraftTopBar.tsx for where these are looked up.
+  activeTag: PlayerTag | undefined;
+  activeValueGap: ValueGap | undefined;
+  activeConsistency: ConsistencyLabel | undefined;
+  onCycleTag: (fpid: number) => void;
   onBumpBid: (delta: number) => void;
   onSetBid: (amount: number) => void;
   onAssignWinner: (teamId: Id<"seasonTeams">) => void;
@@ -51,6 +80,15 @@ interface MobileNominationProps {
 
   onSelectPlayer: (fpid: number) => void;
 }
+
+// Same icon choices NominationPanel.tsx's SearchBody uses for the same
+// consistency ratings - kept in sync there rather than imported, same
+// duplication convention PlayerBar.tsx/PlayerTableRow.tsx already share.
+const CONSISTENCY_ICON: Record<ConsistencyLabel, typeof ShieldCheck> = {
+  Reliable: ShieldCheck,
+  "Boom/Bust": TrendingUpDown,
+  "Low Output": BatteryLow,
+};
 
 type SheetMode = "closed" | "search" | "assign";
 
@@ -147,6 +185,10 @@ export function MobileNomination({
   nominatedPlayer,
   nominatedValue,
   planMatch,
+  activeTag,
+  activeValueGap,
+  activeConsistency,
+  onCycleTag,
   onBumpBid,
   onSetBid,
   onAssignWinner,
@@ -458,6 +500,10 @@ export function MobileNomination({
                 nominatedPlayer={nominatedPlayer}
                 nominatedValue={nominatedValue}
                 planMatch={planMatch}
+                tag={activeTag}
+                valueGap={activeValueGap}
+                consistency={activeConsistency}
+                onCycleTag={() => onCycleTag(activeNomination.fpid)}
                 nominatingTeam={nominatingTeam}
                 teams={teams}
                 selfTeamId={selfTeamId}
@@ -503,6 +549,10 @@ interface AssignDrawerBodyProps {
   nominatedPlayer: { name: string; team: string | null } | undefined;
   nominatedValue: { dollarValue: number } | undefined;
   planMatch: PlanSlotMatch | undefined;
+  tag: PlayerTag | undefined;
+  valueGap: ValueGap | undefined;
+  consistency: ConsistencyLabel | undefined;
+  onCycleTag: () => void;
   nominatingTeam: Doc<"seasonTeams"> | undefined;
   teams: Doc<"seasonTeams">[];
   selfTeamId: Id<"seasonTeams">;
@@ -520,6 +570,10 @@ function AssignDrawerBody({
   nominatedPlayer,
   nominatedValue,
   planMatch,
+  tag,
+  valueGap,
+  consistency,
+  onCycleTag,
   nominatingTeam,
   teams,
   selfTeamId,
@@ -568,23 +622,30 @@ function AssignDrawerBody({
   const decrementBidHold = useHoldRepeat(() => onBumpBid(-1));
   const incrementBidHold = useHoldRepeat(() => onBumpBid(1));
 
-  // Same two market-value figures, in the same dotted-sentence form, as
-  // desktop's ActiveNominationBody (NominationPanel.tsx) - moved up into the
-  // header here rather than inline next to the name/badges row.
-  const valueParts = [
-    nominatedValue ? `Est. ~$${Math.round(nominatedValue.dollarValue)}` : null,
-    planMatch
-      ? `${planMatch.slotLabel} budget ~$${Math.round(planMatch.amount)}`
-      : null,
-  ].filter((part): part is string => part !== null);
+  const ConsistencyRowIcon = consistency
+    ? CONSISTENCY_ICON[consistency]
+    : undefined;
 
   return (
     <Stack gap={10}>
       <Group justify="space-between" align="center" wrap="nowrap">
-        <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-          {valueParts.length > 0 && (
-            <Text size="sm" fw={600} truncate>
-              {valueParts.join("  ·  ")}
+        <Group gap={10} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+          {nominatedValue && (
+            <Text size="sm" fw={700} c="teal" style={{ whiteSpace: "nowrap" }}>
+              Est. ${Math.round(nominatedValue.dollarValue)}
+            </Text>
+          )}
+          {planMatch && (
+            <Text size="xs" c="dimmed" truncate>
+              {planMatch.slotLabel} budget:{" "}
+              <Text
+                component="span"
+                inherit
+                fw={700}
+                c="var(--mantine-color-text)"
+              >
+                ${Math.round(planMatch.amount)}
+              </Text>
             </Text>
           )}
           {usingGenericValues && <GenericValueBadge />}
@@ -633,6 +694,61 @@ function AssignDrawerBody({
           <Badge size="sm" variant="outline" color="gray">
             {nominatedPlayer.team}
           </Badge>
+        )}
+      </Group>
+
+      <Group gap={10} wrap="wrap" align="center">
+        <Button
+          size="compact-xs"
+          {...(tag ? playerTagStyle(tag) : { variant: "default" })}
+          leftSection={
+            tag === "avoid" ? (
+              <CircleSlash size={12} />
+            ) : (
+              <Crosshair size={12} />
+            )
+          }
+          onClick={onCycleTag}
+        >
+          {tag === "target" ? "Target" : tag === "avoid" ? "Avoid" : "+ Tag"}
+        </Button>
+        {valueGap?.direction === "undervalued" ? (
+          <Tooltip label="Undervalued" withArrow>
+            <ThemeIcon size="sm" color="gold" variant="light">
+              <HandCoins size={14} />
+            </ThemeIcon>
+          </Tooltip>
+        ) : valueGap?.direction === "breakout" ? (
+          <Tooltip label="Breakout Player" withArrow>
+            <ThemeIcon size="sm" color="grape" variant="light">
+              <Rocket size={14} />
+            </ThemeIcon>
+          </Tooltip>
+        ) : valueGap?.direction === "falloff" ? (
+          <Tooltip label="Falloff Player" withArrow>
+            <ThemeIcon size="sm" color="red" variant="light">
+              <TrendingDown size={14} />
+            </ThemeIcon>
+          </Tooltip>
+        ) : (
+          valueGap?.direction === "overvalued" && (
+            <Tooltip label="Overvalued" withArrow>
+              <ThemeIcon size="sm" color="red" variant="light">
+                <BanknoteArrowDown size={14} />
+              </ThemeIcon>
+            </Tooltip>
+          )
+        )}
+        {consistency && ConsistencyRowIcon && (
+          <Tooltip label={consistency} withArrow>
+            <ThemeIcon
+              size="sm"
+              variant="light"
+              color={consistencyColor(consistency)}
+            >
+              <ConsistencyRowIcon size={14} />
+            </ThemeIcon>
+          </Tooltip>
         )}
       </Group>
 

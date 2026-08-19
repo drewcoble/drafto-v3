@@ -14,11 +14,29 @@ import {
   Table,
   Text,
   TextInput,
+  ThemeIcon,
+  Tooltip,
 } from "@mantine/core";
+import {
+  BanknoteArrowDown,
+  BatteryLow,
+  CircleSlash,
+  Crosshair,
+  HandCoins,
+  Rocket,
+  ShieldCheck,
+  TrendingDown,
+  TrendingUpDown,
+} from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
-import type { Position } from "../../../types";
+import type { Position, PlayerTag, ValueGap } from "../../../types";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
+import {
+  consistencyColor,
+  type ConsistencyLabel,
+} from "../../../lib/consistency";
 import { POSITION_COLORS } from "../../../lib/positionColors";
+import { playerTagStyle } from "../../../lib/playerTagStyle";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
 import { useHoldRepeat } from "../../../hooks/useHoldRepeat";
 
@@ -27,7 +45,24 @@ export interface SearchResult {
   name: string;
   position: Position;
   team: string | null;
+  // DraftTopBar.tsx populates these on every row regardless of which panel
+  // renders them, but SearchBody only ever displays them on touchFriendly
+  // (MobileNomination's) rows - desktop's NominationPanel card has no room
+  // for them.
+  tag?: PlayerTag;
+  valueGap?: ValueGap;
+  consistency?: ConsistencyLabel;
+  onCycleTag?: () => void;
 }
+
+// Same icon choices PlayerBar.tsx/PlayerTableRow.tsx use for the same
+// consistency ratings - kept in sync there rather than imported, same
+// duplication convention those two already share.
+const CONSISTENCY_ICON: Record<ConsistencyLabel, typeof ShieldCheck> = {
+  Reliable: ShieldCheck,
+  "Boom/Bust": TrendingUpDown,
+  "Low Output": BatteryLow,
+};
 
 interface NominationPanelProps {
   nextPickNumber: number;
@@ -422,55 +457,144 @@ export function SearchBody({
           <Table.ScrollContainer minWidth={320}>
             <Table verticalSpacing={touchFriendly ? 10 : 4}>
               <Table.Tbody>
-                {searchResults.map((row) => (
-                  <Table.Tr key={row.fpid}>
-                    <Table.Td>
-                      <Anchor
-                        component="button"
-                        type="button"
-                        size={touchFriendly ? "sm" : "xs"}
-                        onClick={() => {
-                          blurInput();
-                          onSelectPlayer(row.fpid);
-                        }}
-                      >
-                        {row.name}
-                      </Anchor>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge
-                        size={touchFriendly ? "sm" : "xs"}
-                        variant="light"
-                        color={POSITION_COLORS[row.position]}
-                      >
-                        {row.position}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size={touchFriendly ? "sm" : "xs"} c="dimmed">
-                        {row.team ?? "—"}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size={touchFriendly ? "sm" : "xs"}>
-                        {draftValueByFpid.get(row.fpid)
-                          ? `$${Math.round(draftValueByFpid.get(row.fpid)!.dollarValue)}`
-                          : "—"}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Button
-                        size={touchFriendly ? "sm" : "compact-xs"}
-                        onClick={() => {
-                          blurInput();
-                          onNominate(row.fpid);
-                        }}
-                      >
-                        Nominate
-                      </Button>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
+                {searchResults.map((row) => {
+                  const ConsistencyRowIcon = row.consistency
+                    ? CONSISTENCY_ICON[row.consistency]
+                    : undefined;
+                  return (
+                    <Table.Tr key={row.fpid}>
+                      <Table.Td>
+                        <Group gap={4} wrap="nowrap">
+                          <Anchor
+                            component="button"
+                            type="button"
+                            size={touchFriendly ? "sm" : "xs"}
+                            onClick={() => {
+                              blurInput();
+                              onSelectPlayer(row.fpid);
+                            }}
+                          >
+                            {row.name}
+                          </Anchor>
+                          {touchFriendly && (
+                            <>
+                              {row.valueGap?.direction === "undervalued" ? (
+                                <Tooltip label="Undervalued" withArrow>
+                                  <ThemeIcon
+                                    size="xs"
+                                    color="gold"
+                                    variant="light"
+                                  >
+                                    <HandCoins size={12} />
+                                  </ThemeIcon>
+                                </Tooltip>
+                              ) : row.valueGap?.direction === "breakout" ? (
+                                <Tooltip label="Breakout Player" withArrow>
+                                  <ThemeIcon
+                                    size="xs"
+                                    color="grape"
+                                    variant="light"
+                                  >
+                                    <Rocket size={12} />
+                                  </ThemeIcon>
+                                </Tooltip>
+                              ) : row.valueGap?.direction === "falloff" ? (
+                                <Tooltip label="Falloff Player" withArrow>
+                                  <ThemeIcon
+                                    size="xs"
+                                    color="red"
+                                    variant="light"
+                                  >
+                                    <TrendingDown size={12} />
+                                  </ThemeIcon>
+                                </Tooltip>
+                              ) : (
+                                row.valueGap?.direction === "overvalued" && (
+                                  <Tooltip label="Overvalued" withArrow>
+                                    <ThemeIcon
+                                      size="xs"
+                                      color="red"
+                                      variant="light"
+                                    >
+                                      <BanknoteArrowDown size={12} />
+                                    </ThemeIcon>
+                                  </Tooltip>
+                                )
+                              )}
+                              {row.consistency && ConsistencyRowIcon && (
+                                <Tooltip label={row.consistency} withArrow>
+                                  <ThemeIcon
+                                    size="xs"
+                                    variant="light"
+                                    color={consistencyColor(row.consistency)}
+                                  >
+                                    <ConsistencyRowIcon size={12} />
+                                  </ThemeIcon>
+                                </Tooltip>
+                              )}
+                            </>
+                          )}
+                        </Group>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge
+                          size={touchFriendly ? "sm" : "xs"}
+                          variant="light"
+                          color={POSITION_COLORS[row.position]}
+                        >
+                          {row.position}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size={touchFriendly ? "sm" : "xs"} c="dimmed">
+                          {row.team ?? "—"}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size={touchFriendly ? "sm" : "xs"}>
+                          {draftValueByFpid.get(row.fpid)
+                            ? `$${Math.round(draftValueByFpid.get(row.fpid)!.dollarValue)}`
+                            : "—"}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Stack gap={4} align="flex-end">
+                          <Button
+                            size={touchFriendly ? "sm" : "compact-xs"}
+                            onClick={() => {
+                              blurInput();
+                              onNominate(row.fpid);
+                            }}
+                          >
+                            Nominate
+                          </Button>
+                          {touchFriendly && row.onCycleTag && (
+                            <Button
+                              size="compact-xs"
+                              {...(row.tag
+                                ? playerTagStyle(row.tag)
+                                : { variant: "default" })}
+                              leftSection={
+                                row.tag === "avoid" ? (
+                                  <CircleSlash size={12} />
+                                ) : (
+                                  <Crosshair size={12} />
+                                )
+                              }
+                              onClick={row.onCycleTag}
+                            >
+                              {row.tag === "target"
+                                ? "Target"
+                                : row.tag === "avoid"
+                                  ? "Avoid"
+                                  : "+ Tag"}
+                            </Button>
+                          )}
+                        </Stack>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
               </Table.Tbody>
             </Table>
           </Table.ScrollContainer>

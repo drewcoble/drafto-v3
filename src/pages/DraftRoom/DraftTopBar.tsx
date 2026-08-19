@@ -7,6 +7,11 @@ import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { WEEK } from "../../constants/general";
 import { usePlanSlots } from "../../hooks/usePlanSlots";
 import { useTeamBudget } from "../../hooks/useTeamBudget";
+import {
+  computeConsistencyThresholds,
+  getConsistencyLabel,
+  type ConsistencyLabel,
+} from "../../lib/consistency";
 import { matchPlanSlot } from "../../lib/planRecommendation";
 import {
   filterRelevantPlayers,
@@ -15,7 +20,12 @@ import {
 } from "../../lib/relevantPlayers";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { assignSlotForPick } from "../../lib/slotAssignment";
-import { POSITIONS } from "../../types";
+import {
+  POSITIONS,
+  type PlayerTag,
+  type Position,
+  type ValueGap,
+} from "../../types";
 import { MobileNomination } from "./components/MobileNomination";
 import { MobileStatsRow } from "./components/MobileStatsRow";
 import { NominationPanel } from "./components/NominationPanel";
@@ -72,6 +82,32 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
   const draftValues = draftValuesResult?.values;
   const usingGenericValues = draftValuesResult?.isGeneric ?? false;
 
+  // Target/avoid tag, value-gap (breakout/undervalued/overvalued/falloff),
+  // and consistency (Reliable/Boom-Bust/Low Output) badges - same bulk-
+  // query-then-map pattern PlayersLeftTab.tsx uses, surfaced here only for
+  // MobileNomination's search results/active-nomination rows (desktop's
+  // NominationPanel card has no room for them and never reads these maps).
+  const playerTags = useQuery(api.draft.tags.listPlayerTags, { seasonId });
+  const valueGaps = useQuery(
+    api.valueGaps.getAllValueGaps,
+    settings
+      ? {
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+          lastSeason: String(Number(thisSeason) - 1),
+        }
+      : "skip",
+  );
+  const seasonStats = useQuery(
+    api.playerPoints.getAllSeasonStats,
+    settings
+      ? {
+          season: String(Number(thisSeason) - 1),
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
+      : "skip",
+  );
+
   const nominate = useMutation(api.draft.picks.nominate);
   const bumpNominationBid = useMutation(api.draft.picks.bumpNominationBid);
   const setNominationBid = useMutation(api.draft.picks.setNominationBid);
@@ -80,6 +116,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
   const setCurrentNominator = useMutation(
     api.draft.nominationOrder.setCurrentNominator,
   );
+  const cyclePlayerTag = useMutation(api.draft.tags.cyclePlayerTag);
 
   // Who gets credited on the nomination that's about to be made - mirrors
   // the turn selector's current turn exactly, including the "no one"
@@ -122,6 +159,38 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
     [picks],
   );
 
+  const tagByFpid = useMemo(() => {
+    const map = new Map<number, PlayerTag>();
+    for (const row of playerTags ?? []) map.set(row.fpid, row.tag);
+    return map;
+  }, [playerTags]);
+
+  const valueGapByFpid = useMemo(() => {
+    const map = new Map<number, ValueGap>();
+    for (const gap of valueGaps ?? []) map.set(gap.fpid, gap);
+    return map;
+  }, [valueGaps]);
+
+  // Same per-position threshold computation as PlayersLeftTab.tsx.
+  const consistencyByFpid = useMemo(() => {
+    const map = new Map<number, ConsistencyLabel>();
+    if (!seasonStats) return map;
+    const byPosition = new Map<Position, typeof seasonStats>();
+    for (const row of seasonStats) {
+      const list = byPosition.get(row.position) ?? [];
+      list.push(row);
+      byPosition.set(row.position, list);
+    }
+    for (const [position, rows] of byPosition) {
+      const thresholds = computeConsistencyThresholds(position, rows);
+      for (const row of rows) {
+        const label = getConsistencyLabel(position, row, thresholds);
+        if (label) map.set(row.fpid, label);
+      }
+    }
+    return map;
+  }, [seasonStats]);
+
   const activePositions = useMemo(() => {
     if (!settings) return [];
     return POSITIONS.filter(
@@ -152,7 +221,23 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
           (draftValueByFpid.get(b.fpid)?.dollarValue ?? 0) -
           (draftValueByFpid.get(a.fpid)?.dollarValue ?? 0),
       )
-      .slice(0, 8);
+      .slice(0, 8)
+      .map((row) => {
+        const tag = tagByFpid.get(row.fpid);
+        const valueGap = valueGapByFpid.get(row.fpid);
+        const consistency = consistencyByFpid.get(row.fpid);
+        return {
+          ...row,
+          ...(tag ? { tag } : {}),
+          ...(valueGap ? { valueGap } : {}),
+          ...(consistency ? { consistency } : {}),
+          onCycleTag: () => {
+            cyclePlayerTag({ seasonId, fpid: row.fpid }).catch((err) => {
+              setActionError(getErrorMessage(err, "Failed to update tag."));
+            });
+          },
+        };
+      });
   }, [
     allProjections,
     settings,
@@ -161,6 +246,11 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
     adpByFpid,
     draftedFpids,
     draftValueByFpid,
+    tagByFpid,
+    valueGapByFpid,
+    consistencyByFpid,
+    cyclePlayerTag,
+    seasonId,
   ]);
 
   const nominatedValue = activeNomination
@@ -325,6 +415,24 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
         nominatedPlayer={nominatedPlayer}
         nominatedValue={nominatedValue}
         planMatch={planMatch}
+        activeTag={
+          activeNomination ? tagByFpid.get(activeNomination.fpid) : undefined
+        }
+        activeValueGap={
+          activeNomination
+            ? valueGapByFpid.get(activeNomination.fpid)
+            : undefined
+        }
+        activeConsistency={
+          activeNomination
+            ? consistencyByFpid.get(activeNomination.fpid)
+            : undefined
+        }
+        onCycleTag={(fpid) => {
+          cyclePlayerTag({ seasonId, fpid }).catch((err) => {
+            setActionError(getErrorMessage(err, "Failed to update tag."));
+          });
+        }}
         onBumpBid={(delta) =>
           runAction(() => bumpNominationBid({ seasonId, delta }))
         }
