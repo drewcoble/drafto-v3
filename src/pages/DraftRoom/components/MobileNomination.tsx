@@ -126,9 +126,9 @@ const DRAWER_CONTENT_BOTTOM_PADDING = `calc(var(--mantine-spacing-md) + ${BOTTOM
 
 // Caps how tall the Drawer can grow (see its own size="auto" comment for
 // why a cap is what actually controls its rendered height) - generous
-// enough for the tallest body (the assign state, with its team chips/+5/
-// +10 rows) while leaving a sliver of the page visible/scrollable above it
-// on tall viewports.
+// enough for the tallest body (the assign state, with its team chips row)
+// while leaving a sliver of the page visible/scrollable above it on tall
+// viewports.
 const DRAWER_MAX_HEIGHT = "90vh";
 
 // How far down the drag handle has to travel before release counts as a
@@ -328,8 +328,8 @@ export function MobileNomination({
         // forces near-viewport height, which "auto" then sizes to), so this
         // and the maxHeight below together give a tall-enough, capped sheet
         // no matter which body is showing - the assign state got
-        // noticeably taller with the team chips/+5/+10 rows, and a fixed
-        // 50% wasn't tall enough to show all of it without scrolling.
+        // noticeably taller with the team chips row, and a fixed 50% wasn't
+        // tall enough to show all of it without scrolling.
         size="auto"
         // Below BottomNav's own 200 (and the FAB's 210) - so the nav bar,
         // and the FAB sitting in its notch, render on top of both the sheet
@@ -816,23 +816,6 @@ function AssignDrawerBody({
           >
             +
           </ActionIcon>
-        </Group>
-
-        <Group gap={8} wrap="nowrap">
-          <Button
-            variant="default"
-            style={{ flex: 1 }}
-            onClick={() => onBumpBid(5)}
-          >
-            +5
-          </Button>
-          <Button
-            variant="default"
-            style={{ flex: 1 }}
-            onClick={() => onBumpBid(10)}
-          >
-            +10
-          </Button>
         </Group>
       </Stack>
 
