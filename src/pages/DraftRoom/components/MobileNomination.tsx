@@ -60,10 +60,11 @@ interface MobileNominationProps {
 
 type SheetMode = "closed" | "search" | "assign";
 
-// Bottom offset shared by both minimized "peek" cards below - anchored just
-// above BottomNav's own pill, same spot the old always-expanded bar used to
-// sit permanently.
-const PEEK_BOTTOM_OFFSET = "calc(90px + env(safe-area-inset-bottom))";
+// Bottom offset shared by both minimized "peek" cards below - flush against
+// the top edge of BottomNav's own pill (no gap - see PeekCard's squared-off
+// bottom corners/border below), so the two read as one continuous surface
+// instead of two separate floating cards.
+const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`;
 
 // How far above the screen's bottom edge the Drawer's own sheet stops -
 // BottomNav's rendered height/offset plus a small gap, so the sheet never
@@ -713,13 +714,21 @@ function PeekCard({
         maxWidth: 480,
         margin: "0 auto",
         padding: "10px 14px",
-        borderRadius: "var(--mantine-radius-xl)",
-        border: "1px solid var(--mantine-color-default-border)",
+        // Rounded on top only, flat where it butts against BottomNav's own
+        // rounded top edge - together they read as one tall pill split by a
+        // single border line rather than two stacked cards with a seam
+        // shadow/double border between them.
+        borderTopLeftRadius: "var(--mantine-radius-xl)",
+        borderTopRightRadius: "var(--mantine-radius-xl)",
+        borderLeft: "1px solid var(--mantine-color-default-border)",
+        borderRight: "1px solid var(--mantine-color-default-border)",
+        borderTop: "1px solid var(--mantine-color-default-border)",
+        // Same background as BottomNav.tsx (not Card/Popover's) so the two
+        // are indistinguishable at the shared edge.
         background:
-          "light-dark(color-mix(in srgb, var(--mantine-color-gray-1) 65%, transparent), color-mix(in srgb, var(--mantine-color-dark-5) 50%, transparent))",
+          "light-dark(color-mix(in srgb, var(--mantine-color-body) 65%, transparent), color-mix(in srgb, var(--mantine-color-dark-5) 50%, transparent))",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        boxShadow: "var(--mantine-shadow-lg)",
         cursor: "pointer",
       }}
     >
