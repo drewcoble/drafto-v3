@@ -3,6 +3,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
+  BOTTOM_NAV_ATTACHED_RADIUS,
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
 } from "../constants/general";
@@ -151,7 +152,14 @@ export function BottomNav({
         alignItems: "center",
         maxWidth: 480,
         margin: "0 auto",
-        borderRadius: "var(--mantine-radius-xl)",
+        // Once a draft's running (hasFab - the nominate FAB in
+        // MobileNomination.tsx sits in the notch below), its minimized peek
+        // card can be flush-attached above this bar - see
+        // BOTTOM_NAV_ATTACHED_RADIUS's comment for why the top corners
+        // specifically shrink to that value rather than staying "xl".
+        borderRadius: hasFab
+          ? `${BOTTOM_NAV_ATTACHED_RADIUS}px ${BOTTOM_NAV_ATTACHED_RADIUS}px var(--mantine-radius-xl) var(--mantine-radius-xl)`
+          : "var(--mantine-radius-xl)",
         border: "1px solid var(--mantine-color-default-border)",
         // Dark mode: dark-5, one shade lighter than the dark-green
         // "surface" color Card/Popover use (--mantine-color-dark-6, see

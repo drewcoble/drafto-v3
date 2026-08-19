@@ -24,6 +24,7 @@ import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
 import {
+  BOTTOM_NAV_ATTACHED_RADIUS,
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
 } from "../../../constants/general";
@@ -60,11 +61,15 @@ interface MobileNominationProps {
 
 type SheetMode = "closed" | "search" | "assign";
 
-// Bottom offset shared by both minimized "peek" cards below - flush against
-// the top edge of BottomNav's own pill (no gap - see PeekCard's squared-off
-// bottom corners/border below), so the two read as one continuous surface
-// instead of two separate floating cards.
-const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`;
+// Bottom offset shared by both minimized "peek" cards below - overlapping
+// BOTTOM_NAV_ATTACHED_RADIUS into the top of BottomNav's own pill (rather
+// than sitting flush at its top edge) so the peek card's square bottom
+// corners land exactly where BottomNav's own top corners (shrunk to that
+// same radius while attached - see BottomNav.tsx) finish curving back out to
+// full width. That closes the gap a rounded corner would otherwise leave
+// under a square-cornered card sitting right above it, without the overlap
+// reaching deep enough to cover BottomNav's own icons.
+const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px - ${BOTTOM_NAV_ATTACHED_RADIUS}px + env(safe-area-inset-bottom))`;
 
 // How far above the screen's bottom edge the Drawer's own sheet stops -
 // BottomNav's rendered height/offset plus a small gap, so the sheet never
