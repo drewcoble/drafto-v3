@@ -736,6 +736,19 @@ function AssignDrawerBody({
         </Group>
       </Stack>
 
+      {/* A filled bar (not Divider's default hairline border) in the app's
+          own dark-green surface shade in dark mode - see BottomNav.tsx's
+          comment on dark-5 vs dark-6 for where that palette lives - with a
+          light-mode fallback so this doesn't go bare-dark on that theme. */}
+      <Box
+        style={{
+          height: 2,
+          borderRadius: 999,
+          background:
+            "light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5))",
+        }}
+      />
+
       <Stack gap={4}>
         <Text size="xs" c="dimmed">
           Winning team
