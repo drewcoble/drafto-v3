@@ -25,12 +25,18 @@ import { getErrorMessage } from "../../lib/errors";
 interface DraftTopBarProps {
   seasonId: Id<"seasons">;
   selfTeamId: Id<"seasonTeams">;
+  // Forwarded straight through to MobileNomination - see its own comment.
+  onPeekingChange?: (peeking: boolean) => void;
 }
 
 // Persistent across every Draft Room tab (mounted once by the layout route),
 // so the whole auction - search, nominate, watch/bump the bid, log who won -
 // can be run from any tab without ever switching to a dedicated "Draft" tab.
-export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
+export function DraftTopBar({
+  seasonId,
+  selfTeamId,
+  onPeekingChange,
+}: DraftTopBarProps) {
   const [search, setSearch] = useState("");
   const [winnerTeamId, setWinnerTeamId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -62,7 +68,11 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
   const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
-      ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
+      ? {
+          seasonId,
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
       : "skip",
   );
   const draftValues = draftValuesResult?.values;
@@ -205,9 +215,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
     try {
       await action();
     } catch (err) {
-      setActionError(
-        getErrorMessage(err, "That action failed."),
-      );
+      setActionError(getErrorMessage(err, "That action failed."));
     }
   };
 
@@ -347,6 +355,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
         }}
         usingGenericValues={usingGenericValues}
         onSelectPlayer={setSelectedFpid}
+        {...(onPeekingChange ? { onPeekingChange } : {})}
       />
 
       <Box visibleFrom="sm">

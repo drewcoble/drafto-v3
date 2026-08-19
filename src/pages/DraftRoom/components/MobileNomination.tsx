@@ -24,6 +24,7 @@ import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
 import {
+  BOTTOM_NAV_ATTACHED_RADIUS,
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
 } from "../../../constants/general";
@@ -56,16 +57,25 @@ interface MobileNominationProps {
   usingGenericValues: boolean;
 
   onSelectPlayer: (fpid: number) => void;
+
+  // Reports whether the minimized peek card is actually on screen - route.tsx's
+  // LeagueLayout forwards this to BottomNav so it can shrink its own top
+  // corners to match while (and only while) something's really attached
+  // above it. Optional since not every MobileNomination call site needs it.
+  onPeekingChange?: (peeking: boolean) => void;
 }
 
 type SheetMode = "closed" | "search" | "assign";
 
-// Bottom offset shared by both minimized "peek" cards below - flush against
-// the top edge of BottomNav's own pill (no gap). BottomNav's top corners
-// stay rounded ("xl") whether or not a peek card is showing - see
-// PeekCard's own corner-fill patches below for how the seam still reads as
-// gapless despite that.
-const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`;
+// Bottom offset shared by both minimized "peek" cards below - overlaps
+// BOTTOM_NAV_ATTACHED_RADIUS into the top of BottomNav's own pill (rather
+// than sitting flush at its top edge) so the peek card's square bottom
+// corners land exactly where BottomNav's own top corners (shrunk to that
+// same radius while attached - see BottomNav.tsx/route.tsx) finish curving
+// back out to full width. That closes the gap a rounded corner would
+// otherwise leave under a square-cornered card sitting right above it,
+// without the overlap reaching deep enough to cover BottomNav's own icons.
+const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px - ${BOTTOM_NAV_ATTACHED_RADIUS}px + env(safe-area-inset-bottom))`;
 
 // How far above the screen's bottom edge the Drawer's own sheet stops -
 // BottomNav's rendered height/offset plus a small gap, so the sheet never
@@ -141,6 +151,7 @@ export function MobileNomination({
   onNominate,
   usingGenericValues,
   onSelectPlayer,
+  onPeekingChange,
 }: MobileNominationProps) {
   const [mode, setMode] = useState<SheetMode>("closed");
   const [minimized, setMinimized] = useState(false);
@@ -168,6 +179,12 @@ export function MobileNomination({
     mode === "assign" && !activeNomination ? "closed" : mode;
   const sheetOpen = effectiveMode !== "closed" && !minimized;
   const peeking = effectiveMode !== "closed" && minimized;
+
+  useEffect(() => {
+    onPeekingChange?.(peeking);
+    // Nothing was ever attached once this unmounts (draft room left/closed).
+    return () => onPeekingChange?.(false);
+  }, [peeking, onPeekingChange]);
 
   // Same "dismiss" the scrim tap and Escape key trigger, reused as the
   // swipe-to-close target below - search cancels outright, assign only
@@ -684,50 +701,12 @@ function AssignDrawerBody({
   );
 }
 
-// Same background as BottomNav.tsx (not Card/Popover's) - shared by the peek
-// card itself and its corner-fill patches below so all three are
-// indistinguishable from BottomNav at the shared edge.
-const PEEK_CARD_BACKGROUND =
-  "light-dark(color-mix(in srgb, var(--mantine-color-body) 65%, transparent), color-mix(in srgb, var(--mantine-color-dark-5) 50%, transparent))";
-
-// BottomNav keeps its own "xl" corner radius on every corner, always (see
-// BottomNav.tsx) - it doesn't know or care whether a peek card is attached
-// above it. That radius doesn't reach BottomNav's full width until this many
-// px down from its top edge, so a peek card flush against that top edge with
-// square bottom corners leaves a curved gap open at each side, right where
-// BottomNav's own corner hasn't squared off yet.
-//
-// A radial-gradient version of this (transparent over BottomNav's own
-// curve, solid everywhere else) traced that curve exactly, but relied on a
-// CSS custom property as a gradient color-stop position - iOS Safari drops
-// that whole `background` declaration rather than resolving it, which
-// silently no-ops the patch entirely. A plain solid square is far more
-// widely supported and, since it's blurred/tinted the same as BottomNav
-// itself, reads the same either way: it simply squares off that one corner
-// while a peek card is attached (BottomNav's own corners - and the DOM
-// underneath this patch - are untouched, so it still looks exactly as
-// before once nothing's attached above it).
-function CornerFillPatch({ side }: { side: "left" | "right" }) {
-  return (
-    <Box
-      pos="absolute"
-      bottom="calc(-1 * var(--mantine-radius-xl))"
-      {...(side === "left" ? { left: 0 } : { right: 0 })}
-      style={{
-        width: "var(--mantine-radius-xl)",
-        height: "var(--mantine-radius-xl)",
-        background: PEEK_CARD_BACKGROUND,
-        backdropFilter: "blur(16px)",
-        WebkitBackdropFilter: "blur(16px)",
-        pointerEvents: "none",
-      }}
-    />
-  );
-}
-
 // Shared floating-card chrome for both minimized states below - same frosted
 // glass treatment as BottomNav.tsx/AppHeader.tsx and the drawer it stands in
-// for while minimized.
+// for while minimized. Square bottom corners, overlapping BottomNav by
+// BOTTOM_NAV_ATTACHED_RADIUS (see PEEK_BOTTOM_OFFSET) - closing the gap is
+// BottomNav's job while this card is showing (route.tsx wires that up via
+// onPeekingChange/attachedCardShowing), not this card's.
 function PeekCard({
   children,
   onClick,
@@ -756,25 +735,20 @@ function PeekCard({
         maxWidth: 480,
         margin: "0 auto",
         padding: "10px 14px",
-        position: "relative",
-        // Rounded on top only, flat where it butts against BottomNav's own
-        // rounded top edge - the corner-fill patches above are what make
-        // that square edge still read as gapless against BottomNav's own
-        // curve, rather than trying to round to match it (which would just
-        // relocate the gap rather than close it).
         borderTopLeftRadius: "var(--mantine-radius-xl)",
         borderTopRightRadius: "var(--mantine-radius-xl)",
         borderLeft: "1px solid var(--mantine-color-default-border)",
         borderRight: "1px solid var(--mantine-color-default-border)",
         borderTop: "1px solid var(--mantine-color-default-border)",
-        background: PEEK_CARD_BACKGROUND,
+        // Same background as BottomNav.tsx (not Card/Popover's) so the two
+        // are indistinguishable at the shared edge.
+        background:
+          "light-dark(color-mix(in srgb, var(--mantine-color-body) 65%, transparent), color-mix(in srgb, var(--mantine-color-dark-5) 50%, transparent))",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         cursor: "pointer",
       }}
     >
-      <CornerFillPatch side="left" />
-      <CornerFillPatch side="right" />
       {children}
     </Box>
   );

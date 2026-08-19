@@ -6,6 +6,7 @@ import {
   useLocation,
 } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
+import { useState } from "react";
 import {
   CircleUserRound,
   DollarSign,
@@ -143,6 +144,9 @@ function LeagueLayout() {
   const location = useLocation();
   const isNew = leagueId === "new";
   const seasonId = isNew ? undefined : (leagueId as Id<"seasons">);
+  // Whether DraftTopBar's mobile nomination peek card is actually attached
+  // above BottomNav right now - see BottomNav's attachedCardShowing comment.
+  const [peekCardShowing, setPeekCardShowing] = useState(false);
 
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === leagueId);
@@ -209,6 +213,7 @@ function LeagueLayout() {
           <DraftTopBar
             seasonId={seasonId}
             selfTeamId={selfTeamResult.selfTeam._id}
+            onPeekingChange={setPeekCardShowing}
           />
         )}
         {/* pos="relative" + zIndex needed so this outranks the Keepers
@@ -240,6 +245,7 @@ function LeagueLayout() {
           more={{ label: "More", items: bottomNavMoreItems }}
           leagueId={leagueId}
           hasFab={isStarted}
+          attachedCardShowing={isStarted && peekCardShowing}
         />
         <Outlet />
       </Stack>
