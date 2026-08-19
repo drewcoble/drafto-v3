@@ -65,6 +65,12 @@ type SheetMode = "closed" | "search" | "assign";
 // sit permanently.
 const PEEK_BOTTOM_OFFSET = "calc(90px + env(safe-area-inset-bottom))";
 
+// How far above the screen's bottom edge the Drawer's own sheet stops -
+// BottomNav's rendered height/offset plus a small gap, so the sheet never
+// overlaps (and BottomNav - see its own higher z-index below - stays fully
+// visible and tappable for in-app navigation while the sheet's open).
+const DRAWER_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px + 8px + env(safe-area-inset-bottom))`;
+
 // How far down the drag handle has to travel before release counts as a
 // swipe-to-dismiss rather than a tap or an aborted drag.
 const DRAG_DISMISS_THRESHOLD = 80;
@@ -270,11 +276,18 @@ export function MobileNomination({
         position="bottom"
         withCloseButton={false}
         size="50%"
-        zIndex={220}
+        // Below BottomNav's own 200 (and the FAB's 210) rather than above
+        // them, so the nav bar - and the FAB sitting in its notch - render
+        // on top of both the sheet and its scrim instead of being covered
+        // by them, keeping in-app navigation reachable while the sheet's
+        // open. The sheet itself never occupies BottomNav's screen area
+        // anyway (see DRAWER_BOTTOM_OFFSET below), so this only affects the
+        // full-viewport scrim.
+        zIndex={150}
         styles={{
           content: {
             maxWidth: 480,
-            margin: "0 auto",
+            margin: `0 auto ${DRAWER_BOTTOM_OFFSET}`,
             borderTopLeftRadius: "var(--mantine-radius-xl)",
             borderTopRightRadius: "var(--mantine-radius-xl)",
             overflow: "hidden",
