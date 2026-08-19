@@ -11,7 +11,9 @@ import {
   Stack,
   Table,
   Text,
+  TextInput,
 } from "@mantine/core";
+import { Search } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import {
@@ -53,6 +55,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     ...POSITIONS,
   ]);
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
   // Which rows' target/avoid toggle + Keeper info is showing - dropped from
   // the main row (see PlayerRow.tsx) to fit mobile widths, same
   // click-to-expand pattern InjuryReport.tsx uses.
@@ -284,12 +287,16 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     );
   }, [allProjections, adpByFpid, scoring, scoringConfig, activePositions]);
 
-  // Only the positions currently toggled on via the pills.
+  // Only the positions currently toggled on via the pills, further narrowed
+  // by the name search box if there's a query typed.
   const visibleRows = useMemo(() => {
-    return relevantProjections.filter((row) =>
-      selectedPositions.includes(row.position),
-    );
-  }, [relevantProjections, selectedPositions]);
+    const query = search.trim().toLowerCase();
+    return relevantProjections.filter((row) => {
+      if (!selectedPositions.includes(row.position)) return false;
+      if (query && !row.name.toLowerCase().includes(query)) return false;
+      return true;
+    });
+  }, [relevantProjections, selectedPositions, search]);
 
   // Global ranking across every visible position, by $ Value when available
   // (an auction draft board compares players across positions directly),
@@ -335,12 +342,21 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
           already sets `py`). */}
       <Box hiddenFrom="sm" h={POSITION_FILTER_BAR_HEIGHT} />
       <Group justify="space-between" align="center" wrap="wrap">
-        <PositionFilterBar
-          positions={activePositions}
-          selected={selectedPositions}
-          onChange={setSelectedPositions}
-          top={MOBILE_HEADER_HEIGHT}
-        />
+        <Group gap="sm" wrap="wrap" align="center">
+          <PositionFilterBar
+            positions={activePositions}
+            selected={selectedPositions}
+            onChange={setSelectedPositions}
+            top={MOBILE_HEADER_HEIGHT}
+          />
+          <TextInput
+            placeholder="Search players..."
+            leftSection={<Search size={16} />}
+            value={search}
+            onChange={(event) => setSearch(event.currentTarget.value)}
+            w={{ base: "100%", sm: 220 }}
+          />
+        </Group>
         {allProjections && (
           <Text size="xs" c="dimmed">
             Showing {relevantProjections.length} draft-relevant players (of{" "}
@@ -367,7 +383,9 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
           </Center>
         ) : visibleRows.length === 0 ? (
           <Text c="dimmed" p="md">
-            No projections yet for the selected position(s) - fetch data first.
+            {search.trim()
+              ? "No players match your search."
+              : "No projections yet for the selected position(s) - fetch data first."}
           </Text>
         ) : (
           <Table.ScrollContainer minWidth={640}>

@@ -8,8 +8,9 @@ import {
   Stack,
   Table,
   Text,
+  TextInput,
 } from "@mantine/core";
-import { LayoutGrid, LayoutList } from "lucide-react";
+import { LayoutGrid, LayoutList, Search } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import {
@@ -89,6 +90,10 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   const [selectedPositions, setSelectedPositions] = useState<Position[]>([
     ...POSITIONS,
   ]);
+  // One search box narrows every position section at once (both bar and
+  // table view read from the same rowsByPosition map below), rather than
+  // needing a separate search per position.
+  const [search, setSearch] = useState("");
   // Deliberately a separate subscription from listDraftPicks below - this
   // query's only read dependencies are draftSettings + projections, so it
   // doesn't get invalidated/recomputed (the expensive VBD ranking) every
@@ -280,9 +285,11 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
           (row) => row.points,
         )
       : [];
+    const query = search.trim().toLowerCase();
     const map = new Map<Position, DraftBoardRow[]>();
     for (const row of relevant) {
       if (row.drafted) continue;
+      if (query && !row.name.toLowerCase().includes(query)) continue;
       const list = map.get(row.position) ?? [];
       list.push(row);
       map.set(row.position, list);
@@ -291,7 +298,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
       list.sort((a, b) => a.tierRank - b.tierRank);
     }
     return map;
-  }, [board, settings, activePositions, adpByFpid]);
+  }, [board, settings, activePositions, adpByFpid, search]);
 
   // Across the whole board, not just whatever positions selectedPositions
   // currently has toggled visible - see lib/draftRecommendation.ts's
@@ -362,6 +369,15 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
     return map;
   }, [rowsByPosition, planSlots]);
 
+  // Position sections hidden entirely (rather than shown with a "0 left"
+  // header) once a search query filters every one of their rows out - a wall
+  // of empty position headers isn't useful feedback for "no matches".
+  const visiblePositions = activePositions
+    .filter((pos) => selectedPositions.includes(pos))
+    .filter(
+      (pos) => !search.trim() || (rowsByPosition.get(pos)?.length ?? 0) > 0,
+    );
+
   if (!board || !settings) return null;
 
   return (
@@ -415,6 +431,14 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
         </Box>
       )}
       <Box px={4}>
+        <TextInput
+          placeholder="Search players..."
+          leftSection={<Search size={16} />}
+          value={search}
+          onChange={(event) => setSearch(event.currentTarget.value)}
+          w={{ base: "100%", sm: 260 }}
+          mb="sm"
+        />
         <PositionFilterBar
           positions={activePositions}
           selected={selectedPositions}
@@ -434,172 +458,167 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
           overflow clip region. */}
       <Box style={{ overflowX: view === "bar" ? "auto" : "visible" }} px={4}>
         <Stack gap="lg" miw={view === "bar" ? "max-content" : undefined}>
-          {activePositions
-            .filter((pos) => selectedPositions.includes(pos))
-            .map((pos) => {
-              const rows = rowsByPosition.get(pos) ?? [];
-              const remainingTopTiers = rows.filter(
-                (row) => row.tier <= 2,
-              ).length;
-              const openSlots = openSlotsByPosition.get(pos) ?? 0;
-              const recommendation = recommendationFor(
-                remainingTopTiers,
-                openSlots,
-              );
-              const tierGroups = groupByTier(rows);
+          {visiblePositions.length === 0 && (
+            <Text c="dimmed" px={4}>
+              No players match your search.
+            </Text>
+          )}
+          {visiblePositions.map((pos) => {
+            const rows = rowsByPosition.get(pos) ?? [];
+            const remainingTopTiers = rows.filter(
+              (row) => row.tier <= 2,
+            ).length;
+            const openSlots = openSlotsByPosition.get(pos) ?? 0;
+            const recommendation = recommendationFor(
+              remainingTopTiers,
+              openSlots,
+            );
+            const tierGroups = groupByTier(rows);
 
-              const handleSetTag = (fpid: number, nextTag: PlayerTag) => {
-                setActionError(null);
-                setPlayerTag({ seasonId, fpid, tag: nextTag }).catch((err) => {
-                  setActionError(getErrorMessage(err, "Failed to update tag."));
-                });
-              };
+            const handleSetTag = (fpid: number, nextTag: PlayerTag) => {
+              setActionError(null);
+              setPlayerTag({ seasonId, fpid, tag: nextTag }).catch((err) => {
+                setActionError(getErrorMessage(err, "Failed to update tag."));
+              });
+            };
 
-              const handleNominate = (fpid: number) => {
-                setActionError(null);
-                nominate({
-                  seasonId,
-                  fpid,
-                  ...(nominatingTeamId ? { nominatingTeamId } : {}),
-                  openingBid: 1,
-                }).catch((err) => {
-                  setActionError(getErrorMessage(err, "Failed to nominate."));
-                });
-              };
+            const handleNominate = (fpid: number) => {
+              setActionError(null);
+              nominate({
+                seasonId,
+                fpid,
+                ...(nominatingTeamId ? { nominatingTeamId } : {}),
+                openingBid: 1,
+              }).catch((err) => {
+                setActionError(getErrorMessage(err, "Failed to nominate."));
+              });
+            };
 
-              return (
-                <Stack key={pos} gap={6}>
-                  <Group
-                    gap="sm"
-                    wrap="nowrap"
-                    style={{
-                      position: "sticky",
-                      left: 0,
-                      width: "fit-content",
-                      backgroundColor: "var(--mantine-color-body)",
-                      zIndex: 1,
-                    }}
-                    py={2}
-                    pr="md"
-                  >
-                    <Badge
-                      size="lg"
-                      variant="light"
-                      color={POSITION_COLORS[pos]}
-                    >
-                      {pos}
-                    </Badge>
-                    <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                      {remainingTopTiers} left in tiers 1-2 - {openSlots} slot
-                      {openSlots === 1 ? "" : "s"} to fill
-                    </Text>
-                    <Badge color={recommendation.color} variant="light">
-                      {recommendation.label}
-                    </Badge>
-                  </Group>
-                  {view === "bar" ? (
-                    <Group gap="lg" align="flex-end" wrap="nowrap">
-                      {tierGroups.map((group) => (
-                        <Stack
-                          key={group.tier}
-                          gap={4}
-                          style={{ flexShrink: 0 }}
+            return (
+              <Stack key={pos} gap={6}>
+                <Group
+                  gap="sm"
+                  wrap="nowrap"
+                  style={{
+                    position: "sticky",
+                    left: 0,
+                    width: "fit-content",
+                    backgroundColor: "var(--mantine-color-body)",
+                    zIndex: 1,
+                  }}
+                  py={2}
+                  pr="md"
+                >
+                  <Badge size="lg" variant="light" color={POSITION_COLORS[pos]}>
+                    {pos}
+                  </Badge>
+                  <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                    {remainingTopTiers} left in tiers 1-2 - {openSlots} slot
+                    {openSlots === 1 ? "" : "s"} to fill
+                  </Text>
+                  <Badge color={recommendation.color} variant="light">
+                    {recommendation.label}
+                  </Badge>
+                </Group>
+                {view === "bar" ? (
+                  <Group gap="lg" align="flex-end" wrap="nowrap">
+                    {tierGroups.map((group) => (
+                      <Stack key={group.tier} gap={4} style={{ flexShrink: 0 }}>
+                        <Text
+                          size="xs"
+                          c="dimmed"
+                          tt="uppercase"
+                          style={{
+                            position: "sticky",
+                            left: 0,
+                            width: "fit-content",
+                            backgroundColor: "var(--mantine-color-body)",
+                            zIndex: 1,
+                          }}
                         >
-                          <Text
-                            size="xs"
-                            c="dimmed"
-                            tt="uppercase"
-                            style={{
-                              position: "sticky",
-                              left: 0,
-                              width: "fit-content",
-                              backgroundColor: "var(--mantine-color-body)",
-                              zIndex: 1,
-                            }}
-                          >
-                            {group.tierLabel}
-                          </Text>
-                          <Group gap={8} align="flex-end" wrap="nowrap">
-                            {group.rows.map((row) => {
-                              const planMatch = planMatchByFpid.get(row.fpid);
-                              const budgetAmount =
-                                planMatch?.amount ?? stats?.perOpenSlot;
-                              return (
-                                <PlayerBar
-                                  key={row.fpid}
-                                  row={row}
-                                  budgetAmount={budgetAmount}
-                                  highestVisibleDollarValue={
-                                    highestVisibleDollarValue
-                                  }
-                                  planMatch={planMatch}
-                                  tag={tagByFpid.get(row.fpid)}
-                                  valueGap={valueGapByFpid.get(row.fpid)}
-                                  consistency={consistencyByFpid.get(row.fpid)}
-                                  isRookie={rookieFpids.has(row.fpid)}
-                                  isNominated={
-                                    activeNomination?.fpid === row.fpid
-                                  }
-                                  hasActiveNomination={!!activeNomination}
-                                  onSetTag={(nextTag) =>
-                                    handleSetTag(row.fpid, nextTag)
-                                  }
-                                  onNominate={() => handleNominate(row.fpid)}
-                                  onSelectPlayer={setSelectedFpid}
-                                />
-                              );
-                            })}
-                          </Group>
-                        </Stack>
-                      ))}
-                    </Group>
-                  ) : (
-                    <Table.ScrollContainer minWidth={300}>
-                      <Table
-                        verticalSpacing={4}
-                        horizontalSpacing="xs"
-                        highlightOnHover
-                      >
-                        <Table.Thead>
-                          <Table.Tr>
-                            <Table.Th></Table.Th>
-                            <Table.Th>Player</Table.Th>
-                            <Table.Th>Tier</Table.Th>
-                            <Table.Th>$</Table.Th>
-                            <Table.Th visibleFrom="sm">Pts</Table.Th>
-                            <Table.Th></Table.Th>
-                          </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                          {rows.map((row) => (
-                            <PlayerTableRow
-                              key={row.fpid}
-                              row={row}
-                              tag={tagByFpid.get(row.fpid)}
-                              valueGap={valueGapByFpid.get(row.fpid)}
-                              consistency={consistencyByFpid.get(row.fpid)}
-                              isRookie={rookieFpids.has(row.fpid)}
-                              isNominated={activeNomination?.fpid === row.fpid}
-                              hasActiveNomination={!!activeNomination}
-                              budgetMatch={
-                                budgetMatchByFpid.get(row.fpid) ?? false
-                              }
-                              isExpanded={expandedFpids.has(row.fpid)}
-                              onSetTag={(nextTag) =>
-                                handleSetTag(row.fpid, nextTag)
-                              }
-                              onNominate={() => handleNominate(row.fpid)}
-                              onSelectPlayer={setSelectedFpid}
-                              onToggleExpand={() => toggleExpanded(row.fpid)}
-                            />
-                          ))}
-                        </Table.Tbody>
-                      </Table>
-                    </Table.ScrollContainer>
-                  )}
-                </Stack>
-              );
-            })}
+                          {group.tierLabel}
+                        </Text>
+                        <Group gap={8} align="flex-end" wrap="nowrap">
+                          {group.rows.map((row) => {
+                            const planMatch = planMatchByFpid.get(row.fpid);
+                            const budgetAmount =
+                              planMatch?.amount ?? stats?.perOpenSlot;
+                            return (
+                              <PlayerBar
+                                key={row.fpid}
+                                row={row}
+                                budgetAmount={budgetAmount}
+                                highestVisibleDollarValue={
+                                  highestVisibleDollarValue
+                                }
+                                planMatch={planMatch}
+                                tag={tagByFpid.get(row.fpid)}
+                                valueGap={valueGapByFpid.get(row.fpid)}
+                                consistency={consistencyByFpid.get(row.fpid)}
+                                isRookie={rookieFpids.has(row.fpid)}
+                                isNominated={
+                                  activeNomination?.fpid === row.fpid
+                                }
+                                hasActiveNomination={!!activeNomination}
+                                onSetTag={(nextTag) =>
+                                  handleSetTag(row.fpid, nextTag)
+                                }
+                                onNominate={() => handleNominate(row.fpid)}
+                                onSelectPlayer={setSelectedFpid}
+                              />
+                            );
+                          })}
+                        </Group>
+                      </Stack>
+                    ))}
+                  </Group>
+                ) : (
+                  <Table.ScrollContainer minWidth={300}>
+                    <Table
+                      verticalSpacing={4}
+                      horizontalSpacing="xs"
+                      highlightOnHover
+                    >
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th></Table.Th>
+                          <Table.Th>Player</Table.Th>
+                          <Table.Th>Tier</Table.Th>
+                          <Table.Th>$</Table.Th>
+                          <Table.Th visibleFrom="sm">Pts</Table.Th>
+                          <Table.Th></Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {rows.map((row) => (
+                          <PlayerTableRow
+                            key={row.fpid}
+                            row={row}
+                            tag={tagByFpid.get(row.fpid)}
+                            valueGap={valueGapByFpid.get(row.fpid)}
+                            consistency={consistencyByFpid.get(row.fpid)}
+                            isRookie={rookieFpids.has(row.fpid)}
+                            isNominated={activeNomination?.fpid === row.fpid}
+                            hasActiveNomination={!!activeNomination}
+                            budgetMatch={
+                              budgetMatchByFpid.get(row.fpid) ?? false
+                            }
+                            isExpanded={expandedFpids.has(row.fpid)}
+                            onSetTag={(nextTag) =>
+                              handleSetTag(row.fpid, nextTag)
+                            }
+                            onNominate={() => handleNominate(row.fpid)}
+                            onSelectPlayer={setSelectedFpid}
+                            onToggleExpand={() => toggleExpanded(row.fpid)}
+                          />
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </Table.ScrollContainer>
+                )}
+              </Stack>
+            );
+          })}
         </Stack>
       </Box>
 
