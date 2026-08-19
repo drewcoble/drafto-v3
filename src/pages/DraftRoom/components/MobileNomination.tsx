@@ -1,17 +1,25 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import {
   ActionIcon,
   Badge,
   Box,
   Button,
+  Drawer,
   Group,
   NumberInput,
-  Popover,
   Select,
   Stack,
   Text,
 } from "@mantine/core";
-import { ChevronLeft, ChevronRight, UserPlus, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  UserPlus,
+  X,
+} from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
@@ -50,15 +58,22 @@ interface MobileNominationProps {
   onSelectPlayer: (fpid: number) => void;
 }
 
+type SheetMode = "closed" | "search" | "assign";
+
+// Bottom offset shared by both minimized "peek" cards below - anchored just
+// above BottomNav's own pill, same spot the old always-expanded bar used to
+// sit permanently.
+const PEEK_BOTTOM_OFFSET = "calc(90px + env(safe-area-inset-bottom))";
+
 // Mobile replacement for the desktop NominationPanel card (hidden below the
 // "sm" breakpoint via visibleFrom="sm" on that component - see
 // DraftTopBar.tsx). A gavel FAB sits over the center of the bottom nav bar
-// and opens a Popover with the search/nominate form, styled like
-// PlayerBar.tsx's own nominate popover (withArrow shadow="md") rather than
-// a full bottom-sheet Drawer; once a player is nominated the popover closes
-// itself and a floating bar takes over above the bottom nav with the live
-// bid + winner controls, so the auction can be run one-handed without
-// digging through a tab.
+// and drives a single bottom Drawer that's shared by both the search/
+// nominate form and the bid/assign controls, swapping bodies depending on
+// `mode`. The Drawer can be minimized without losing the in-progress
+// nomination/search - while minimized, a small floating "peek" card takes
+// its place above the bottom nav so the auction can still be tracked
+// one-handed without the sheet covering the rest of the screen.
 export function MobileNomination({
   nominationOrderEnabled,
   turnTeamId,
@@ -80,14 +95,32 @@ export function MobileNomination({
   usingGenericValues,
   onSelectPlayer,
 }: MobileNominationProps) {
-  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [mode, setMode] = useState<SheetMode>("closed");
+  const [minimized, setMinimized] = useState(false);
   const hasActiveNomination = !!activeNomination;
 
-  // Auto-close the search popover the moment a nomination lands - the
-  // floating bar below takes over from here.
+  // Mirrors the server: once a nomination lands (whether this device made it
+  // or another team's client did), the sheet takes over in the expanded
+  // assign state. Once it resolves/passes, drop back to fully closed rather
+  // than lingering on a stale assign sheet - but leave an in-progress search
+  // alone, since the absence of a nomination is the expected state while
+  // searching for one to make.
   useEffect(() => {
-    if (hasActiveNomination) setPopoverOpen(false);
+    if (hasActiveNomination) {
+      setMode("assign");
+      setMinimized(false);
+    } else {
+      setMode((current) => (current === "assign" ? "closed" : current));
+    }
   }, [hasActiveNomination]);
+
+  // Guards the single render tick between the server clearing
+  // activeNomination and the effect above catching up, so the sheet/peek
+  // never flash stale assign content with nothing behind it.
+  const effectiveMode: SheetMode =
+    mode === "assign" && !activeNomination ? "closed" : mode;
+  const sheetOpen = effectiveMode !== "closed" && !minimized;
+  const peeking = effectiveMode !== "closed" && minimized;
 
   // Steps "whose turn" one team over in `teams`' own order (a plain list
   // wrap, not the configured snake/linear nomination order - this is just a
@@ -110,6 +143,30 @@ export function MobileNomination({
     onSetTurnTeam(teams[nextIndex]!._id);
   };
 
+  const nominatingTeam = activeNomination
+    ? teams.find((team) => team._id === activeNomination.nominatingTeamId)
+    : undefined;
+
+  let fabIcon: ReactNode = <UserPlus size={24} />;
+  let fabLabel = "Nominate a player";
+  let fabAction = () => setMode("search");
+  if (effectiveMode === "search") {
+    fabIcon = <X size={24} />;
+    fabLabel = "Close nominate a player";
+    fabAction = () => {
+      setMode("closed");
+      setMinimized(false);
+    };
+  } else if (effectiveMode === "assign" && !minimized) {
+    fabIcon = <ChevronDown size={24} />;
+    fabLabel = "Minimize nomination";
+    fabAction = () => setMinimized(true);
+  } else if (effectiveMode === "assign" && minimized) {
+    fabIcon = <ChevronUp size={24} />;
+    fabLabel = "Resume nomination";
+    fabAction = () => setMinimized(false);
+  }
+
   return (
     <>
       {/* Height-matched to BottomNav's own pill (BOTTOM_NAV_HEIGHT) and
@@ -130,164 +187,204 @@ export function MobileNomination({
           zIndex: 210,
         }}
       >
-        <Popover
-          opened={popoverOpen}
-          onChange={setPopoverOpen}
-          position="top"
-          withinPortal
-          // Background is theme.ts's global Popover default (dark-6,
-          // matching Card/MobileNominationBar) - radius and shadow are
-          // wired to real Mantine props (they map to
-          // --popover-radius/--popover-shadow), so setting them here
-          // instead of only via styles.dropdown avoids fighting the
-          // component's own CSS variables for those two.
+        <ActionIcon
           radius="xl"
-          shadow="lg"
-          // Same left/right: 12, maxWidth: 480, centered footprint as
-          // MobileNominationBar's Box below (the "nominee" bar) - width is
-          // relative to the viewport rather than a fixed px so the two
-          // floating panels always match, not just at one screen size.
-          width="calc(100vw - 24px)"
-          styles={{
-            dropdown: {
-              maxWidth: 480,
-              padding: "var(--mantine-spacing-md)",
-              border: "1px solid var(--mantine-color-default-border)",
-            },
+          size={56}
+          color="saddlebrown"
+          variant="filled"
+          aria-label={fabLabel}
+          onClick={fabAction}
+          style={{
+            boxShadow: "var(--mantine-shadow-lg)",
+            border: "none",
+            // A saddlebrown gradient (lighter shade 3 to darker shade 7)
+            // instead of a flat fill, each stop still mixed with
+            // transparent at the same 65% as before so it stays
+            // translucent against the frosted bar underneath it (see
+            // BottomNav.tsx).
+            background:
+              "linear-gradient(135deg, color-mix(in srgb, var(--mantine-color-saddlebrown-3) 65%, transparent), color-mix(in srgb, var(--mantine-color-saddlebrown-7) 65%, transparent))",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
           }}
         >
-          <Popover.Target>
-            <ActionIcon
-              radius="xl"
-              size={56}
-              color="saddlebrown"
-              variant="filled"
-              disabled={!!activeNomination}
-              aria-label={
-                popoverOpen ? "Close nominate a player" : "Nominate a player"
-              }
-              onClick={() => setPopoverOpen((open) => !open)}
-              style={{
-                boxShadow: "var(--mantine-shadow-lg)",
-                border: "none",
-                // A saddlebrown gradient (lighter shade 3 to darker shade 7)
-                // instead of a flat fill, each stop still mixed with
-                // transparent at the same 65% as before so it stays
-                // translucent against the frosted bar underneath it (see
-                // BottomNav.tsx). Unaffected by disabled state on purpose -
-                // only the icon darkens below.
-                background:
-                  "linear-gradient(135deg, color-mix(in srgb, var(--mantine-color-saddlebrown-3) 65%, transparent), color-mix(in srgb, var(--mantine-color-saddlebrown-7) 65%, transparent))",
-                backdropFilter: "blur(16px)",
-                WebkitBackdropFilter: "blur(16px)",
-                // Mantine's own disabled icon color (dark-3/gray-5) is too
-                // close to the saddlebrown gradient to read clearly once
-                // disabled - a darker neutral gray gives it real contrast
-                // instead of blending into the background.
-                ...(activeNomination
-                  ? { color: "var(--mantine-color-gray-8)" }
-                  : {}),
-              }}
-            >
-              {popoverOpen ? <X size={24} /> : <UserPlus size={24} />}
-            </ActionIcon>
-          </Popover.Target>
-          <Popover.Dropdown>
-            <Stack gap={10}>
-              {usingGenericValues && (
-                <Group gap={6} wrap="nowrap">
-                  <Text size="sm" c="dimmed">
-                    Values shown are estimates
-                  </Text>
-                  <GenericValueBadge />
-                </Group>
-              )}
-              {nominationOrderEnabled && (
-                <Stack gap={4}>
-                  <Text size="sm" c="dimmed">
-                    Nominating team
-                  </Text>
-                  <Group gap={8} wrap="nowrap" justify="space-between">
-                    <Group gap={4} wrap="nowrap">
-                      <ActionIcon
-                        variant="default"
-                        size="lg"
-                        onClick={() => bumpTurnTeam(-1)}
-                        aria-label="Previous team"
-                      >
-                        <ChevronLeft size={18} />
-                      </ActionIcon>
-                      <Text
-                        size="sm"
-                        fw={600}
-                        ta="center"
-                        style={{ minWidth: 108 }}
-                      >
-                        {currentTeamName ?? "Manual"}
-                      </Text>
-                      <ActionIcon
-                        variant="default"
-                        size="lg"
-                        onClick={() => bumpTurnTeam(1)}
-                        aria-label="Next team"
-                      >
-                        <ChevronRight size={18} />
-                      </ActionIcon>
-                    </Group>
-                    {/* Manual isn't part of the team cycle above (the
-                        arrows only ever bump between actual teams), so it
-                        needs its own explicit way in. */}
-                    <Button
-                      size="xs"
-                      variant={turnTeamId == null ? "filled" : "default"}
-                      {...(turnTeamId == null ? { color: "burlywood" } : {})}
-                      onClick={() => onSetTurnTeam(null)}
-                    >
-                      Manual
-                    </Button>
-                  </Group>
-                </Stack>
-              )}
-              <SearchBody
-                search={search}
-                onSearchChange={onSearchChange}
-                searchResults={searchResults}
-                draftValueByFpid={draftValueByFpid}
-                onNominate={(fpid) => {
-                  onNominate(fpid);
-                  setPopoverOpen(false);
-                }}
-                onSelectPlayer={onSelectPlayer}
-                touchFriendly
-              />
-            </Stack>
-          </Popover.Dropdown>
-        </Popover>
+          {fabIcon}
+        </ActionIcon>
       </Box>
 
-      {activeNomination && (
-        <MobileNominationBar
+      <Drawer
+        hiddenFrom="sm"
+        opened={sheetOpen}
+        onClose={() => {
+          if (effectiveMode === "search") {
+            setMode("closed");
+          } else {
+            setMinimized(true);
+          }
+        }}
+        position="bottom"
+        withCloseButton={false}
+        size="auto"
+        zIndex={220}
+        styles={{
+          content: {
+            maxWidth: 480,
+            margin: "0 auto",
+            maxHeight: "85vh",
+            borderTopLeftRadius: "var(--mantine-radius-xl)",
+            borderTopRightRadius: "var(--mantine-radius-xl)",
+          },
+          body: {
+            paddingBottom:
+              "calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom))",
+          },
+        }}
+      >
+        {effectiveMode === "search" && (
+          <Stack gap={10}>
+            <Group justify="space-between" wrap="nowrap">
+              <Text fw={700} size="lg">
+                Nominate a Player
+              </Text>
+              <Group gap={6} wrap="nowrap">
+                <ActionIcon
+                  variant="default"
+                  radius="xl"
+                  onClick={() => setMinimized(true)}
+                  aria-label="Minimize"
+                  title="Minimize - keeps your search in progress"
+                >
+                  <ChevronDown size={18} />
+                </ActionIcon>
+                <ActionIcon
+                  variant="default"
+                  radius="xl"
+                  onClick={() => setMode("closed")}
+                  aria-label="Close"
+                >
+                  <X size={18} />
+                </ActionIcon>
+              </Group>
+            </Group>
+
+            {usingGenericValues && (
+              <Group gap={6} wrap="nowrap">
+                <Text size="sm" c="dimmed">
+                  Values shown are estimates
+                </Text>
+                <GenericValueBadge />
+              </Group>
+            )}
+            {nominationOrderEnabled && (
+              <Stack gap={4}>
+                <Text size="sm" c="dimmed">
+                  Nominating team
+                </Text>
+                <Group gap={8} wrap="nowrap" justify="space-between">
+                  <Group gap={4} wrap="nowrap">
+                    <ActionIcon
+                      variant="default"
+                      size="lg"
+                      onClick={() => bumpTurnTeam(-1)}
+                      aria-label="Previous team"
+                    >
+                      <ChevronLeft size={18} />
+                    </ActionIcon>
+                    <Text
+                      size="sm"
+                      fw={600}
+                      ta="center"
+                      style={{ minWidth: 108 }}
+                    >
+                      {currentTeamName ?? "Manual"}
+                    </Text>
+                    <ActionIcon
+                      variant="default"
+                      size="lg"
+                      onClick={() => bumpTurnTeam(1)}
+                      aria-label="Next team"
+                    >
+                      <ChevronRight size={18} />
+                    </ActionIcon>
+                  </Group>
+                  {/* Manual isn't part of the team cycle above (the arrows
+                      only ever bump between actual teams), so it needs its
+                      own explicit way in. */}
+                  <Button
+                    size="xs"
+                    variant={turnTeamId == null ? "filled" : "default"}
+                    {...(turnTeamId == null ? { color: "burlywood" } : {})}
+                    onClick={() => onSetTurnTeam(null)}
+                  >
+                    Manual
+                  </Button>
+                </Group>
+              </Stack>
+            )}
+            <SearchBody
+              search={search}
+              onSearchChange={onSearchChange}
+              searchResults={searchResults}
+              draftValueByFpid={draftValueByFpid}
+              onNominate={(fpid) => {
+                onNominate(fpid);
+                setMode("closed");
+                setMinimized(false);
+              }}
+              onSelectPlayer={onSelectPlayer}
+              touchFriendly
+            />
+          </Stack>
+        )}
+
+        {effectiveMode === "assign" && activeNomination && (
+          <AssignDrawerBody
+            activeNomination={activeNomination}
+            nominatedPlayer={nominatedPlayer}
+            nominatedValue={nominatedValue}
+            nominatingTeam={nominatingTeam}
+            teams={teams}
+            selfTeamId={selfTeamId}
+            onBumpBid={onBumpBid}
+            onSetBid={onSetBid}
+            onAssignWinner={onAssignWinner}
+            onPass={onPass}
+            onSelectPlayer={onSelectPlayer}
+            usingGenericValues={usingGenericValues}
+            onMinimize={() => setMinimized(true)}
+          />
+        )}
+      </Drawer>
+
+      {peeking && effectiveMode === "search" && (
+        <SearchPeekCard
+          label={
+            nominationOrderEnabled
+              ? `${currentTeamName ?? "Manual"} is nominating`
+              : "Search a player to nominate"
+          }
+          onClick={() => setMinimized(false)}
+        />
+      )}
+
+      {peeking && effectiveMode === "assign" && activeNomination && (
+        <AssignPeekCard
           activeNomination={activeNomination}
           nominatedPlayer={nominatedPlayer}
           nominatedValue={nominatedValue}
-          teams={teams}
-          selfTeamId={selfTeamId}
-          onBumpBid={onBumpBid}
-          onSetBid={onSetBid}
-          onAssignWinner={onAssignWinner}
-          onPass={onPass}
-          onSelectPlayer={onSelectPlayer}
           usingGenericValues={usingGenericValues}
+          onClick={() => setMinimized(false)}
         />
       )}
     </>
   );
 }
 
-interface MobileNominationBarProps {
+interface AssignDrawerBodyProps {
   activeNomination: Doc<"draftNominations">;
   nominatedPlayer: { name: string; team: string | null } | undefined;
   nominatedValue: { dollarValue: number } | undefined;
+  nominatingTeam: Doc<"seasonTeams"> | undefined;
   teams: Doc<"seasonTeams">[];
   selfTeamId: Id<"seasonTeams">;
   onBumpBid: (delta: number) => void;
@@ -296,12 +393,14 @@ interface MobileNominationBarProps {
   onPass: () => void;
   onSelectPlayer: (fpid: number) => void;
   usingGenericValues: boolean;
+  onMinimize: () => void;
 }
 
-function MobileNominationBar({
+function AssignDrawerBody({
   activeNomination,
   nominatedPlayer,
   nominatedValue,
+  nominatingTeam,
   teams,
   selfTeamId,
   onBumpBid,
@@ -310,7 +409,8 @@ function MobileNominationBar({
   onPass,
   onSelectPlayer,
   usingGenericValues,
-}: MobileNominationBarProps) {
+  onMinimize,
+}: AssignDrawerBodyProps) {
   // Self team always listed first - it's the common case, and with the
   // dedicated "I won" button gone on mobile, picking it from this list is
   // now the only way to log a self-win.
@@ -349,59 +449,226 @@ function MobileNominationBar({
   const incrementBidHold = useHoldRepeat(() => onBumpBid(1));
 
   return (
+    <Stack gap={10}>
+      <Group justify="space-between" align="center" wrap="nowrap">
+        <Text size="xs" c="dimmed">
+          {nominatingTeam
+            ? `Nominated by ${nominatingTeam.name}`
+            : "Active nomination"}
+        </Text>
+        <ActionIcon
+          variant="default"
+          radius="xl"
+          onClick={onMinimize}
+          aria-label="Minimize"
+          title="Minimize - keeps this nomination in view"
+        >
+          <ChevronDown size={18} />
+        </ActionIcon>
+      </Group>
+
+      <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+        {nominatedPlayer ? (
+          <Text
+            fw={700}
+            truncate
+            style={{ flex: 1, minWidth: 0 }}
+            onClick={() => onSelectPlayer(activeNomination.fpid)}
+          >
+            {nominatedPlayer.name}
+          </Text>
+        ) : (
+          <Text fw={700} truncate style={{ flex: 1, minWidth: 0 }}>
+            Player #{activeNomination.fpid}
+          </Text>
+        )}
+        <Badge
+          size="sm"
+          variant="light"
+          color={POSITION_COLORS[activeNomination.position]}
+        >
+          {activeNomination.position}
+        </Badge>
+        {nominatedPlayer?.team && (
+          <Badge size="sm" variant="outline" color="gray">
+            {nominatedPlayer.team}
+          </Badge>
+        )}
+        {nominatedValue && (
+          <Group gap={4} wrap="nowrap">
+            <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+              ~${Math.round(nominatedValue.dollarValue)}
+            </Text>
+            {usingGenericValues && <GenericValueBadge />}
+          </Group>
+        )}
+      </Group>
+
+      <Group gap={8} wrap="nowrap">
+        <Select
+          size="md"
+          data={orderedTeams.map((team) => ({
+            value: team._id,
+            label: team.isSelf ? `${team.name} (me)` : team.name,
+          }))}
+          value={winnerTeamId}
+          onChange={(value) =>
+            value && setWinnerTeamId(value as Id<"seasonTeams">)
+          }
+          allowDeselect={false}
+          style={{ flex: 1, minWidth: 0 }}
+        />
+        <ActionIcon
+          size={40}
+          variant="default"
+          onClick={() => onBumpBid(-1)}
+          {...decrementBidHold}
+        >
+          −
+        </ActionIcon>
+        <NumberInput
+          hideControls
+          min={1}
+          value={bidDraft}
+          onChange={setBidDraft}
+          onFocus={() => setEditingBid(true)}
+          onBlur={commitBidDraft}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          prefix="$"
+          w={70}
+          size="md"
+          styles={{
+            input: {
+              fontFamily: "var(--mantine-font-family-monospace)",
+              fontWeight: 700,
+              textAlign: "center",
+              color: "var(--mantine-color-saddlebrown-5)",
+            },
+          }}
+        />
+        <ActionIcon
+          size={40}
+          variant="default"
+          onClick={() => onBumpBid(1)}
+          {...incrementBidHold}
+        >
+          +
+        </ActionIcon>
+      </Group>
+
+      <Group gap={8} wrap="nowrap">
+        <Button
+          size="md"
+          color="saddlebrown"
+          style={{ flex: 1 }}
+          onClick={() => onAssignWinner(winnerTeamId)}
+        >
+          Assign
+        </Button>
+        <Button size="md" variant="subtle" color="gray" onClick={onPass}>
+          Pass
+        </Button>
+      </Group>
+    </Stack>
+  );
+}
+
+// Shared floating-card chrome for both minimized states below - same frosted
+// glass treatment as BottomNav.tsx/AppHeader.tsx and the drawer it stands in
+// for while minimized.
+function PeekCard({
+  children,
+  onClick,
+  ariaLabel,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  ariaLabel: string;
+}) {
+  return (
     <Box
       hiddenFrom="sm"
       pos="fixed"
       left={12}
       right={12}
+      role="button"
+      tabIndex={0}
+      aria-label={ariaLabel}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onClick();
+      }}
       style={{
-        bottom: "calc(90px + env(safe-area-inset-bottom))",
-        zIndex: 200,
+        bottom: PEEK_BOTTOM_OFFSET,
+        zIndex: 205,
         maxWidth: 480,
         margin: "0 auto",
-        padding: "var(--mantine-spacing-md)",
+        padding: "10px 14px",
         borderRadius: "var(--mantine-radius-xl)",
         border: "1px solid var(--mantine-color-default-border)",
-        // Same light-dark() as the global Popover default in theme.ts -
-        // this Box isn't a real Popover (just styled to match one), so it
-        // doesn't inherit that theme default and needs its own copy. Same
-        // frosted-glass treatment as every other elevated surface
-        // (BottomNav.tsx, AppHeader.tsx, and now Popover.Dropdown itself).
         background:
           "light-dark(color-mix(in srgb, var(--mantine-color-gray-1) 65%, transparent), color-mix(in srgb, var(--mantine-color-dark-5) 50%, transparent))",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         boxShadow: "var(--mantine-shadow-lg)",
+        cursor: "pointer",
       }}
     >
-      <Stack gap={10}>
-        <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-          {nominatedPlayer ? (
-            <Text
-              fw={700}
-              truncate
-              style={{ flex: 1, minWidth: 0 }}
-              onClick={() => onSelectPlayer(activeNomination.fpid)}
-            >
-              {nominatedPlayer.name}
-            </Text>
-          ) : (
-            <Text fw={700} truncate style={{ flex: 1, minWidth: 0 }}>
-              Player #{activeNomination.fpid}
-            </Text>
-          )}
-          <Badge
-            size="sm"
-            variant="light"
-            color={POSITION_COLORS[activeNomination.position]}
-          >
-            {activeNomination.position}
-          </Badge>
-          {nominatedPlayer?.team && (
-            <Badge size="sm" variant="outline" color="gray">
-              {nominatedPlayer.team}
-            </Badge>
-          )}
+      {children}
+    </Box>
+  );
+}
+
+function SearchPeekCard({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <PeekCard onClick={onClick} ariaLabel="Resume nominating a player">
+      <Group gap={8} wrap="nowrap" justify="space-between">
+        <Text size="sm" fw={600} truncate style={{ flex: 1, minWidth: 0 }}>
+          {label}
+        </Text>
+        <ChevronUp size={16} />
+      </Group>
+    </PeekCard>
+  );
+}
+
+interface AssignPeekCardProps {
+  activeNomination: Doc<"draftNominations">;
+  nominatedPlayer: { name: string; team: string | null } | undefined;
+  nominatedValue: { dollarValue: number } | undefined;
+  usingGenericValues: boolean;
+  onClick: () => void;
+}
+
+function AssignPeekCard({
+  activeNomination,
+  nominatedPlayer,
+  nominatedValue,
+  usingGenericValues,
+  onClick,
+}: AssignPeekCardProps) {
+  return (
+    <PeekCard onClick={onClick} ariaLabel="Resume nomination">
+      <Group gap={10} wrap="nowrap">
+        <Badge
+          size="sm"
+          variant="light"
+          color={POSITION_COLORS[activeNomination.position]}
+        >
+          {activeNomination.position}
+        </Badge>
+        <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
+          <Text size="sm" fw={600} truncate>
+            {nominatedPlayer?.name ?? `Player #${activeNomination.fpid}`}
+          </Text>
           {nominatedValue && (
             <Group gap={4} wrap="nowrap">
               <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
@@ -410,76 +677,16 @@ function MobileNominationBar({
               {usingGenericValues && <GenericValueBadge />}
             </Group>
           )}
-        </Group>
-
-        <Group gap={8} wrap="nowrap">
-          <Select
-            size="md"
-            data={orderedTeams.map((team) => ({
-              value: team._id,
-              label: team.isSelf ? `${team.name} (me)` : team.name,
-            }))}
-            value={winnerTeamId}
-            onChange={(value) =>
-              value && setWinnerTeamId(value as Id<"seasonTeams">)
-            }
-            allowDeselect={false}
-            style={{ flex: 1, minWidth: 0 }}
-          />
-          <ActionIcon
-            size={40}
-            variant="default"
-            onClick={() => onBumpBid(-1)}
-            {...decrementBidHold}
-          >
-            −
-          </ActionIcon>
-          <NumberInput
-            hideControls
-            min={1}
-            value={bidDraft}
-            onChange={setBidDraft}
-            onFocus={() => setEditingBid(true)}
-            onBlur={commitBidDraft}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
-            prefix="$"
-            w={70}
-            size="md"
-            styles={{
-              input: {
-                fontFamily: "var(--mantine-font-family-monospace)",
-                fontWeight: 700,
-                textAlign: "center",
-                color: "var(--mantine-color-saddlebrown-5)",
-              },
-            }}
-          />
-          <ActionIcon
-            size={40}
-            variant="default"
-            onClick={() => onBumpBid(1)}
-            {...incrementBidHold}
-          >
-            +
-          </ActionIcon>
-        </Group>
-
-        <Group gap={8} wrap="nowrap">
-          <Button
-            size="md"
-            color="saddlebrown"
-            style={{ flex: 1 }}
-            onClick={() => onAssignWinner(winnerTeamId)}
-          >
-            Assign
-          </Button>
-          <Button size="md" variant="subtle" color="gray" onClick={onPass}>
-            Pass
-          </Button>
-        </Group>
-      </Stack>
-    </Box>
+        </Stack>
+        <Text
+          size="md"
+          fw={700}
+          style={{ color: "var(--mantine-color-saddlebrown-5)" }}
+        >
+          ${activeNomination.currentBid}
+        </Text>
+        <ChevronUp size={16} />
+      </Group>
+    </PeekCard>
   );
 }

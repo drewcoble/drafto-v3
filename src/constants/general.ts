@@ -72,7 +72,7 @@ export const BOTTOM_NAV_HEIGHT = 58;
 
 // The +/- tap target size used by the Budget tab's per-slot $ stepper
 // (SlotRow.tsx) and the Draft Room's live bid stepper
-// (MobileNomination.tsx's MobileNominationBar) - both hand-picked this
+// (MobileNomination.tsx's AssignDrawerBody) - both hand-picked this
 // exact ActionIcon size already. components/NumberStepper.tsx's shared
 // CountStepper/EditableNumberStepper now use this too instead of their own
 // much smaller default, so every +/- control in the app (roster slot
