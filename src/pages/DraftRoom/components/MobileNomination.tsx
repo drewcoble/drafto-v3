@@ -627,29 +627,13 @@ function AssignDrawerBody({
     : undefined;
 
   return (
-    <Stack gap={10}>
+    <Stack gap={20}>
       <Group justify="space-between" align="center" wrap="nowrap">
-        <Group gap={10} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-          {nominatedValue && (
-            <Text size="sm" fw={700} c="teal" style={{ whiteSpace: "nowrap" }}>
-              Est. ${Math.round(nominatedValue.dollarValue)}
-            </Text>
-          )}
-          {planMatch && (
-            <Text size="xs" c="dimmed" truncate>
-              {planMatch.slotLabel} budget:{" "}
-              <Text
-                component="span"
-                inherit
-                fw={700}
-                c="var(--mantine-color-text)"
-              >
-                ${Math.round(planMatch.amount)}
-              </Text>
-            </Text>
-          )}
-          {usingGenericValues && <GenericValueBadge />}
-        </Group>
+        <Text size="xs" c="dimmed">
+          {nominatingTeam
+            ? `Nominated by ${nominatingTeam.name}`
+            : "Active nomination"}
+        </Text>
         <ActionIcon
           variant="default"
           radius="xl"
@@ -661,170 +645,192 @@ function AssignDrawerBody({
         </ActionIcon>
       </Group>
 
-      <Text size="xs" c="dimmed">
-        {nominatingTeam
-          ? `Nominated by ${nominatingTeam.name}`
-          : "Active nomination"}
-      </Text>
-
-      <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-        <Badge
-          size="sm"
-          variant="light"
-          color={POSITION_COLORS[activeNomination.position]}
-        >
-          {activeNomination.position}
-        </Badge>
-        {nominatedPlayer ? (
-          <Text
-            fw={700}
-            size="lg"
-            truncate
-            style={{ flex: 1, minWidth: 0 }}
-            onClick={() => onSelectPlayer(activeNomination.fpid)}
+      <Stack gap={8}>
+        <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+          <Badge
+            size="sm"
+            variant="light"
+            color={POSITION_COLORS[activeNomination.position]}
           >
-            {nominatedPlayer.name}
-          </Text>
-        ) : (
-          <Text fw={700} size="lg" truncate style={{ flex: 1, minWidth: 0 }}>
-            Player #{activeNomination.fpid}
-          </Text>
-        )}
-        {nominatedPlayer?.team && (
-          <Badge size="sm" variant="outline" color="gray">
-            {nominatedPlayer.team}
+            {activeNomination.position}
           </Badge>
-        )}
-      </Group>
+          {nominatedPlayer ? (
+            <Text
+              fw={700}
+              size="lg"
+              truncate
+              style={{ flex: 1, minWidth: 0 }}
+              onClick={() => onSelectPlayer(activeNomination.fpid)}
+            >
+              {nominatedPlayer.name}
+            </Text>
+          ) : (
+            <Text fw={700} size="lg" truncate style={{ flex: 1, minWidth: 0 }}>
+              Player #{activeNomination.fpid}
+            </Text>
+          )}
+          {nominatedPlayer?.team && (
+            <Badge size="sm" variant="outline" color="gray">
+              {nominatedPlayer.team}
+            </Badge>
+          )}
+        </Group>
 
-      <Group gap={10} wrap="wrap" align="center">
-        <Button
-          size="compact-xs"
-          {...(tag ? playerTagStyle(tag) : { variant: "default" })}
-          leftSection={
-            tag === "avoid" ? (
-              <CircleSlash size={12} />
-            ) : (
-              <Crosshair size={12} />
-            )
-          }
-          onClick={onCycleTag}
-        >
-          {tag === "target" ? "Target" : tag === "avoid" ? "Avoid" : "+ Tag"}
-        </Button>
-        {valueGap?.direction === "undervalued" ? (
-          <Tooltip label="Undervalued" withArrow>
-            <ThemeIcon size="sm" color="gold" variant="light">
-              <HandCoins size={14} />
-            </ThemeIcon>
-          </Tooltip>
-        ) : valueGap?.direction === "breakout" ? (
-          <Tooltip label="Breakout Player" withArrow>
-            <ThemeIcon size="sm" color="grape" variant="light">
-              <Rocket size={14} />
-            </ThemeIcon>
-          </Tooltip>
-        ) : valueGap?.direction === "falloff" ? (
-          <Tooltip label="Falloff Player" withArrow>
-            <ThemeIcon size="sm" color="red" variant="light">
-              <TrendingDown size={14} />
-            </ThemeIcon>
-          </Tooltip>
-        ) : (
-          valueGap?.direction === "overvalued" && (
-            <Tooltip label="Overvalued" withArrow>
-              <ThemeIcon size="sm" color="red" variant="light">
-                <BanknoteArrowDown size={14} />
+        <Group gap={10} wrap="wrap" align="center">
+          <Button
+            size="compact-xs"
+            {...(tag ? playerTagStyle(tag) : { variant: "default" })}
+            leftSection={
+              tag === "avoid" ? (
+                <CircleSlash size={12} />
+              ) : (
+                <Crosshair size={12} />
+              )
+            }
+            onClick={onCycleTag}
+          >
+            {tag === "target" ? "Target" : tag === "avoid" ? "Avoid" : "+ Tag"}
+          </Button>
+          {valueGap?.direction === "undervalued" ? (
+            <Tooltip label="Undervalued" withArrow>
+              <ThemeIcon size="sm" color="gold" variant="light">
+                <HandCoins size={14} />
               </ThemeIcon>
             </Tooltip>
-          )
-        )}
-        {consistency && ConsistencyRowIcon && (
-          <Tooltip label={consistency} withArrow>
-            <ThemeIcon
-              size="sm"
-              variant="light"
-              color={consistencyColor(consistency)}
-            >
-              <ConsistencyRowIcon size={14} />
-            </ThemeIcon>
-          </Tooltip>
-        )}
-      </Group>
+          ) : valueGap?.direction === "breakout" ? (
+            <Tooltip label="Breakout Player" withArrow>
+              <ThemeIcon size="sm" color="grape" variant="light">
+                <Rocket size={14} />
+              </ThemeIcon>
+            </Tooltip>
+          ) : valueGap?.direction === "falloff" ? (
+            <Tooltip label="Falloff Player" withArrow>
+              <ThemeIcon size="sm" color="red" variant="light">
+                <TrendingDown size={14} />
+              </ThemeIcon>
+            </Tooltip>
+          ) : (
+            valueGap?.direction === "overvalued" && (
+              <Tooltip label="Overvalued" withArrow>
+                <ThemeIcon size="sm" color="red" variant="light">
+                  <BanknoteArrowDown size={14} />
+                </ThemeIcon>
+              </Tooltip>
+            )
+          )}
+          {consistency && ConsistencyRowIcon && (
+            <Tooltip label={consistency} withArrow>
+              <ThemeIcon
+                size="sm"
+                variant="light"
+                color={consistencyColor(consistency)}
+              >
+                <ConsistencyRowIcon size={14} />
+              </ThemeIcon>
+            </Tooltip>
+          )}
+        </Group>
+      </Stack>
 
-      <Text size="xs" c="dimmed">
-        Winning team
-      </Text>
-      <TeamChipRow
-        teams={orderedTeams.map((team) => ({
-          id: team._id,
-          label: team.isSelf ? `${team.name} (me)` : team.name,
-        }))}
-        selectedId={winnerTeamId}
-        onSelect={(id) => id && setWinnerTeamId(id)}
-      />
-
-      <Text size="xs" c="dimmed">
-        Final price
-      </Text>
-      <Group gap={8} wrap="nowrap">
-        <ActionIcon
-          size={40}
-          variant="default"
-          onClick={() => onBumpBid(-1)}
-          {...decrementBidHold}
-        >
-          −
-        </ActionIcon>
-        <NumberInput
-          hideControls
-          min={1}
-          value={bidDraft}
-          onChange={setBidDraft}
-          onFocus={() => setEditingBid(true)}
-          onBlur={commitBidDraft}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
-          }}
-          prefix="$"
-          style={{ flex: 1 }}
-          size="md"
-          styles={{
-            input: {
-              fontFamily: "var(--mantine-font-family-monospace)",
-              fontWeight: 700,
-              textAlign: "center",
-              fontSize: "var(--mantine-font-size-lg)",
-              color: "var(--mantine-color-saddlebrown-5)",
-            },
-          }}
+      <Stack gap={4}>
+        <Text size="xs" c="dimmed">
+          Winning team
+        </Text>
+        <TeamChipRow
+          teams={orderedTeams.map((team) => ({
+            id: team._id,
+            label: team.isSelf ? `${team.name} (me)` : team.name,
+          }))}
+          selectedId={winnerTeamId}
+          onSelect={(id) => id && setWinnerTeamId(id)}
         />
-        <ActionIcon
-          size={40}
-          variant="default"
-          onClick={() => onBumpBid(1)}
-          {...incrementBidHold}
-        >
-          +
-        </ActionIcon>
+      </Stack>
+
+      <Group gap={10} wrap="nowrap" style={{ minWidth: 0 }}>
+        {nominatedValue && (
+          <Text size="sm" fw={700} c="teal" style={{ whiteSpace: "nowrap" }}>
+            Est. ${Math.round(nominatedValue.dollarValue)}
+          </Text>
+        )}
+        {planMatch && (
+          <Text size="xs" c="dimmed" truncate>
+            {planMatch.slotLabel} budget:{" "}
+            <Text
+              component="span"
+              inherit
+              fw={700}
+              c="var(--mantine-color-text)"
+            >
+              ${Math.round(planMatch.amount)}
+            </Text>
+          </Text>
+        )}
+        {usingGenericValues && <GenericValueBadge />}
       </Group>
 
-      <Group gap={8} wrap="nowrap">
-        <Button
-          variant="default"
-          style={{ flex: 1 }}
-          onClick={() => onBumpBid(5)}
-        >
-          +5
-        </Button>
-        <Button
-          variant="default"
-          style={{ flex: 1 }}
-          onClick={() => onBumpBid(10)}
-        >
-          +10
-        </Button>
-      </Group>
+      <Stack gap={8}>
+        <Text size="xs" c="dimmed">
+          Final price
+        </Text>
+        <Group gap={8} wrap="nowrap">
+          <ActionIcon
+            size={40}
+            variant="default"
+            onClick={() => onBumpBid(-1)}
+            {...decrementBidHold}
+          >
+            −
+          </ActionIcon>
+          <NumberInput
+            hideControls
+            min={1}
+            value={bidDraft}
+            onChange={setBidDraft}
+            onFocus={() => setEditingBid(true)}
+            onBlur={commitBidDraft}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+            }}
+            prefix="$"
+            style={{ flex: 1 }}
+            size="md"
+            styles={{
+              input: {
+                fontFamily: "var(--mantine-font-family-monospace)",
+                fontWeight: 700,
+                textAlign: "center",
+                fontSize: "var(--mantine-font-size-lg)",
+                color: "var(--mantine-color-saddlebrown-5)",
+              },
+            }}
+          />
+          <ActionIcon
+            size={40}
+            variant="default"
+            onClick={() => onBumpBid(1)}
+            {...incrementBidHold}
+          >
+            +
+          </ActionIcon>
+        </Group>
+
+        <Group gap={8} wrap="nowrap">
+          <Button
+            variant="default"
+            style={{ flex: 1 }}
+            onClick={() => onBumpBid(5)}
+          >
+            +5
+          </Button>
+          <Button
+            variant="default"
+            style={{ flex: 1 }}
+            onClick={() => onBumpBid(10)}
+          >
+            +10
+          </Button>
+        </Group>
+      </Stack>
 
       <Group gap={8} wrap="nowrap">
         <Button
