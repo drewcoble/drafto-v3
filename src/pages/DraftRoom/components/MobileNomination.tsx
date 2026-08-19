@@ -307,9 +307,35 @@ export function MobileNomination({
         // what keeps BottomNav paintable on top of that background too.
         zIndex={150}
         styles={{
+          // Left visually bare (no background/radius/shadow of its own) -
+          // see the draggable div just below for why: Mantine's own open/
+          // close Transition sets this exact node's `transform` on every
+          // render (even once "entered"), so our own drag transform can't
+          // live here without the two fighting each other every frame.
           content: {
             maxWidth: 480,
             margin: "0 auto",
+            background: "transparent",
+            boxShadow: "none",
+          },
+          body: {
+            height: "100%",
+            padding: 0,
+            display: "flex",
+            flexDirection: "column",
+          },
+        }}
+      >
+        {/* Owns the sheet's actual background/radius/blur (not Content
+            above) specifically so dragging moves the whole visible card -
+            chrome included - together with the finger, rather than just the
+            handle/content sliding inside a background that stays put. */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
             borderTopLeftRadius: "var(--mantine-radius-xl)",
             borderTopRightRadius: "var(--mantine-radius-xl)",
             overflow: "hidden",
@@ -323,26 +349,6 @@ export function MobileNomination({
               "light-dark(color-mix(in srgb, var(--mantine-color-body) 85%, transparent), color-mix(in srgb, var(--mantine-color-dark-6) 85%, transparent))",
             backdropFilter: "blur(16px)",
             WebkitBackdropFilter: "blur(16px)",
-          },
-          body: {
-            height: "100%",
-            padding: 0,
-            display: "flex",
-            flexDirection: "column",
-          },
-        }}
-      >
-        {/* Follows the drag handle 1:1 while dragging (see
-            useSwipeToDismiss) and snaps back once released below the
-            dismiss threshold - Content itself (background/rounded corners/
-            Mantine's own open/close transition) stays untouched so this
-            never fights that transition's own transform. */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            minHeight: 0,
             transform: `translateY(${dragY}px)`,
             transition: dragY === 0 ? "transform 200ms ease" : "none",
           }}
