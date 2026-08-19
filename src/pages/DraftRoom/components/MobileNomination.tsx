@@ -694,8 +694,19 @@ const PEEK_CARD_BACKGROUND =
 // BottomNav.tsx) - it doesn't know or care whether a peek card is attached
 // above it. That radius doesn't reach BottomNav's full width until this many
 // px down from its top edge, so a peek card flush against that top edge with
-// square bottom corners would leave a curved gap open at each side, right
-// where BottomNav's own corner hasn't squared off yet.
+// square bottom corners leaves a curved gap open at each side, right where
+// BottomNav's own corner hasn't squared off yet.
+//
+// A radial-gradient version of this (transparent over BottomNav's own
+// curve, solid everywhere else) traced that curve exactly, but relied on a
+// CSS custom property as a gradient color-stop position - iOS Safari drops
+// that whole `background` declaration rather than resolving it, which
+// silently no-ops the patch entirely. A plain solid square is far more
+// widely supported and, since it's blurred/tinted the same as BottomNav
+// itself, reads the same either way: it simply squares off that one corner
+// while a peek card is attached (BottomNav's own corners - and the DOM
+// underneath this patch - are untouched, so it still looks exactly as
+// before once nothing's attached above it).
 function CornerFillPatch({ side }: { side: "left" | "right" }) {
   return (
     <Box
@@ -705,12 +716,7 @@ function CornerFillPatch({ side }: { side: "left" | "right" }) {
       style={{
         width: "var(--mantine-radius-xl)",
         height: "var(--mantine-radius-xl)",
-        // Transparent inside BottomNav's own corner circle (so its rendered
-        // pixels/border show through untouched), solid everywhere else in
-        // this square - i.e. exactly the sliver BottomNav's rounding cuts
-        // away outside that circle. A hard-edged (not soft) stop, since this
-        // is tracing a real geometric boundary, not fading a gradient.
-        background: `radial-gradient(circle at bottom ${side}, transparent var(--mantine-radius-xl), ${PEEK_CARD_BACKGROUND} var(--mantine-radius-xl))`,
+        background: PEEK_CARD_BACKGROUND,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         pointerEvents: "none",
