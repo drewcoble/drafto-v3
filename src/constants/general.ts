@@ -70,20 +70,6 @@ export const BOTTOM_NAV_BOTTOM_OFFSET = 7;
 // two independently-guessed numbers happening to match.
 export const BOTTOM_NAV_HEIGHT = 58;
 
-// Matches each nav column's own py (see BOTTOM_NAV_HEIGHT's comment) - the
-// vertical padding above its icon, i.e. the deepest a same-width element can
-// overlap BottomNav's top edge without covering any icon/label. Shared by
-// two things that need to agree exactly: BottomNav.tsx shrinks its own top-
-// left/top-right corner radius to this value while a peek card is actually
-// attached above it (LeagueLayout in route.tsx tracks that and passes it
-// down - not simply "a draft is running", which left the corners looking
-// flattened for no reason any time nothing was attached), and
-// MobileNomination.tsx's peek card overlaps BottomNav by exactly this much
-// while showing. Together that closes the gap a rounded top corner would
-// otherwise leave under the peek card's own square bottom corners, with
-// zero risk of clipping BottomNav's icons.
-export const BOTTOM_NAV_ATTACHED_RADIUS = 12;
-
 // The +/- tap target size used by the Budget tab's per-slot $ stepper
 // (SlotRow.tsx) and the Draft Room's live bid stepper
 // (MobileNomination.tsx's AssignDrawerBody) - both hand-picked this

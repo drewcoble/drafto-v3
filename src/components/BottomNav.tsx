@@ -3,7 +3,6 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  BOTTOM_NAV_ATTACHED_RADIUS,
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
 } from "../constants/general";
@@ -29,13 +28,6 @@ type BottomNavProps = {
   // route.tsx's isStarted); before that there's no FAB, so it renders one
   // flat evenly-spaced row instead of splitting around an empty gap.
   hasFab?: boolean;
-  // True while MobileNomination's minimized peek card is actually showing
-  // (tracked in route.tsx's LeagueLayout, not simply "a draft is running" -
-  // see BOTTOM_NAV_ATTACHED_RADIUS's comment) - shrinks just the top-left/
-  // top-right corner radius so that card can sit flush above this bar with
-  // no gap at the sides. Independent of hasFab: without an attached card,
-  // this bar always keeps its normal full "xl" rounding on every corner.
-  attachedCardShowing?: boolean;
 };
 
 // `to` is a plain `string` on BottomNavItem (items come from a shared,
@@ -70,7 +62,6 @@ export function BottomNav({
   more,
   leagueId,
   hasFab = false,
-  attachedCardShowing = false,
 }: BottomNavProps) {
   const location = useLocation();
   const activeValue = location.pathname.split("/").pop();
@@ -160,9 +151,7 @@ export function BottomNav({
         alignItems: "center",
         maxWidth: 480,
         margin: "0 auto",
-        borderRadius: attachedCardShowing
-          ? `${BOTTOM_NAV_ATTACHED_RADIUS}px ${BOTTOM_NAV_ATTACHED_RADIUS}px var(--mantine-radius-xl) var(--mantine-radius-xl)`
-          : "var(--mantine-radius-xl)",
+        borderRadius: "var(--mantine-radius-xl)",
         border: "1px solid var(--mantine-color-default-border)",
         // Dark mode: dark-5, one shade lighter than the dark-green
         // "surface" color Card/Popover use (--mantine-color-dark-6, see

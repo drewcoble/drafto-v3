@@ -56,37 +56,29 @@ interface MobileNominationProps {
   usingGenericValues: boolean;
 
   onSelectPlayer: (fpid: number) => void;
-
-  // Reports whether the minimized peek card is actually on screen - route.tsx's
-  // LeagueLayout forwards this to BottomNav so it can shrink its own top
-  // corners to match while (and only while) something's really attached
-  // above it. Optional since not every MobileNomination call site needs it.
-  onPeekingChange?: (peeking: boolean) => void;
 }
 
 type SheetMode = "closed" | "search" | "assign";
 
-// The nominate FAB's own circle size (see its ActionIcon below) - its
-// wrapper Box shares BottomNav's exact height/bottom offset, so centering a
-// circle this size within it insets the FAB's top edge from BottomNav's own
-// top edge by exactly this much on each side.
+// The nominate FAB's own circle size (see its ActionIcon below).
 const NOMINATE_FAB_SIZE = 56;
 
-// A few extra px of overlap on top of the FAB-edge alignment below - the
-// peek card sits behind BottomNav (see its own zIndex comment), so this is
-// free to go a little deeper without covering BottomNav's icons: BottomNav
-// itself paints over most of it, and the card's own color only actually
-// shows through in the sliver BottomNav's rounded top corners leave open,
-// closing what would otherwise be a small visible gap there.
-const PEEK_EXTRA_OVERLAP = 5;
+// Bottom offset for both minimized "peek" cards below - overlaps
+// BottomNav's top edge by exactly its own "xl" corner radius (BottomNav
+// always keeps that radius, on every corner, whether or not a peek card is
+// attached - see BottomNav.tsx). The peek card sits behind BottomNav (see
+// its own zIndex comment) so this overlap is purely a backing color: it's
+// invisible everywhere BottomNav actually paints, and only shows through in
+// the sliver BottomNav's rounded corner leaves open - matching this depth
+// exactly is what closes that gap with no residual, rather than leaving
+// some of the curve still exposed.
+const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px - var(--mantine-radius-xl) + env(safe-area-inset-bottom))`;
 
-// Bottom offset shared by both minimized "peek" cards below - overlaps
-// BottomNav's top edge by just enough that the seam lands level with the
-// nominate FAB's own top edge (see NOMINATE_FAB_SIZE), plus
-// PEEK_EXTRA_OVERLAP, rather than right above BottomNav's icon row -
-// leaving a little breathing room above the icons instead of the card's
-// edge sitting flush against them.
-const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px - ${(BOTTOM_NAV_HEIGHT - NOMINATE_FAB_SIZE) / 2 + PEEK_EXTRA_OVERLAP}px + env(safe-area-inset-bottom))`;
+// The peek card's own bottom padding needs to be at least this deep so
+// BottomNav's overlap (see PEEK_BOTTOM_OFFSET) only ever covers empty
+// padding, never the card's actual name/price/etc. row - the +6px is just
+// breathing room past the exact radius depth.
+const PEEK_BOTTOM_PADDING = "calc(var(--mantine-radius-xl) + 6px)";
 
 // Bottom padding reserved inside the Drawer's own scrollable content - its
 // background now runs all the way to the screen's bottom edge (behind
@@ -164,7 +156,6 @@ export function MobileNomination({
   onNominate,
   usingGenericValues,
   onSelectPlayer,
-  onPeekingChange,
 }: MobileNominationProps) {
   const [mode, setMode] = useState<SheetMode>("closed");
   const [minimized, setMinimized] = useState(false);
@@ -192,12 +183,6 @@ export function MobileNomination({
     mode === "assign" && !activeNomination ? "closed" : mode;
   const sheetOpen = effectiveMode !== "closed" && !minimized;
   const peeking = effectiveMode !== "closed" && minimized;
-
-  useEffect(() => {
-    onPeekingChange?.(peeking);
-    // Nothing was ever attached once this unmounts (draft room left/closed).
-    return () => onPeekingChange?.(false);
-  }, [peeking, onPeekingChange]);
 
   // Same "dismiss" the scrim tap and Escape key trigger, reused as the
   // swipe-to-close target below - search cancels outright, assign only
@@ -740,8 +725,8 @@ function AssignDrawerBody({
 // glass treatment as BottomNav.tsx/AppHeader.tsx and the drawer it stands in
 // for while minimized. Square bottom corners, overlapping BottomNav by
 // PEEK_BOTTOM_OFFSET's own amount - deliberately behind BottomNav in
-// z-index (see below) so that overlap is safe to be a little generous
-// (PEEK_EXTRA_OVERLAP) without any risk of covering BottomNav's icons.
+// z-index (see below), which is what makes that overlap safe (see
+// PEEK_BOTTOM_PADDING for how it stays clear of this card's own content).
 function PeekCard({
   children,
   onClick,
@@ -777,7 +762,7 @@ function PeekCard({
         zIndex: 195,
         maxWidth: 480,
         margin: "0 auto",
-        padding: "10px 14px",
+        padding: `10px 14px ${PEEK_BOTTOM_PADDING}`,
         borderTopLeftRadius: "var(--mantine-radius-xl)",
         borderTopRightRadius: "var(--mantine-radius-xl)",
         borderLeft: "1px solid var(--mantine-color-default-border)",
