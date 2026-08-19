@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   TrendingDown,
   TrendingUpDown,
+  Undo2,
   UserPlus,
   X,
 } from "lucide-react";
@@ -67,7 +68,10 @@ interface MobileNominationProps {
   onBumpBid: (delta: number) => void;
   onSetBid: (amount: number) => void;
   onAssignWinner: (teamId: Id<"seasonTeams">) => void;
-  onPass: () => void;
+  // Cancels the active nomination without recording a pick, restoring
+  // "whose turn" back to whoever made it - see the AssignDrawerBody Undo
+  // button/DraftTopBar.tsx's undoNomination mutation call.
+  onUndo: () => void;
 
   search: string;
   onSearchChange: (value: string) => void;
@@ -192,7 +196,7 @@ export function MobileNomination({
   onBumpBid,
   onSetBid,
   onAssignWinner,
-  onPass,
+  onUndo,
   search,
   onSearchChange,
   searchResults,
@@ -510,7 +514,7 @@ export function MobileNomination({
                 onBumpBid={onBumpBid}
                 onSetBid={onSetBid}
                 onAssignWinner={onAssignWinner}
-                onPass={onPass}
+                onUndo={onUndo}
                 onSelectPlayer={onSelectPlayer}
                 usingGenericValues={usingGenericValues}
                 onMinimize={() => setMinimized(true)}
@@ -559,7 +563,7 @@ interface AssignDrawerBodyProps {
   onBumpBid: (delta: number) => void;
   onSetBid: (amount: number) => void;
   onAssignWinner: (teamId: Id<"seasonTeams">) => void;
-  onPass: () => void;
+  onUndo: () => void;
   onSelectPlayer: (fpid: number) => void;
   usingGenericValues: boolean;
   onMinimize: () => void;
@@ -580,7 +584,7 @@ function AssignDrawerBody({
   onBumpBid,
   onSetBid,
   onAssignWinner,
-  onPass,
+  onUndo,
   onSelectPlayer,
   usingGenericValues,
   onMinimize,
@@ -832,7 +836,16 @@ function AssignDrawerBody({
         </Group>
       </Stack>
 
-      <Group gap={8} wrap="nowrap">
+      <Group gap={10} wrap="nowrap">
+        <ActionIcon
+          size={44}
+          variant="default"
+          onClick={onUndo}
+          aria-label="Undo nomination"
+          title="Undo - cancels this nomination, no pick recorded, and keeps it this team's turn to nominate again"
+        >
+          <Undo2 size={18} />
+        </ActionIcon>
         <Button
           size="md"
           color="saddlebrown"
@@ -840,9 +853,6 @@ function AssignDrawerBody({
           onClick={() => onAssignWinner(winnerTeamId)}
         >
           Assign for ${activeNomination.currentBid}
-        </Button>
-        <Button size="md" variant="subtle" color="gray" onClick={onPass}>
-          Pass
         </Button>
       </Group>
     </Stack>

@@ -113,6 +113,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
   const setNominationBid = useMutation(api.draft.picks.setNominationBid);
   const resolvePick = useMutation(api.draft.picks.resolvePick);
   const passNomination = useMutation(api.draft.picks.passNomination);
+  const undoNomination = useMutation(api.draft.picks.undoNomination);
   const setCurrentNominator = useMutation(
     api.draft.nominationOrder.setCurrentNominator,
   );
@@ -440,7 +441,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
           runAction(() => setNominationBid({ seasonId, amount }))
         }
         onAssignWinner={assignWinner}
-        onPass={() => runAction(() => passNomination({ seasonId }))}
+        onUndo={() => runAction(() => undoNomination({ seasonId }))}
         search={search}
         onSearchChange={setSearch}
         searchResults={searchResults}

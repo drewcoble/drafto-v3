@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { internalMutation, mutation, query } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import {
@@ -208,6 +208,43 @@ export const passNomination = mutation({
       throw new Error("Nothing is currently on the block.");
     }
     await ctx.db.delete(nomination._id);
+    return null;
+  },
+});
+
+// Cancels a mistaken nomination with no pick recorded, and - unlike
+// passNomination, which leaves "whose turn" wherever nominate() already
+// advanced it to - restores the turn pointer back to whoever made this
+// nomination, so they're up again instead of the rotation having moved on.
+// Doesn't attempt to restore snake mode's exact pre-nomination direction
+// (not derivable from what's stored); resets to 1, same tradeoff
+// setCurrentNominator's manual override already makes.
+export const undoNomination = mutation({
+  args: { seasonId: v.id("seasons") },
+  handler: async (ctx, args) => {
+    const { draft } = await requireDraftStarted(ctx, args.seasonId);
+    const nomination = await ctx.db
+      .query("draftNominations")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .first();
+    if (!nomination) {
+      throw new Error("Nothing is currently on the block.");
+    }
+    await ctx.db.delete(nomination._id);
+
+    if (nomination.nominatingTeamId) {
+      const turn = await ctx.db
+        .query("draftNominationTurns")
+        .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+        .first();
+      if (turn) {
+        await ctx.db.patch(turn._id, {
+          currentTeamId: nomination.nominatingTeamId,
+          direction: 1,
+          updatedAt: Date.now(),
+        });
+      }
+    }
     return null;
   },
 });
@@ -677,5 +714,79 @@ export const undoLastPick = mutation({
     }
     await syncDraftStatus(ctx, draft._id);
     return lastPick;
+  },
+});
+
+// Sleeper-sync counterpart to resolvePick - batch-writes picks discovered by
+// polling a linked live Sleeper draft (see convex/sleeper/draftSync.ts's
+// applySleeperSyncTick, the only caller, which has already resolved each
+// pick's fpid/teamId/price before calling here). No nomination to consume
+// and no auto-adjust-budget hook (that's specific to the self team's live
+// in-app bidding flow via resolvePick) - just the same draftPicks row shape
+// resolvePick produces, applied in Sleeper's pick_no order so `sequence`
+// matches real pick order even when one poll discovers several new picks at
+// once. Silently no-ops (not a caller error) for an fpid already in
+// draftPicks - a poll always returns the full pick list so far, and this is
+// the same re-poll idempotency every hop of the sync loop depends on.
+export const applySleeperSyncedPicks = internalMutation({
+  args: {
+    draftId: v.id("drafts"),
+    picks: v.array(
+      v.object({
+        fpid: v.number(),
+        teamId: v.id("seasonTeams"),
+        price: v.number(),
+        pickNo: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, args): Promise<{ applied: number; skipped: number }> => {
+    const lastPick = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft_sequence", (q) => q.eq("draftId", args.draftId))
+      .order("desc")
+      .first();
+    let sequence = lastPick?.sequence ?? 0;
+    let applied = 0;
+    let skipped = 0;
+
+    for (const pick of [...args.picks].sort((a, b) => a.pickNo - b.pickNo)) {
+      const existing = await ctx.db
+        .query("draftPicks")
+        .withIndex("by_draft_fpid", (q) =>
+          q.eq("draftId", args.draftId).eq("fpid", pick.fpid),
+        )
+        .first();
+      if (existing) continue;
+
+      const player = await ctx.db
+        .query("players")
+        .withIndex("by_fpid", (q) => q.eq("fpid", pick.fpid))
+        .first();
+      if (!player) {
+        // Shouldn't normally happen (Sleeper's own player pool backs fpid
+        // resolution), but a mid-season player-pool gap shouldn't crash the
+        // whole batch - skip it and let the caller surface the count.
+        skipped += 1;
+        continue;
+      }
+
+      sequence += 1;
+      await ctx.db.insert("draftPicks", {
+        draftId: args.draftId,
+        sequence,
+        fpid: pick.fpid,
+        position: player.position,
+        teamId: pick.teamId,
+        price: pick.price,
+        createdAt: Date.now(),
+      });
+      applied += 1;
+    }
+
+    if (applied > 0) {
+      await syncDraftStatus(ctx, args.draftId);
+    }
+    return { applied, skipped };
   },
 });
