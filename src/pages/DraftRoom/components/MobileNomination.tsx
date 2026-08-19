@@ -306,6 +306,12 @@ export function MobileNomination({
         // PADDING below for why its content doesn't), so this z-index is
         // what keeps BottomNav paintable on top of that background too.
         zIndex={150}
+        // A slight blur on the scrim itself (not just the sheet's own
+        // background above), matching the frosted-glass treatment used
+        // everywhere else in the app (BottomNav.tsx, AppHeader.tsx, the
+        // sheet's own background) - the rest of the page behind it reads as
+        // softened, not just dimmed.
+        overlayProps={{ blur: 2 }}
         styles={{
           // Left visually bare (no background/radius/shadow of its own) -
           // see the draggable div just below for why: Mantine's own open/
