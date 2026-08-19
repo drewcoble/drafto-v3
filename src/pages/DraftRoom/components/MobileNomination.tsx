@@ -733,17 +733,12 @@ interface TeamChipRowProps {
   onSelect: (id: Id<"seasonTeams"> | null) => void;
 }
 
-// Horizontally-scrollable row of team pills, shared by the search state's
-// "Nominating team" selector and the assign state's "Winning team" one -
-// tap a team directly rather than stepping through them or picking from a
-// dropdown.
+// Wrapping row of team pills, shared by the search state's "Nominating
+// team" selector and the assign state's "Winning team" one - tap a team
+// directly rather than stepping through them or picking from a dropdown.
 function TeamChipRow({ teams, selectedId, onSelect }: TeamChipRowProps) {
   return (
-    <Group
-      gap={8}
-      wrap="nowrap"
-      style={{ overflowX: "auto", paddingBottom: 2 }}
-    >
+    <Group gap={8} wrap="wrap">
       {teams.map((team) => {
         const active = team.id === selectedId;
         return (
@@ -754,7 +749,6 @@ function TeamChipRow({ teams, selectedId, onSelect }: TeamChipRowProps) {
             variant={active ? "filled" : "default"}
             {...(active ? { color: "saddlebrown" } : {})}
             onClick={() => onSelect(team.id)}
-            style={{ flexShrink: 0 }}
           >
             {team.label}
           </Button>
