@@ -19,6 +19,8 @@ import type { PlanSlotMatch } from "../../../lib/planRecommendation";
 import {
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
+  MOBILE_HEADER_HEIGHT,
+  MOBILE_STATS_ROW_HEIGHT,
 } from "../../../constants/general";
 import { useHoldRepeat } from "../../../hooks/useHoldRepeat";
 import { SearchBody, type SearchResult } from "./NominationPanel";
@@ -81,6 +83,15 @@ const PEEK_BOTTOM_PADDING = "calc(var(--mantine-radius-xl) + 6px)";
 // tappable area, so the content stops that much earlier than its
 // background does.
 const DRAWER_CONTENT_BOTTOM_PADDING = `calc(var(--mantine-spacing-md) + ${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`;
+
+// Caps the Drawer's own height so it never reaches up far enough to
+// overlap AppHeader/MobileStatsRow - both fixed above it at a higher
+// z-index than the Drawer (see its own zIndex comment for why: BottomNav
+// needs to outrank the Drawer, and BottomNav sits below both of those bars,
+// so the Drawer can't simply out-rank them too). Reserving their combined
+// height here keeps the two from ever fighting over the same pixels in the
+// first place, rather than trying to resolve it with z-index.
+const DRAWER_MAX_HEIGHT = `calc(100vh - ${MOBILE_HEADER_HEIGHT}px - ${MOBILE_STATS_ROW_HEIGHT}px)`;
 
 // How far down the drag handle has to travel before release counts as a
 // swipe-to-dismiss rather than a tap or an aborted drag.
@@ -301,7 +312,7 @@ export function MobileNomination({
           // live here without the two fighting each other every frame.
           content: {
             maxWidth: 480,
-            maxHeight: "85vh",
+            maxHeight: DRAWER_MAX_HEIGHT,
             margin: "0 auto",
             background: "transparent",
             boxShadow: "none",
