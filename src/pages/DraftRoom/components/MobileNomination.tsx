@@ -72,12 +72,21 @@ type SheetMode = "closed" | "search" | "assign";
 // top edge by exactly this much on each side.
 const NOMINATE_FAB_SIZE = 56;
 
+// A few extra px of overlap on top of the FAB-edge alignment below - the
+// peek card sits behind BottomNav (see its own zIndex comment), so this is
+// free to go a little deeper without covering BottomNav's icons: BottomNav
+// itself paints over most of it, and the card's own color only actually
+// shows through in the sliver BottomNav's rounded top corners leave open,
+// closing what would otherwise be a small visible gap there.
+const PEEK_EXTRA_OVERLAP = 5;
+
 // Bottom offset shared by both minimized "peek" cards below - overlaps
 // BottomNav's top edge by just enough that the seam lands level with the
-// nominate FAB's own top edge (see NOMINATE_FAB_SIZE) rather than right
-// above BottomNav's icon row, leaving a little breathing room above the
-// icons instead of the card's edge sitting flush against them.
-const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px - ${(BOTTOM_NAV_HEIGHT - NOMINATE_FAB_SIZE) / 2}px + env(safe-area-inset-bottom))`;
+// nominate FAB's own top edge (see NOMINATE_FAB_SIZE), plus
+// PEEK_EXTRA_OVERLAP, rather than right above BottomNav's icon row -
+// leaving a little breathing room above the icons instead of the card's
+// edge sitting flush against them.
+const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px - ${(BOTTOM_NAV_HEIGHT - NOMINATE_FAB_SIZE) / 2 + PEEK_EXTRA_OVERLAP}px + env(safe-area-inset-bottom))`;
 
 // Bottom padding reserved inside the Drawer's own scrollable content - its
 // background now runs all the way to the screen's bottom edge (behind
@@ -730,10 +739,9 @@ function AssignDrawerBody({
 // Shared floating-card chrome for both minimized states below - same frosted
 // glass treatment as BottomNav.tsx/AppHeader.tsx and the drawer it stands in
 // for while minimized. Square bottom corners, overlapping BottomNav by
-// PEEK_BOTTOM_OFFSET's own amount - BottomNav shrinks its top corners to
-// BOTTOM_NAV_ATTACHED_RADIUS while this card is showing (route.tsx wires
-// that up via onPeekingChange/attachedCardShowing) regardless of exactly
-// how deep this card overlaps it.
+// PEEK_BOTTOM_OFFSET's own amount - deliberately behind BottomNav in
+// z-index (see below) so that overlap is safe to be a little generous
+// (PEEK_EXTRA_OVERLAP) without any risk of covering BottomNav's icons.
 function PeekCard({
   children,
   onClick,
@@ -758,7 +766,15 @@ function PeekCard({
       }}
       style={{
         bottom: PEEK_BOTTOM_OFFSET,
-        zIndex: 205,
+        // Below BottomNav's own 200 (not above, like the peek card used to
+        // be) - the two rectangles only actually overlap in the small sliver
+        // this card extends into BottomNav's own territory, and in that
+        // sliver BottomNav's real pixels should win: its rounded top corners
+        // leave a little of that sliver open, and this card's own color
+        // showing through there (rather than being painted over by it) is
+        // what closes the gap, while BottomNav's icons stay fully visible
+        // and clickable everywhere it does paint.
+        zIndex: 195,
         maxWidth: 480,
         margin: "0 auto",
         padding: "10px 14px",
