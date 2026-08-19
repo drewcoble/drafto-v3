@@ -77,11 +77,13 @@ type SheetMode = "closed" | "search" | "assign";
 // without the overlap reaching deep enough to cover BottomNav's own icons.
 const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px - ${BOTTOM_NAV_ATTACHED_RADIUS}px + env(safe-area-inset-bottom))`;
 
-// How far above the screen's bottom edge the Drawer's own sheet stops -
-// BottomNav's rendered height/offset plus a small gap, so the sheet never
-// overlaps (and BottomNav - see its own higher z-index below - stays fully
-// visible and tappable for in-app navigation while the sheet's open).
-const DRAWER_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px + 8px + env(safe-area-inset-bottom))`;
+// Bottom padding reserved inside the Drawer's own scrollable content - its
+// background now runs all the way to the screen's bottom edge (behind
+// BottomNav, which stays reachable via its own higher z-index below), but
+// nothing scrollable should actually render underneath BottomNav's real
+// tappable area, so the content stops that much earlier than its
+// background does.
+const DRAWER_CONTENT_BOTTOM_PADDING = `calc(var(--mantine-spacing-md) + ${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`;
 
 // How far down the drag handle has to travel before release counts as a
 // swipe-to-dismiss rather than a tap or an aborted drag.
@@ -299,17 +301,28 @@ export function MobileNomination({
         // them, so the nav bar - and the FAB sitting in its notch - render
         // on top of both the sheet and its scrim instead of being covered
         // by them, keeping in-app navigation reachable while the sheet's
-        // open. The sheet itself never occupies BottomNav's screen area
-        // anyway (see DRAWER_BOTTOM_OFFSET below), so this only affects the
-        // full-viewport scrim.
+        // open. The sheet's own background now runs behind BottomNav all
+        // the way to the screen's bottom edge (see DRAWER_CONTENT_BOTTOM_
+        // PADDING below for why its content doesn't), so this z-index is
+        // what keeps BottomNav paintable on top of that background too.
         zIndex={150}
         styles={{
           content: {
             maxWidth: 480,
-            margin: `0 auto ${DRAWER_BOTTOM_OFFSET}`,
+            margin: "0 auto",
             borderTopLeftRadius: "var(--mantine-radius-xl)",
             borderTopRightRadius: "var(--mantine-radius-xl)",
             overflow: "hidden",
+            // The "surface" shade Card/Popover use (dark-6 - see
+            // BottomNav.tsx's own comment on dark-5 vs dark-6) rather than
+            // BottomNav's lighter dark-5, and noticeably less transparent
+            // than BottomNav's own 65%/50% - a full sheet reading through
+            // to the page behind it looks murky over this much area, where
+            // BottomNav's translucency works at its own much smaller size.
+            background:
+              "light-dark(color-mix(in srgb, var(--mantine-color-body) 85%, transparent), color-mix(in srgb, var(--mantine-color-dark-6) 85%, transparent))",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
           },
           body: {
             height: "100%",
@@ -360,8 +373,7 @@ export function MobileNomination({
               flex: 1,
               minHeight: 0,
               overflowY: "auto",
-              padding:
-                "0 var(--mantine-spacing-md) calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom))",
+              padding: `0 var(--mantine-spacing-md) ${DRAWER_CONTENT_BOTTOM_PADDING}`,
             }}
           >
             {effectiveMode === "search" && (
