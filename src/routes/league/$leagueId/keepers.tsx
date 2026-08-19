@@ -88,12 +88,16 @@ function KeepersRoute() {
         closeOnEscape={false}
         centered
         // Mantine's Modal overlay defaults to z-index 400 - well above the
-        // app's own fixed chrome (AppHeader at 220, BottomNav/
-        // UnallocatedBar/the nominate FAB around 200-210), which would
-        // otherwise sit visually and interactively underneath this
-        // "can't close it" block, trapping a visitor on the page instead
-        // of just blocking the Keepers content itself. 190 keeps it above
-        // ordinary page content but below all of that global chrome.
+        // app's own fixed chrome (AppHeader at 195, BottomNav at 200, the
+        // nominate FAB at 210), which would otherwise sit visually and
+        // interactively underneath this "can't close it" block, trapping a
+        // visitor on the page instead of just blocking the Keepers content
+        // itself. 190 keeps it above ordinary page content but below all of
+        // that global chrome. AppHeader's own docked bars (MobileStatsRow/
+        // UnallocatedBar/PositionFilterBar, all 180-185) are the one
+        // exception - a shorter viewport could plausibly have this modal
+        // draw over the very bottom of one of those, which is fine, they're
+        // not interactive controls the way BottomNav is.
         zIndex={190}
         // On desktop, route.tsx's AppHeader + Tabs bar sit in normal flow
         // above the Outlet (not fixed), so `centered`'s default full-
@@ -105,9 +109,7 @@ function KeepersRoute() {
         // centered in the content area below the tab bar instead. Mobile
         // has no tab bar to clear (Tabs.List is visibleFrom="sm"), so this
         // only applies at that breakpoint.
-        {...(isDesktop
-          ? { styles: { inner: { paddingTop: 160 } } }
-          : {})}
+        {...(isDesktop ? { styles: { inner: { paddingTop: 160 } } } : {})}
       >
         <UpgradePrompt title="Keepers is a Pro feature" />
       </Modal>
@@ -125,7 +127,9 @@ function KeepersRoute() {
   return (
     <Stack gap="md">
       {phase?.isStarted && (
-        <LockedNotice>Keeper rules are locked once the draft starts.</LockedNotice>
+        <LockedNotice>
+          Keeper rules are locked once the draft starts.
+        </LockedNotice>
       )}
       <KeepersTab seasonId={leagueId as Id<"seasons">} />
     </Stack>

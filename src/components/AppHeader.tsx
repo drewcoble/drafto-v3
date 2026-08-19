@@ -214,7 +214,16 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
       py={{ base: "sm", sm: "xs" }}
       h={{ base: MOBILE_HEADER_HEIGHT, sm: "auto" }}
       style={{
-        zIndex: 220,
+        // Above the Keepers route's non-dismissible free-plan upgrade Modal
+        // (zIndex 190, see keepers.tsx) so that "can't close it" block never
+        // covers the header itself, but below BottomNav's 200 - AppHeader
+        // (top-fixed) and BottomNav (bottom-fixed) never occupy the same
+        // pixels on any real viewport, so their relative order doesn't
+        // otherwise matter, and keeping AppHeader under BottomNav lets
+        // MobileNomination's bottom-sheet Drawer sit in between the two
+        // (above AppHeader, below BottomNav) instead of needing to either
+        // outrank BottomNav too or physically avoid ever reaching this bar.
+        zIndex: 195,
         display: "flex",
         alignItems: "center",
         // Translucent + blurred rather than a flat cutout - same frosted-

@@ -35,7 +35,10 @@ export function UnallocatedBar({
       right={0}
       px="md"
       style={{
-        zIndex: 210,
+        // Same tier as MobileStatsRow.tsx's analogous bar - below AppHeader
+        // (see its own zIndex comment for why it sits under BottomNav now
+        // too), which this docks directly under.
+        zIndex: 185,
         minHeight: BUDGET_UNALLOCATED_BAR_HEIGHT,
         display: "flex",
         alignItems: "center",

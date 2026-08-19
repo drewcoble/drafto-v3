@@ -56,7 +56,10 @@ export function MobileStatsRow({
       right={0}
       px="md"
       style={{
-        zIndex: 210,
+        // Below AppHeader (see its own zIndex comment for why it sits under
+        // BottomNav now too) - docks directly under it, so keeping this one
+        // notch lower preserves that same stacking.
+        zIndex: 185,
         minHeight: MOBILE_STATS_ROW_HEIGHT,
         display: "flex",
         alignItems: "center",

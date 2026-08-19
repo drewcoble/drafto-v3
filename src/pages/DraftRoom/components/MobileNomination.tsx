@@ -19,8 +19,6 @@ import type { PlanSlotMatch } from "../../../lib/planRecommendation";
 import {
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
-  MOBILE_HEADER_HEIGHT,
-  MOBILE_STATS_ROW_HEIGHT,
 } from "../../../constants/general";
 import { useHoldRepeat } from "../../../hooks/useHoldRepeat";
 import { SearchBody, type SearchResult } from "./NominationPanel";
@@ -84,14 +82,12 @@ const PEEK_BOTTOM_PADDING = "calc(var(--mantine-radius-xl) + 6px)";
 // background does.
 const DRAWER_CONTENT_BOTTOM_PADDING = `calc(var(--mantine-spacing-md) + ${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`;
 
-// Caps the Drawer's own height so it never reaches up far enough to
-// overlap AppHeader/MobileStatsRow - both fixed above it at a higher
-// z-index than the Drawer (see its own zIndex comment for why: BottomNav
-// needs to outrank the Drawer, and BottomNav sits below both of those bars,
-// so the Drawer can't simply out-rank them too). Reserving their combined
-// height here keeps the two from ever fighting over the same pixels in the
-// first place, rather than trying to resolve it with z-index.
-const DRAWER_MAX_HEIGHT = `calc(100vh - ${MOBILE_HEADER_HEIGHT}px - ${MOBILE_STATS_ROW_HEIGHT}px)`;
+// Caps how tall the Drawer can grow (see its own size="auto" comment for
+// why a cap is what actually controls its rendered height) - generous
+// enough for the tallest body (the assign state, with its team chips/+5/
+// +10 rows) while leaving a sliver of the page visible/scrollable above it
+// on tall viewports.
+const DRAWER_MAX_HEIGHT = "90vh";
 
 // How far down the drag handle has to travel before release counts as a
 // swipe-to-dismiss rather than a tap or an aborted drag.
@@ -289,15 +285,18 @@ export function MobileNomination({
         // noticeably taller with the team chips/+5/+10 rows, and a fixed
         // 50% wasn't tall enough to show all of it without scrolling.
         size="auto"
-        // Below BottomNav's own 200 (and the FAB's 210) rather than above
-        // them, so the nav bar - and the FAB sitting in its notch - render
-        // on top of both the sheet and its scrim instead of being covered
-        // by them, keeping in-app navigation reachable while the sheet's
-        // open. The sheet's own background now runs behind BottomNav all
-        // the way to the screen's bottom edge (see DRAWER_CONTENT_BOTTOM_
-        // PADDING below for why its content doesn't), so this z-index is
-        // what keeps BottomNav paintable on top of that background too.
-        zIndex={150}
+        // Below BottomNav's own 200 (and the FAB's 210) - so the nav bar,
+        // and the FAB sitting in its notch, render on top of both the sheet
+        // and its scrim instead of being covered by them, keeping in-app
+        // navigation reachable while the sheet's open (the sheet's own
+        // background runs behind BottomNav all the way to the screen's
+        // bottom edge - see DRAWER_CONTENT_BOTTOM_PADDING below for why its
+        // content doesn't - so this is what keeps BottomNav paintable on
+        // top of that background too). Above AppHeader's own 195 (see its
+        // zIndex comment) so a tall sheet - the assign state's grown a lot -
+        // draws in front of the fixed header/stats-row instead of behind
+        // them, without needing BottomNav to outrank those bars too.
+        zIndex={197}
         // A slight blur on the scrim itself (not just the sheet's own
         // background above), matching the frosted-glass treatment used
         // everywhere else in the app (BottomNav.tsx, AppHeader.tsx, the

@@ -129,7 +129,10 @@ export function PositionFilterBar({
         px="md"
         py={8}
         style={{
-          zIndex: 205,
+          // Below AppHeader/MobileStatsRow (see AppHeader.tsx's own zIndex
+          // comment for why it sits under BottomNav now too) - this docks
+          // directly under whichever of those is above it.
+          zIndex: 180,
           minHeight: POSITION_FILTER_BAR_HEIGHT,
           overflowX: "auto",
           background:
