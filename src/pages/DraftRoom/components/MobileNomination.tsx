@@ -24,7 +24,6 @@ import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
 import {
-  BOTTOM_NAV_ATTACHED_RADIUS,
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
 } from "../../../constants/general";
@@ -67,15 +66,18 @@ interface MobileNominationProps {
 
 type SheetMode = "closed" | "search" | "assign";
 
+// The nominate FAB's own circle size (see its ActionIcon below) - its
+// wrapper Box shares BottomNav's exact height/bottom offset, so centering a
+// circle this size within it insets the FAB's top edge from BottomNav's own
+// top edge by exactly this much on each side.
+const NOMINATE_FAB_SIZE = 56;
+
 // Bottom offset shared by both minimized "peek" cards below - overlaps
-// BOTTOM_NAV_ATTACHED_RADIUS into the top of BottomNav's own pill (rather
-// than sitting flush at its top edge) so the peek card's square bottom
-// corners land exactly where BottomNav's own top corners (shrunk to that
-// same radius while attached - see BottomNav.tsx/route.tsx) finish curving
-// back out to full width. That closes the gap a rounded corner would
-// otherwise leave under a square-cornered card sitting right above it,
-// without the overlap reaching deep enough to cover BottomNav's own icons.
-const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px - ${BOTTOM_NAV_ATTACHED_RADIUS}px + env(safe-area-inset-bottom))`;
+// BottomNav's top edge by just enough that the seam lands level with the
+// nominate FAB's own top edge (see NOMINATE_FAB_SIZE) rather than right
+// above BottomNav's icon row, leaving a little breathing room above the
+// icons instead of the card's edge sitting flush against them.
+const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px - ${(BOTTOM_NAV_HEIGHT - NOMINATE_FAB_SIZE) / 2}px + env(safe-area-inset-bottom))`;
 
 // Bottom padding reserved inside the Drawer's own scrollable content - its
 // background now runs all the way to the screen's bottom edge (behind
@@ -267,7 +269,7 @@ export function MobileNomination({
       >
         <ActionIcon
           radius="xl"
-          size={56}
+          size={NOMINATE_FAB_SIZE}
           color="saddlebrown"
           variant="filled"
           aria-label={fabLabel}
@@ -728,9 +730,10 @@ function AssignDrawerBody({
 // Shared floating-card chrome for both minimized states below - same frosted
 // glass treatment as BottomNav.tsx/AppHeader.tsx and the drawer it stands in
 // for while minimized. Square bottom corners, overlapping BottomNav by
-// BOTTOM_NAV_ATTACHED_RADIUS (see PEEK_BOTTOM_OFFSET) - closing the gap is
-// BottomNav's job while this card is showing (route.tsx wires that up via
-// onPeekingChange/attachedCardShowing), not this card's.
+// PEEK_BOTTOM_OFFSET's own amount - BottomNav shrinks its top corners to
+// BOTTOM_NAV_ATTACHED_RADIUS while this card is showing (route.tsx wires
+// that up via onPeekingChange/attachedCardShowing) regardless of exactly
+// how deep this card overlaps it.
 function PeekCard({
   children,
   onClick,
