@@ -70,19 +70,6 @@ export const BOTTOM_NAV_BOTTOM_OFFSET = 7;
 // two independently-guessed numbers happening to match.
 export const BOTTOM_NAV_HEIGHT = 58;
 
-// Matches each nav column's own py (see BOTTOM_NAV_HEIGHT's comment) - the
-// vertical padding above its icon, i.e. the deepest a same-width element can
-// overlap BottomNav's top edge without covering any icon/label. Shared by
-// two things that need to agree exactly: BottomNav.tsx shrinks its own top-
-// left/top-right corner radius to this value whenever hasFab is set (so the
-// curve fully resolves to square by the time this depth is reached instead
-// of the full "xl" radius, which doesn't square off until 32px down - well
-// past the icons), and MobileNomination.tsx's minimized peek card overlaps
-// BottomNav by exactly this much. Together that closes the gap a rounded
-// top corner would otherwise leave under the peek card's own square bottom
-// corners, with zero risk of clipping BottomNav's icons.
-export const BOTTOM_NAV_ATTACHED_RADIUS = 12;
-
 // The +/- tap target size used by the Budget tab's per-slot $ stepper
 // (SlotRow.tsx) and the Draft Room's live bid stepper
 // (MobileNomination.tsx's AssignDrawerBody) - both hand-picked this
