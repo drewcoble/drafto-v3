@@ -269,7 +269,15 @@ export function MobileNomination({
         onClose={dismiss}
         position="bottom"
         withCloseButton={false}
-        size="50%"
+        // "auto" rather than a fixed fraction of the screen (e.g. "50%") -
+        // Mantine's Drawer always renders at its styles.content maxHeight
+        // cap regardless of the size prop (its internal scroll wrapper
+        // forces near-viewport height, which "auto" then sizes to), so this
+        // and the maxHeight below together give a tall-enough, capped sheet
+        // no matter which body is showing - the assign state got
+        // noticeably taller with the team chips/+5/+10 rows, and a fixed
+        // 50% wasn't tall enough to show all of it without scrolling.
+        size="auto"
         // Below BottomNav's own 200 (and the FAB's 210) rather than above
         // them, so the nav bar - and the FAB sitting in its notch - render
         // on top of both the sheet and its scrim instead of being covered
@@ -293,6 +301,7 @@ export function MobileNomination({
           // live here without the two fighting each other every frame.
           content: {
             maxWidth: 480,
+            maxHeight: "85vh",
             margin: "0 auto",
             background: "transparent",
             boxShadow: "none",
