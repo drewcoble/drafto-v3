@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   ActionIcon,
   Badge,
@@ -65,6 +65,45 @@ type SheetMode = "closed" | "search" | "assign";
 // sit permanently.
 const PEEK_BOTTOM_OFFSET = "calc(90px + env(safe-area-inset-bottom))";
 
+// How far down the drag handle has to travel before release counts as a
+// swipe-to-dismiss rather than a tap or an aborted drag.
+const DRAG_DISMISS_THRESHOLD = 80;
+
+// Lets the small handle bar at the top of the Drawer double as a
+// swipe-down-to-dismiss target, the native bottom-sheet convention. `dragY`
+// tracks the pointer 1:1 (for the content below to visually follow the
+// finger) and past DRAG_DISMISS_THRESHOLD on release, `onDismiss` fires -
+// same as tapping the scrim or pressing Escape.
+function useSwipeToDismiss(onDismiss: () => void) {
+  const [dragY, setDragY] = useState(0);
+  const draggingRef = useRef(false);
+  const startYRef = useRef(0);
+
+  const endDrag = () => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    if (dragY > DRAG_DISMISS_THRESHOLD) onDismiss();
+    setDragY(0);
+  };
+
+  return {
+    dragY,
+    dragHandleProps: {
+      onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => {
+        draggingRef.current = true;
+        startYRef.current = event.clientY;
+        event.currentTarget.setPointerCapture(event.pointerId);
+      },
+      onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (!draggingRef.current) return;
+        setDragY(Math.max(0, event.clientY - startYRef.current));
+      },
+      onPointerUp: endDrag,
+      onPointerCancel: endDrag,
+    },
+  };
+}
+
 // Mobile replacement for the desktop NominationPanel card (hidden below the
 // "sm" breakpoint via visibleFrom="sm" on that component - see
 // DraftTopBar.tsx). A gavel FAB sits over the center of the bottom nav bar
@@ -121,6 +160,18 @@ export function MobileNomination({
     mode === "assign" && !activeNomination ? "closed" : mode;
   const sheetOpen = effectiveMode !== "closed" && !minimized;
   const peeking = effectiveMode !== "closed" && minimized;
+
+  // Same "dismiss" the scrim tap and Escape key trigger, reused as the
+  // swipe-to-close target below - search cancels outright, assign only
+  // minimizes (the nomination itself is still live on the server).
+  const dismiss = () => {
+    if (effectiveMode === "search") {
+      setMode("closed");
+    } else {
+      setMinimized(true);
+    }
+  };
+  const { dragY, dragHandleProps } = useSwipeToDismiss(dismiss);
 
   // Steps "whose turn" one team over in `teams`' own order (a plain list
   // wrap, not the configured snake/linear nomination order - this is just a
@@ -215,145 +266,188 @@ export function MobileNomination({
       <Drawer
         hiddenFrom="sm"
         opened={sheetOpen}
-        onClose={() => {
-          if (effectiveMode === "search") {
-            setMode("closed");
-          } else {
-            setMinimized(true);
-          }
-        }}
+        onClose={dismiss}
         position="bottom"
         withCloseButton={false}
-        size="auto"
+        size="50%"
         zIndex={220}
         styles={{
           content: {
             maxWidth: 480,
             margin: "0 auto",
-            maxHeight: "85vh",
             borderTopLeftRadius: "var(--mantine-radius-xl)",
             borderTopRightRadius: "var(--mantine-radius-xl)",
+            overflow: "hidden",
           },
           body: {
-            paddingBottom:
-              "calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom))",
+            height: "100%",
+            padding: 0,
+            display: "flex",
+            flexDirection: "column",
           },
         }}
       >
-        {effectiveMode === "search" && (
-          <Stack gap={10}>
-            <Group justify="space-between" wrap="nowrap">
-              <Text fw={700} size="lg">
-                Nominate a Player
-              </Text>
-              <Group gap={6} wrap="nowrap">
-                <ActionIcon
-                  variant="default"
-                  radius="xl"
-                  onClick={() => setMinimized(true)}
-                  aria-label="Minimize"
-                  title="Minimize - keeps your search in progress"
-                >
-                  <ChevronDown size={18} />
-                </ActionIcon>
-                <ActionIcon
-                  variant="default"
-                  radius="xl"
-                  onClick={() => setMode("closed")}
-                  aria-label="Close"
-                >
-                  <X size={18} />
-                </ActionIcon>
-              </Group>
-            </Group>
-
-            {usingGenericValues && (
-              <Group gap={6} wrap="nowrap">
-                <Text size="sm" c="dimmed">
-                  Values shown are estimates
-                </Text>
-                <GenericValueBadge />
-              </Group>
-            )}
-            {nominationOrderEnabled && (
-              <Stack gap={4}>
-                <Text size="sm" c="dimmed">
-                  Nominating team
-                </Text>
-                <Group gap={8} wrap="nowrap" justify="space-between">
-                  <Group gap={4} wrap="nowrap">
+        {/* Follows the drag handle 1:1 while dragging (see
+            useSwipeToDismiss) and snaps back once released below the
+            dismiss threshold - Content itself (background/rounded corners/
+            Mantine's own open/close transition) stays untouched so this
+            never fights that transition's own transform. */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
+            transform: `translateY(${dragY}px)`,
+            transition: dragY === 0 ? "transform 200ms ease" : "none",
+          }}
+        >
+          <div
+            {...dragHandleProps}
+            aria-hidden
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              padding: "10px 0 6px",
+              flexShrink: 0,
+              touchAction: "none",
+              cursor: "grab",
+            }}
+          >
+            <div
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 999,
+                background: "var(--mantine-color-default-border)",
+              }}
+            />
+          </div>
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+              padding:
+                "0 var(--mantine-spacing-md) calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom))",
+            }}
+          >
+            {effectiveMode === "search" && (
+              <Stack gap={10}>
+                <Group justify="space-between" wrap="nowrap">
+                  <Text fw={700} size="lg">
+                    Nominate a Player
+                  </Text>
+                  <Group gap={6} wrap="nowrap">
                     <ActionIcon
                       variant="default"
-                      size="lg"
-                      onClick={() => bumpTurnTeam(-1)}
-                      aria-label="Previous team"
+                      radius="xl"
+                      onClick={() => setMinimized(true)}
+                      aria-label="Minimize"
+                      title="Minimize - keeps your search in progress"
                     >
-                      <ChevronLeft size={18} />
+                      <ChevronDown size={18} />
                     </ActionIcon>
-                    <Text
-                      size="sm"
-                      fw={600}
-                      ta="center"
-                      style={{ minWidth: 108 }}
-                    >
-                      {currentTeamName ?? "Manual"}
-                    </Text>
                     <ActionIcon
                       variant="default"
-                      size="lg"
-                      onClick={() => bumpTurnTeam(1)}
-                      aria-label="Next team"
+                      radius="xl"
+                      onClick={() => setMode("closed")}
+                      aria-label="Close"
                     >
-                      <ChevronRight size={18} />
+                      <X size={18} />
                     </ActionIcon>
                   </Group>
-                  {/* Manual isn't part of the team cycle above (the arrows
+                </Group>
+
+                {usingGenericValues && (
+                  <Group gap={6} wrap="nowrap">
+                    <Text size="sm" c="dimmed">
+                      Values shown are estimates
+                    </Text>
+                    <GenericValueBadge />
+                  </Group>
+                )}
+                {nominationOrderEnabled && (
+                  <Stack gap={4}>
+                    <Text size="sm" c="dimmed">
+                      Nominating team
+                    </Text>
+                    <Group gap={8} wrap="nowrap" justify="space-between">
+                      <Group gap={4} wrap="nowrap">
+                        <ActionIcon
+                          variant="default"
+                          size="lg"
+                          onClick={() => bumpTurnTeam(-1)}
+                          aria-label="Previous team"
+                        >
+                          <ChevronLeft size={18} />
+                        </ActionIcon>
+                        <Text
+                          size="sm"
+                          fw={600}
+                          ta="center"
+                          style={{ minWidth: 108 }}
+                        >
+                          {currentTeamName ?? "Manual"}
+                        </Text>
+                        <ActionIcon
+                          variant="default"
+                          size="lg"
+                          onClick={() => bumpTurnTeam(1)}
+                          aria-label="Next team"
+                        >
+                          <ChevronRight size={18} />
+                        </ActionIcon>
+                      </Group>
+                      {/* Manual isn't part of the team cycle above (the arrows
                       only ever bump between actual teams), so it needs its
                       own explicit way in. */}
-                  <Button
-                    size="xs"
-                    variant={turnTeamId == null ? "filled" : "default"}
-                    {...(turnTeamId == null ? { color: "burlywood" } : {})}
-                    onClick={() => onSetTurnTeam(null)}
-                  >
-                    Manual
-                  </Button>
-                </Group>
+                      <Button
+                        size="xs"
+                        variant={turnTeamId == null ? "filled" : "default"}
+                        {...(turnTeamId == null ? { color: "burlywood" } : {})}
+                        onClick={() => onSetTurnTeam(null)}
+                      >
+                        Manual
+                      </Button>
+                    </Group>
+                  </Stack>
+                )}
+                <SearchBody
+                  search={search}
+                  onSearchChange={onSearchChange}
+                  searchResults={searchResults}
+                  draftValueByFpid={draftValueByFpid}
+                  onNominate={(fpid) => {
+                    onNominate(fpid);
+                    setMode("closed");
+                    setMinimized(false);
+                  }}
+                  onSelectPlayer={onSelectPlayer}
+                  touchFriendly
+                />
               </Stack>
             )}
-            <SearchBody
-              search={search}
-              onSearchChange={onSearchChange}
-              searchResults={searchResults}
-              draftValueByFpid={draftValueByFpid}
-              onNominate={(fpid) => {
-                onNominate(fpid);
-                setMode("closed");
-                setMinimized(false);
-              }}
-              onSelectPlayer={onSelectPlayer}
-              touchFriendly
-            />
-          </Stack>
-        )}
 
-        {effectiveMode === "assign" && activeNomination && (
-          <AssignDrawerBody
-            activeNomination={activeNomination}
-            nominatedPlayer={nominatedPlayer}
-            nominatedValue={nominatedValue}
-            nominatingTeam={nominatingTeam}
-            teams={teams}
-            selfTeamId={selfTeamId}
-            onBumpBid={onBumpBid}
-            onSetBid={onSetBid}
-            onAssignWinner={onAssignWinner}
-            onPass={onPass}
-            onSelectPlayer={onSelectPlayer}
-            usingGenericValues={usingGenericValues}
-            onMinimize={() => setMinimized(true)}
-          />
-        )}
+            {effectiveMode === "assign" && activeNomination && (
+              <AssignDrawerBody
+                activeNomination={activeNomination}
+                nominatedPlayer={nominatedPlayer}
+                nominatedValue={nominatedValue}
+                nominatingTeam={nominatingTeam}
+                teams={teams}
+                selfTeamId={selfTeamId}
+                onBumpBid={onBumpBid}
+                onSetBid={onSetBid}
+                onAssignWinner={onAssignWinner}
+                onPass={onPass}
+                onSelectPlayer={onSelectPlayer}
+                usingGenericValues={usingGenericValues}
+                onMinimize={() => setMinimized(true)}
+              />
+            )}
+          </div>
+        </div>
       </Drawer>
 
       {peeking && effectiveMode === "search" && (
