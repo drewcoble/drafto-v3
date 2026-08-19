@@ -324,6 +324,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
         activeNomination={activeNomination ?? undefined}
         nominatedPlayer={nominatedPlayer}
         nominatedValue={nominatedValue}
+        planMatch={planMatch}
         onBumpBid={(delta) =>
           runAction(() => bumpNominationBid({ seasonId, delta }))
         }

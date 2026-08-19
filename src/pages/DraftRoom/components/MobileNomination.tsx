@@ -8,21 +8,14 @@ import {
   Drawer,
   Group,
   NumberInput,
-  Select,
   Stack,
   Text,
 } from "@mantine/core";
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  UserPlus,
-  X,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, UserPlus, X } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
+import type { PlanSlotMatch } from "../../../lib/planRecommendation";
 import {
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
@@ -41,6 +34,7 @@ interface MobileNominationProps {
   activeNomination: Doc<"draftNominations"> | undefined;
   nominatedPlayer: { name: string; team: string | null } | undefined;
   nominatedValue: { dollarValue: number } | undefined;
+  planMatch: PlanSlotMatch | undefined;
   onBumpBid: (delta: number) => void;
   onSetBid: (amount: number) => void;
   onAssignWinner: (teamId: Id<"seasonTeams">) => void;
@@ -145,6 +139,7 @@ export function MobileNomination({
   activeNomination,
   nominatedPlayer,
   nominatedValue,
+  planMatch,
   onBumpBid,
   onSetBid,
   onAssignWinner,
@@ -196,26 +191,8 @@ export function MobileNomination({
   };
   const { dragY, dragHandleProps } = useSwipeToDismiss(dismiss);
 
-  // Steps "whose turn" one team over in `teams`' own order (a plain list
-  // wrap, not the configured snake/linear nomination order - this is just a
-  // manual override control, same as the Select it replaced). From manual
-  // (turnTeamId null, no index), either arrow lands on the end of the list
-  // nearest that direction rather than skipping past it.
-  const currentTeamIndex = teams.findIndex((team) => team._id === turnTeamId);
   const currentTeamName =
-    currentTeamIndex === -1 ? null : teams[currentTeamIndex]?.name;
-  const bumpTurnTeam = (direction: 1 | -1) => {
-    if (teams.length === 0) return;
-    if (currentTeamIndex === -1) {
-      onSetTurnTeam(
-        direction === 1 ? teams[0]!._id : teams[teams.length - 1]!._id,
-      );
-      return;
-    }
-    const nextIndex =
-      (currentTeamIndex + direction + teams.length) % teams.length;
-    onSetTurnTeam(teams[nextIndex]!._id);
-  };
+    teams.find((team) => team._id === turnTeamId)?.name ?? null;
 
   const nominatingTeam = activeNomination
     ? teams.find((team) => team._id === activeNomination.nominatingTeamId)
@@ -424,45 +401,20 @@ export function MobileNomination({
                     <Text size="sm" c="dimmed">
                       Nominating team
                     </Text>
-                    <Group gap={8} wrap="nowrap" justify="space-between">
-                      <Group gap={4} wrap="nowrap">
-                        <ActionIcon
-                          variant="default"
-                          size="lg"
-                          onClick={() => bumpTurnTeam(-1)}
-                          aria-label="Previous team"
-                        >
-                          <ChevronLeft size={18} />
-                        </ActionIcon>
-                        <Text
-                          size="sm"
-                          fw={600}
-                          ta="center"
-                          style={{ minWidth: 108 }}
-                        >
-                          {currentTeamName ?? "Manual"}
-                        </Text>
-                        <ActionIcon
-                          variant="default"
-                          size="lg"
-                          onClick={() => bumpTurnTeam(1)}
-                          aria-label="Next team"
-                        >
-                          <ChevronRight size={18} />
-                        </ActionIcon>
-                      </Group>
-                      {/* Manual isn't part of the team cycle above (the arrows
-                      only ever bump between actual teams), so it needs its
-                      own explicit way in. */}
-                      <Button
-                        size="xs"
-                        variant={turnTeamId == null ? "filled" : "default"}
-                        {...(turnTeamId == null ? { color: "burlywood" } : {})}
-                        onClick={() => onSetTurnTeam(null)}
-                      >
-                        Manual
-                      </Button>
-                    </Group>
+                    <TeamChipRow
+                      teams={[
+                        ...teams.map((team) => ({
+                          id: team._id,
+                          label: team.name,
+                        })),
+                        // Not part of the configured turn order - an escape
+                        // hatch back to picking the nominating team by hand
+                        // on the search form below, same as before.
+                        { id: null, label: "Manual" },
+                      ]}
+                      selectedId={turnTeamId ?? null}
+                      onSelect={onSetTurnTeam}
+                    />
                   </Stack>
                 )}
                 <SearchBody
@@ -486,6 +438,7 @@ export function MobileNomination({
                 activeNomination={activeNomination}
                 nominatedPlayer={nominatedPlayer}
                 nominatedValue={nominatedValue}
+                planMatch={planMatch}
                 nominatingTeam={nominatingTeam}
                 teams={teams}
                 selfTeamId={selfTeamId}
@@ -530,6 +483,7 @@ interface AssignDrawerBodyProps {
   activeNomination: Doc<"draftNominations">;
   nominatedPlayer: { name: string; team: string | null } | undefined;
   nominatedValue: { dollarValue: number } | undefined;
+  planMatch: PlanSlotMatch | undefined;
   nominatingTeam: Doc<"seasonTeams"> | undefined;
   teams: Doc<"seasonTeams">[];
   selfTeamId: Id<"seasonTeams">;
@@ -546,6 +500,7 @@ function AssignDrawerBody({
   activeNomination,
   nominatedPlayer,
   nominatedValue,
+  planMatch,
   nominatingTeam,
   teams,
   selfTeamId,
@@ -594,14 +549,27 @@ function AssignDrawerBody({
   const decrementBidHold = useHoldRepeat(() => onBumpBid(-1));
   const incrementBidHold = useHoldRepeat(() => onBumpBid(1));
 
+  // Same two market-value figures, in the same dotted-sentence form, as
+  // desktop's ActiveNominationBody (NominationPanel.tsx) - moved up into the
+  // header here rather than inline next to the name/badges row.
+  const valueParts = [
+    nominatedValue ? `Est. ~$${Math.round(nominatedValue.dollarValue)}` : null,
+    planMatch
+      ? `${planMatch.slotLabel} budget ~$${Math.round(planMatch.amount)}`
+      : null,
+  ].filter((part): part is string => part !== null);
+
   return (
     <Stack gap={10}>
       <Group justify="space-between" align="center" wrap="nowrap">
-        <Text size="xs" c="dimmed">
-          {nominatingTeam
-            ? `Nominated by ${nominatingTeam.name}`
-            : "Active nomination"}
-        </Text>
+        <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+          {valueParts.length > 0 && (
+            <Text size="sm" fw={600} truncate>
+              {valueParts.join("  ·  ")}
+            </Text>
+          )}
+          {usingGenericValues && <GenericValueBadge />}
+        </Group>
         <ActionIcon
           variant="default"
           radius="xl"
@@ -613,21 +581,13 @@ function AssignDrawerBody({
         </ActionIcon>
       </Group>
 
+      <Text size="xs" c="dimmed">
+        {nominatingTeam
+          ? `Nominated by ${nominatingTeam.name}`
+          : "Active nomination"}
+      </Text>
+
       <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-        {nominatedPlayer ? (
-          <Text
-            fw={700}
-            truncate
-            style={{ flex: 1, minWidth: 0 }}
-            onClick={() => onSelectPlayer(activeNomination.fpid)}
-          >
-            {nominatedPlayer.name}
-          </Text>
-        ) : (
-          <Text fw={700} truncate style={{ flex: 1, minWidth: 0 }}>
-            Player #{activeNomination.fpid}
-          </Text>
-        )}
         <Badge
           size="sm"
           variant="light"
@@ -635,35 +595,44 @@ function AssignDrawerBody({
         >
           {activeNomination.position}
         </Badge>
+        {nominatedPlayer ? (
+          <Text
+            fw={700}
+            size="lg"
+            truncate
+            style={{ flex: 1, minWidth: 0 }}
+            onClick={() => onSelectPlayer(activeNomination.fpid)}
+          >
+            {nominatedPlayer.name}
+          </Text>
+        ) : (
+          <Text fw={700} size="lg" truncate style={{ flex: 1, minWidth: 0 }}>
+            Player #{activeNomination.fpid}
+          </Text>
+        )}
         {nominatedPlayer?.team && (
           <Badge size="sm" variant="outline" color="gray">
             {nominatedPlayer.team}
           </Badge>
         )}
-        {nominatedValue && (
-          <Group gap={4} wrap="nowrap">
-            <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-              ~${Math.round(nominatedValue.dollarValue)}
-            </Text>
-            {usingGenericValues && <GenericValueBadge />}
-          </Group>
-        )}
       </Group>
 
+      <Text size="xs" c="dimmed">
+        Winning team
+      </Text>
+      <TeamChipRow
+        teams={orderedTeams.map((team) => ({
+          id: team._id,
+          label: team.isSelf ? `${team.name} (me)` : team.name,
+        }))}
+        selectedId={winnerTeamId}
+        onSelect={(id) => id && setWinnerTeamId(id)}
+      />
+
+      <Text size="xs" c="dimmed">
+        Final price
+      </Text>
       <Group gap={8} wrap="nowrap">
-        <Select
-          size="md"
-          data={orderedTeams.map((team) => ({
-            value: team._id,
-            label: team.isSelf ? `${team.name} (me)` : team.name,
-          }))}
-          value={winnerTeamId}
-          onChange={(value) =>
-            value && setWinnerTeamId(value as Id<"seasonTeams">)
-          }
-          allowDeselect={false}
-          style={{ flex: 1, minWidth: 0 }}
-        />
         <ActionIcon
           size={40}
           variant="default"
@@ -683,13 +652,14 @@ function AssignDrawerBody({
             if (event.key === "Enter") event.currentTarget.blur();
           }}
           prefix="$"
-          w={70}
+          style={{ flex: 1 }}
           size="md"
           styles={{
             input: {
               fontFamily: "var(--mantine-font-family-monospace)",
               fontWeight: 700,
               textAlign: "center",
+              fontSize: "var(--mantine-font-size-lg)",
               color: "var(--mantine-color-saddlebrown-5)",
             },
           }}
@@ -706,18 +676,72 @@ function AssignDrawerBody({
 
       <Group gap={8} wrap="nowrap">
         <Button
+          variant="default"
+          style={{ flex: 1 }}
+          onClick={() => onBumpBid(5)}
+        >
+          +5
+        </Button>
+        <Button
+          variant="default"
+          style={{ flex: 1 }}
+          onClick={() => onBumpBid(10)}
+        >
+          +10
+        </Button>
+      </Group>
+
+      <Group gap={8} wrap="nowrap">
+        <Button
           size="md"
           color="saddlebrown"
           style={{ flex: 1 }}
           onClick={() => onAssignWinner(winnerTeamId)}
         >
-          Assign
+          Assign for ${activeNomination.currentBid}
         </Button>
         <Button size="md" variant="subtle" color="gray" onClick={onPass}>
           Pass
         </Button>
       </Group>
     </Stack>
+  );
+}
+
+interface TeamChipRowProps {
+  teams: { id: Id<"seasonTeams"> | null; label: string }[];
+  selectedId: Id<"seasonTeams"> | null;
+  onSelect: (id: Id<"seasonTeams"> | null) => void;
+}
+
+// Horizontally-scrollable row of team pills, shared by the search state's
+// "Nominating team" selector and the assign state's "Winning team" one -
+// tap a team directly rather than stepping through them or picking from a
+// dropdown.
+function TeamChipRow({ teams, selectedId, onSelect }: TeamChipRowProps) {
+  return (
+    <Group
+      gap={8}
+      wrap="nowrap"
+      style={{ overflowX: "auto", paddingBottom: 2 }}
+    >
+      {teams.map((team) => {
+        const active = team.id === selectedId;
+        return (
+          <Button
+            key={team.id ?? "__manual__"}
+            size="xs"
+            radius="xl"
+            variant={active ? "filled" : "default"}
+            {...(active ? { color: "saddlebrown" } : {})}
+            onClick={() => onSelect(team.id)}
+            style={{ flexShrink: 0 }}
+          >
+            {team.label}
+          </Button>
+        );
+      })}
+    </Group>
   );
 }
 
