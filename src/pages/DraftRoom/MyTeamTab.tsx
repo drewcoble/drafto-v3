@@ -4,6 +4,7 @@ import {
   ActionIcon,
   Anchor,
   Badge,
+  Card,
   Group,
   Progress,
   Stack,
@@ -115,110 +116,120 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
 
   return (
     <Stack gap="md" py="sm">
-      {stats && (
-        <Group gap="lg">
-          <Text size="sm" c="dimmed">
-            ${stats.spent} of ${stats.spent + stats.remaining} spent
-          </Text>
-          <Text size="sm" c="dimmed">
-            {stats.totalSlots - stats.openSlots} of {stats.totalSlots} slots
-            filled
-          </Text>
-        </Group>
-      )}
+      <Card withBorder padding="md">
+        <Stack gap="sm">
+          {stats && (
+            <Group gap="lg">
+              <Text size="sm" c="dimmed">
+                ${stats.spent} of ${stats.spent + stats.remaining} spent
+              </Text>
+              <Text size="sm" c="dimmed">
+                {stats.totalSlots - stats.openSlots} of {stats.totalSlots}{" "}
+                slots filled
+              </Text>
+            </Group>
+          )}
 
-      {removeError && (
-        <Text c="red" size="sm">
-          {removeError}
-        </Text>
-      )}
+          {removeError && (
+            <Text c="red" size="sm">
+              {removeError}
+            </Text>
+          )}
 
-      <SlotTable
-        slots={slots}
-        pickBySlotKey={pickBySlotKey}
-        planAmounts={plan?.amounts ?? {}}
-        nameByFpid={nameByFpid}
-        flexPositions={settings?.flexPositions ?? []}
-        superflexPositions={settings?.superflexPositions ?? []}
-        onRemove={handleRemove}
-        onMove={handleMove}
-        onSelectPlayer={setSelectedFpid}
-        trackConsecutiveYears={
-          settings?.keeperRules?.maxConsecutiveYears !== undefined
-        }
-      />
+          <SlotTable
+            slots={slots}
+            pickBySlotKey={pickBySlotKey}
+            planAmounts={plan?.amounts ?? {}}
+            nameByFpid={nameByFpid}
+            flexPositions={settings?.flexPositions ?? []}
+            superflexPositions={settings?.superflexPositions ?? []}
+            onRemove={handleRemove}
+            onMove={handleMove}
+            onSelectPlayer={setSelectedFpid}
+            trackConsecutiveYears={
+              settings?.keeperRules?.maxConsecutiveYears !== undefined
+            }
+          />
+        </Stack>
+      </Card>
 
       {unassignedPicks.length > 0 && (
-        <Stack gap={6}>
-          <Text size="sm" fw={500}>
-            Unassigned picks
-          </Text>
-          {unassignedPicks.map((pick) => (
-            <Group key={pick._id} gap={6}>
-              <Text size="sm" c="dimmed">
-                <Anchor
-                  component="button"
-                  type="button"
-                  size="sm"
-                  onClick={() => setSelectedFpid(pick.fpid)}
+        <Card withBorder padding="md">
+          <Stack gap="sm">
+            <Text size="sm" fw={500}>
+              Unassigned picks
+            </Text>
+            {unassignedPicks.map((pick) => (
+              <Group key={pick._id} gap={6}>
+                <Text size="sm" c="dimmed">
+                  <Anchor
+                    component="button"
+                    type="button"
+                    size="sm"
+                    onClick={() => setSelectedFpid(pick.fpid)}
+                  >
+                    {nameByFpid.get(pick.fpid)?.name ?? `#${pick.fpid}`}
+                  </Anchor>{" "}
+                  - ${pick.price}
+                </Text>
+                {pick.isKeeper && (
+                  <Badge variant="light" color="gray" size="sm">
+                    {settings?.keeperRules?.maxConsecutiveYears !== undefined
+                      ? `Keeper · Yr ${pick.keeperStreak ?? 1}`
+                      : "Keeper"}
+                  </Badge>
+                )}
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  aria-label="Remove pick"
+                  onClick={() => handleRemove(pick._id)}
                 >
-                  {nameByFpid.get(pick.fpid)?.name ?? `#${pick.fpid}`}
-                </Anchor>{" "}
-                - ${pick.price}
+                  <Trash2 size={16} />
+                </ActionIcon>
+              </Group>
+            ))}
+          </Stack>
+        </Card>
+      )}
+
+      <Card withBorder padding="md">
+        <Stack gap="sm">
+          <Text size="sm" fw={500}>
+            Where the money went
+          </Text>
+          {spendByGroup.map(([group, { plan: planTotal, actual }]) => (
+            <Group key={group} gap="sm" wrap="nowrap">
+              <Text size="sm" w={60}>
+                {group}
               </Text>
-              {pick.isKeeper && (
-                <Badge variant="light" color="gray" size="sm">
-                  {settings?.keeperRules?.maxConsecutiveYears !== undefined
-                    ? `Keeper · Yr ${pick.keeperStreak ?? 1}`
-                    : "Keeper"}
-                </Badge>
-              )}
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                aria-label="Remove pick"
-                onClick={() => handleRemove(pick._id)}
-              >
-                <Trash2 size={16} />
-              </ActionIcon>
+              <Progress
+                value={
+                  planTotal > 0 ? Math.min((actual / planTotal) * 100, 100) : 0
+                }
+                color={positionColorOrDefault(group)}
+                flex={1}
+              />
+              <Text size="sm" c="dimmed" w={90} ta="right">
+                ${actual} / ${planTotal}
+              </Text>
             </Group>
           ))}
         </Stack>
-      )}
+      </Card>
 
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          Where the money went
-        </Text>
-        {spendByGroup.map(([group, { plan: planTotal, actual }]) => (
-          <Group key={group} gap="sm" wrap="nowrap">
-            <Text size="sm" w={60}>
-              {group}
-            </Text>
-            <Progress
-              value={
-                planTotal > 0 ? Math.min((actual / planTotal) * 100, 100) : 0
-              }
-              color={positionColorOrDefault(group)}
-              flex={1}
-            />
-            <Text size="sm" c="dimmed" w={90} ta="right">
-              ${actual} / ${planTotal}
-            </Text>
-          </Group>
-        ))}
-      </Stack>
-
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          Bench - {benchFilled} of {benchSlots.length} filled
-        </Text>
-        <Progress
-          value={
-            benchSlots.length ? (benchFilled / benchSlots.length) * 100 : 0
-          }
-        />
-      </Stack>
+      <Card withBorder padding="md">
+        <Stack gap="sm">
+          <Text size="sm" fw={500}>
+            Bench - {benchFilled} of {benchSlots.length} filled
+          </Text>
+          <Progress
+            value={
+              benchSlots.length ? (benchFilled / benchSlots.length) * 100 : 0
+            }
+          />
+        </Stack>
+      </Card>
 
       <PlayerDetailModal
         fpid={selectedFpid}

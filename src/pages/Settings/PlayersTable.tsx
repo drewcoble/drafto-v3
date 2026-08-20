@@ -335,6 +335,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
             w={{ base: "100%", sm: 220 }}
+            autoComplete="off"
           />
         </Group>
         {allProjections && (
@@ -369,25 +370,26 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
           </Text>
         ) : (
           <Table.ScrollContainer minWidth={640}>
-            <Table striped highlightOnHover>
+            <Table striped highlightOnHover verticalSpacing={4}>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Rank</Table.Th>
-                  {/* Flags (value-gap/consistency) - unlabeled column right
-                    next to Player, same placement every icon-flag table in
-                    the app uses. Target/avoid toggle and Keeper moved into
-                    the expanded detail row (see PlayerRow.tsx). */}
-                  <Table.Th></Table.Th>
-                  <Table.Th miw={220}>Player</Table.Th>
-                  <Table.Th miw={70}>Pos</Table.Th>
-                  <Table.Th>Team</Table.Th>
                   <Table.Th>FPTS</Table.Th>
                   {draftValues && (
                     <Table.Th>
                       {draftValuesResult?.isGeneric ? "$ (est.)" : "$"}
                     </Table.Th>
                   )}
-                  <Table.Th />
+                  {/* Target/avoid toggle - unlabeled icon column. */}
+                  <Table.Th></Table.Th>
+                  <Table.Th miw={70}>Pos</Table.Th>
+                  <Table.Th miw={220}>Player</Table.Th>
+                  {/* Tags (value-gap/consistency) - unlabeled column, same
+                    placement every icon-flag table in the app uses. Keeper
+                    moved into the expanded detail row (see PlayerRow.tsx). */}
+                  <Table.Th></Table.Th>
+                  <Table.Th>Team</Table.Th>
+                  {!!selectedSettings && <Table.Th />}
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -399,7 +401,6 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                     scoringConfig={scoringConfig}
                     injury={injuriesByFpid.get(row.fpid)}
                     isRookie={rookieFpids.has(row.fpid)}
-                    latestNews={undefined}
                     draftValue={draftValueByFpid.get(row.fpid)}
                     valueGap={valueGapByFpid.get(row.fpid)}
                     showValueColumn={!!draftValues}

@@ -42,18 +42,22 @@ export const POSITION_ORDER: string[] = [
 // not be one of the six Position values (e.g. a roster slot's group label,
 // like "FLEX"/"SFLEX"/"BN" - see SlotDescriptor.label in lib/rosterSlots.ts -
 // or the raw rosterSlots settings object's own field names, "FLEX"/
-// "SUPERFLEX"/"BENCH" - see LeagueDetails.tsx). startsWith rather than an
-// exact key lookup because a league with more than one FLEX/SUPERFLEX/bench
-// slot numbers the labels ("FLEX1", "FLEX2", "BN1", ...) - and MyTeamTab
-// additionally strips trailing digits before calling this, so plain "BN"
-// needs to match too, not just "BENCH".
+// "SUPERFLEX"/"BENCH" - see LeagueDetails.tsx). A league with more than one
+// slot of a given kind numbers the labels ("RB1", "RB2", "FLEX1", "BN1",
+// ...) - stripped here (rather than requiring every call site to remember
+// to) so e.g. "RB1" still resolves to the RB color instead of falling
+// through to the gray default. startsWith (on the stripped base) rather
+// than an exact key lookup for FLEX/SFLEX/BENCH since those match by
+// prefix, not full value, even before any digit is involved (e.g. the raw
+// "SUPERFLEX" settings field name vs. slot label "SFLEX").
 export function positionColorOrDefault(key: string): string {
-  if (key in POSITION_COLORS) return POSITION_COLORS[key as Position];
-  if (key.startsWith("FLEX")) return ADDITIONAL_POSITION_COLORS.FLEX;
-  if (key.startsWith("SFLEX") || key.startsWith("SUPERFLEX")) {
+  const base = key.replace(/\d+$/, "");
+  if (base in POSITION_COLORS) return POSITION_COLORS[base as Position];
+  if (base.startsWith("FLEX")) return ADDITIONAL_POSITION_COLORS.FLEX;
+  if (base.startsWith("SFLEX") || base.startsWith("SUPERFLEX")) {
     return ADDITIONAL_POSITION_COLORS.SFLEX;
   }
-  if (key.startsWith("BN") || key.startsWith("BENCH")) {
+  if (base.startsWith("BN") || base.startsWith("BENCH")) {
     return ADDITIONAL_POSITION_COLORS.BENCH;
   }
   return "gray";

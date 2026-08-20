@@ -191,13 +191,13 @@ export function InjuryReport({
           </Text>
         ) : (
           <Table.ScrollContainer minWidth={360}>
-            <Table striped highlightOnHover>
+            <Table striped highlightOnHover verticalSpacing={4}>
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th miw={140}>Player</Table.Th>
                   <Table.Th miw={60}>Pos</Table.Th>
-                  <Table.Th>Team</Table.Th>
+                  <Table.Th miw={140}>Player</Table.Th>
                   <Table.Th>Status</Table.Th>
+                  <Table.Th>Team</Table.Th>
                   <Table.Th />
                 </Table.Tr>
               </Table.Thead>
@@ -216,10 +216,20 @@ export function InjuryReport({
                         style={{ cursor: "pointer" }}
                       >
                         <Table.Td>
+                          <Badge
+                            size="sm"
+                            color={POSITION_COLORS[player.position]}
+                            variant="light"
+                          >
+                            {player.position}
+                          </Badge>
+                        </Table.Td>
+                        <Table.Td>
                           <Group gap={6} wrap="nowrap">
                             <Anchor
                               component="button"
                               type="button"
+                              size="sm"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setSelectedFpid(injury.fpid);
@@ -230,15 +240,6 @@ export function InjuryReport({
                             {rookieFpids.has(player.fpid) && <RookieBadge />}
                           </Group>
                         </Table.Td>
-                        <Table.Td>
-                          <Badge
-                            color={POSITION_COLORS[player.position]}
-                            variant="light"
-                          >
-                            {player.position}
-                          </Badge>
-                        </Table.Td>
-                        <Table.Td>{player.team ?? "—"}</Table.Td>
                         <Table.Td>
                           {/* Abbreviated (statusShort - "Q"/"O"/"D"/etc,
                               already computed server-side, see
@@ -253,12 +254,14 @@ export function InjuryReport({
                               tooltip wouldn't help touch/mobile users, the
                               actual audience this table's condensed for). */}
                           <Badge
+                            size="sm"
                             color={injuryColor(injury.status)}
                             variant="light"
                           >
                             {injury.statusShort}
                           </Badge>
                         </Table.Td>
+                        <Table.Td>{player.team ?? "—"}</Table.Td>
                         <Table.Td>
                           <ActionIcon
                             variant="subtle"

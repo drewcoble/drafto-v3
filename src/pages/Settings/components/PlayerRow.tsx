@@ -5,13 +5,11 @@ import {
   Badge,
   Box,
   Group,
-  SimpleGrid,
-  Stack,
   Table,
   Text,
   Tooltip,
 } from "@mantine/core";
-import { Ban, ChevronDown, ChevronUp, StickyNote, Target } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, Target } from "lucide-react";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { PlayerTag, ScoringConfig, ValueGap } from "../../../types";
 import { POSITION_COLORS } from "../../../lib/positionColors";
@@ -40,7 +38,6 @@ interface PlayerRowProps {
   scoringConfig: ScoringConfig;
   injury: { status: string; statusShort: string } | undefined;
   isRookie: boolean;
-  latestNews: { title: string; publishedAt: number } | undefined;
   draftValue: { dollarValue: number; usedFallback: boolean } | undefined;
   valueGap: ValueGap | undefined;
   showValueColumn: boolean;
@@ -62,7 +59,6 @@ export function PlayerRow({
   scoringConfig,
   injury,
   isRookie,
-  latestNews,
   draftValue,
   valueGap,
   showValueColumn,
@@ -77,35 +73,89 @@ export function PlayerRow({
   isExpanded,
   onToggleExpand,
 }: PlayerRowProps) {
-  // Rank, flags, Player, Pos, Team, FPTS, chevron, plus $ when shown - kept
-  // in sync with the header column count in PlayersTable.tsx so the
-  // expanded detail row's colSpan always spans the full table width.
-  const colSpan = 7 + (showValueColumn ? 1 : 0);
+  // Keeper is the only thing still tucked behind the expand chevron (see
+  // PlayersTable.tsx's header) - Target/Avoid moved into the main row below,
+  // so there's nothing to expand into when no league (and therefore no
+  // Keeper data) is selected.
+  const showChevron = showKeeperColumn;
+  // Rank, FPTS, $ (when shown), Target/Avoid, Pos, Player, Tags, Team, plus
+  // the chevron itself when shown - kept in sync with the header column
+  // count in PlayersTable.tsx so the expanded Keeper row's colSpan always
+  // spans the full table width.
+  const columnCount =
+    7 + (showValueColumn ? 1 : 0) + (showChevron ? 1 : 0);
 
   return (
     <Fragment>
-      {/* Target/Avoid toggle and Keeper moved into an expandable detail row
-        below instead of two more columns - those pushed this table well
-        past mobile widths, same tradeoff InjuryReport.tsx made. */}
-      <Table.Tr onClick={onToggleExpand} style={{ cursor: "pointer" }}>
+      <Table.Tr
+        onClick={showChevron ? onToggleExpand : undefined}
+        style={showChevron ? { cursor: "pointer" } : undefined}
+      >
         <Table.Td>{index + 1}</Table.Td>
         <Table.Td>
-          <Group gap={4} wrap="nowrap">
-            <Box w={28} style={{ display: "flex", justifyContent: "center" }}>
-              {valueGap && (
-                <ValueGapIcon valueGap={valueGap} position={row.position} />
-              )}
-            </Box>
-            {showConsistencyColumn && consistency && (
-              <ConsistencyIcon label={consistency} />
+          {pointsForScoringConfig(row, scoringConfig).toFixed(1)}
+        </Table.Td>
+        {showValueColumn && (
+          <Table.Td>
+            {draftValue ? (
+              draftValue.usedFallback ? (
+                <Tooltip
+                  label="Approximate: this position's replacement-level player isn't in our data yet, so this uses a fallback estimate"
+                  multiline
+                  w={260}
+                  withArrow
+                >
+                  <Text span size="sm" fs="italic" c="dimmed">
+                    ${Math.round(draftValue.dollarValue)}
+                  </Text>
+                </Tooltip>
+              ) : (
+                `$${Math.round(draftValue.dollarValue)}`
+              )
+            ) : (
+              "—"
             )}
-          </Group>
+          </Table.Td>
+        )}
+        <Table.Td>
+          <Tooltip
+            label={
+              !onCycleTag
+                ? "Select a league to mark targets/avoids"
+                : tag === "target"
+                  ? "Target - click to mark avoid"
+                  : tag === "avoid"
+                    ? "Avoid - click to clear"
+                    : "Click to mark as target"
+            }
+          >
+            <ActionIcon
+              size={32}
+              disabled={!onCycleTag}
+              onClick={(event) => {
+                event.stopPropagation();
+                onCycleTag?.();
+              }}
+              aria-label="Cycle target/avoid"
+              {...(tag
+                ? playerTagStyle(tag)
+                : { variant: "subtle", color: "gray" })}
+            >
+              {tag === "avoid" ? <Ban size={16} /> : <Target size={16} />}
+            </ActionIcon>
+          </Tooltip>
+        </Table.Td>
+        <Table.Td miw={70}>
+          <Badge size="sm" color={POSITION_COLORS[row.position]} variant="light">
+            {row.position}
+          </Badge>
         </Table.Td>
         <Table.Td miw={220}>
           <Group gap={6}>
             <Anchor
               component="button"
               type="button"
+              size="sm"
               onClick={(event) => {
                 event.stopPropagation();
                 onSelectPlayer(row.fpid);
@@ -123,117 +173,48 @@ export function PlayerRow({
                 {injury.statusShort}
               </Badge>
             )}
-            {latestNews && (
-              <Tooltip label={latestNews.title} multiline w={260} withArrow>
-                <StickyNote
-                  size={14}
-                  strokeWidth={2}
-                  aria-label="Recent news"
-                />
-              </Tooltip>
+          </Group>
+        </Table.Td>
+        <Table.Td>
+          <Group gap={4} wrap="nowrap">
+            <Box w={28} style={{ display: "flex", justifyContent: "center" }}>
+              {valueGap && (
+                <ValueGapIcon valueGap={valueGap} position={row.position} />
+              )}
+            </Box>
+            {showConsistencyColumn && consistency && (
+              <ConsistencyIcon label={consistency} />
             )}
           </Group>
         </Table.Td>
-        <Table.Td miw={70}>
-          <Badge color={POSITION_COLORS[row.position]} variant="light">
-            {row.position}
-          </Badge>
-        </Table.Td>
         <Table.Td>{row.team ?? "—"}</Table.Td>
-        <Table.Td>
-          {pointsForScoringConfig(row, scoringConfig).toFixed(1)}
-        </Table.Td>
-        {showValueColumn && (
+        {showChevron && (
           <Table.Td>
-            {draftValue ? (
-              draftValue.usedFallback ? (
-                <Tooltip
-                  label="Approximate: this position's replacement-level player isn't in our data yet, so this uses a fallback estimate"
-                  multiline
-                  w={260}
-                  withArrow
-                >
-                  <Text span fs="italic" c="dimmed">
-                    ${Math.round(draftValue.dollarValue)}
-                  </Text>
-                </Tooltip>
-              ) : (
-                `$${Math.round(draftValue.dollarValue)}`
-              )
-            ) : (
-              "—"
-            )}
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              aria-label={isExpanded ? "Hide details" : "Show details"}
+            >
+              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </ActionIcon>
           </Table.Td>
         )}
-        <Table.Td>
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            aria-label={isExpanded ? "Hide details" : "Show details"}
-          >
-            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </ActionIcon>
-        </Table.Td>
       </Table.Tr>
-      {isExpanded && (
+      {showChevron && isExpanded && (
         <Table.Tr>
-          <Table.Td colSpan={colSpan}>
-            <SimpleGrid cols={2} spacing="md" py={4}>
-              <Stack gap={4}>
-                <Group gap={6}>
-                  <Tooltip
-                    label={
-                      !onCycleTag
-                        ? "Select a league to mark targets/avoids"
-                        : tag === "target"
-                          ? "Target - click to mark avoid"
-                          : tag === "avoid"
-                            ? "Avoid - click to clear"
-                            : "Click to mark as target"
-                    }
-                  >
-                    <ActionIcon
-                      size={36}
-                      disabled={!onCycleTag}
-                      onClick={onCycleTag}
-                      aria-label="Cycle target/avoid"
-                      {...(tag
-                        ? playerTagStyle(tag)
-                        : { variant: "subtle", color: "gray" })}
-                    >
-                      {tag === "avoid" ? (
-                        <Ban size={16} />
-                      ) : (
-                        <Target size={16} />
-                      )}
-                    </ActionIcon>
-                  </Tooltip>
-                  <Text size="xs">
-                    {tag === "target"
-                      ? "Target"
-                      : tag === "avoid"
-                        ? "Avoid"
-                        : "Not tagged"}
-                  </Text>
-                </Group>
-              </Stack>
-              {showKeeperColumn && (
-                <Stack gap={4}>
-                  <Group gap={6}>
-                    <Text size="xs" fw={600} c="dimmed">
-                      Keeper:
-                    </Text>
-                    <Text size="xs">
-                      {keeperInfo
-                        ? showKeeperYear
-                          ? `$${keeperInfo.price} · Yr ${keeperInfo.streak ?? 1}`
-                          : `$${keeperInfo.price}`
-                        : "—"}
-                    </Text>
-                  </Group>
-                </Stack>
-              )}
-            </SimpleGrid>
+          <Table.Td colSpan={columnCount}>
+            <Group gap={6} py={4}>
+              <Text size="xs" fw={600} c="dimmed">
+                Keeper:
+              </Text>
+              <Text size="xs">
+                {keeperInfo
+                  ? showKeeperYear
+                    ? `$${keeperInfo.price} · Yr ${keeperInfo.streak ?? 1}`
+                    : `$${keeperInfo.price}`
+                  : "—"}
+              </Text>
+            </Group>
           </Table.Td>
         </Table.Tr>
       )}

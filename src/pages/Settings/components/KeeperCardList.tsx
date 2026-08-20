@@ -86,9 +86,11 @@ export function KeeperCardList({
         );
 
         return (
-          <Card key={team._id} withBorder padding="sm" radius="md">
-            <Stack gap={2} mb="xs">
-              <Text fw={600}>{team.name}</Text>
+          <Card key={team._id} withBorder padding="md">
+            <Stack gap={2} mb={6}>
+              <Text size="sm" fw={600}>
+                {team.name}
+              </Text>
               <Group gap={6} wrap="wrap">
                 <Text size="sm" c="dimmed">
                   {teamKeepers.length} keeper
@@ -99,7 +101,7 @@ export function KeeperCardList({
                 </Text>
               </Group>
             </Stack>
-            <Stack gap="xs">
+            <Stack gap={6}>
               {teamKeepers.map((pick, index) => {
                 const streak = pick.keeperStreak ?? 1;
                 const value =
@@ -107,10 +109,11 @@ export function KeeperCardList({
                   pick.price;
                 return (
                   <Stack key={pick._id} gap={0}>
-                    {index > 0 && <Divider mb="xs" />}
+                    {index > 0 && <Divider mb={6} />}
                     <Group justify="space-between" wrap="nowrap" align="center">
                       <Group gap={6} wrap="wrap" style={{ minWidth: 0 }}>
                         <Badge
+                          size="sm"
                           variant="light"
                           color={POSITION_COLORS[pick.position]}
                         >
@@ -119,6 +122,7 @@ export function KeeperCardList({
                         <Anchor
                           component="button"
                           type="button"
+                          size="sm"
                           fw={500}
                           onClick={() => onSelectPlayer(pick.fpid)}
                         >

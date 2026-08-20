@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import {
   Badge,
+  Card,
   Center,
   Group,
   Loader,
@@ -89,56 +90,58 @@ export function FreeAgentsTab({
         onChange={setSelectedPositions}
         top={MOBILE_HEADER_HEIGHT}
       />
-      <Table.ScrollContainer minWidth={680}>
-        <Table striped highlightOnHover verticalSpacing="xs">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Player</Table.Th>
-              <Table.Th>Pos</Table.Th>
-              <Table.Th>ROS Pts</Table.Th>
-              <Table.Th>Market $</Table.Th>
-              <Table.Th>Your Suggested Bid</Table.Th>
-              <Table.Th>Why</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {rows.map((row) => (
-              <Table.Tr
-                key={row.fpid}
-                onClick={() => setSelectedFpid(row.fpid)}
-                style={{ cursor: "pointer" }}
-              >
-                <Table.Td>
-                  <Group gap={6} wrap="nowrap">
-                    <Text fw={500}>{row.name}</Text>
-                    {rookieFpids.has(row.fpid) && <RookieBadge />}
-                    {row.team && (
-                      <Text c="dimmed" size="sm">
-                        {row.team}
-                      </Text>
-                    )}
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <Badge color={POSITION_COLORS[row.position]} variant="light">
-                    {row.position}
-                  </Badge>
-                </Table.Td>
-                <Table.Td>{row.rosValue.toFixed(1)}</Table.Td>
-                <Table.Td>${row.marketValue.toFixed(0)}</Table.Td>
-                <Table.Td fw={700}>
-                  {row.suggestedBid !== null ? `$${row.suggestedBid}` : "—"}
-                </Table.Td>
-                <Table.Td>
-                  <Text c="dimmed" size="sm">
-                    {row.rationale ?? "—"}
-                  </Text>
-                </Table.Td>
+      <Card withBorder padding="md">
+        <Table.ScrollContainer minWidth={680}>
+          <Table striped highlightOnHover verticalSpacing={4}>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Player</Table.Th>
+                <Table.Th>Pos</Table.Th>
+                <Table.Th>ROS Pts</Table.Th>
+                <Table.Th>Market $</Table.Th>
+                <Table.Th>Your Suggested Bid</Table.Th>
+                <Table.Th>Why</Table.Th>
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
+            </Table.Thead>
+            <Table.Tbody>
+              {rows.map((row) => (
+                <Table.Tr
+                  key={row.fpid}
+                  onClick={() => setSelectedFpid(row.fpid)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <Table.Td>
+                    <Group gap={6} wrap="nowrap">
+                      <Text size="sm" fw={500}>{row.name}</Text>
+                      {rookieFpids.has(row.fpid) && <RookieBadge />}
+                      {row.team && (
+                        <Text c="dimmed" size="sm">
+                          {row.team}
+                        </Text>
+                      )}
+                    </Group>
+                  </Table.Td>
+                  <Table.Td>
+                    <Badge size="sm" color={POSITION_COLORS[row.position]} variant="light">
+                      {row.position}
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td>{row.rosValue.toFixed(1)}</Table.Td>
+                  <Table.Td>${row.marketValue.toFixed(0)}</Table.Td>
+                  <Table.Td fw={700}>
+                    {row.suggestedBid !== null ? `$${row.suggestedBid}` : "—"}
+                  </Table.Td>
+                  <Table.Td>
+                    <Text c="dimmed" size="sm">
+                      {row.rationale ?? "—"}
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      </Card>
       <PlayerDetailModal
         fpid={selectedFpid}
         onClose={() => setSelectedFpid(null)}

@@ -1,4 +1,4 @@
-import { Anchor, Badge, Button, Group, SegmentedControl, Stack, Table, Text } from "@mantine/core";
+import { Anchor, Badge, Button, Card, Group, SegmentedControl, Stack, Table, Text } from "@mantine/core";
 import { ArrowRightLeft, Flame, Percent } from "lucide-react";
 import { useState } from "react";
 import { POSITION_COLORS } from "../../../lib/positionColors";
@@ -61,83 +61,85 @@ export function RecommendedNominations({
   const rows = results[strategy];
 
   return (
-    <Stack gap={6}>
-      <Group justify="space-between" wrap="wrap" gap="xs">
-        <Text size="sm" fw={500}>
-          Recommended nominations
-        </Text>
-        <SegmentedControl
-          size="xs"
-          value={strategy}
-          onChange={(value) => setStrategy(value as Strategy)}
-          data={STRATEGY_DATA.map(({ value, label }) => ({ value, label }))}
-        />
-      </Group>
-      {rows.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          {active.emptyText}
-        </Text>
-      ) : (
-        <Table.ScrollContainer minWidth={420}>
-          <Table striped highlightOnHover verticalSpacing="xs">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Player</Table.Th>
-                <Table.Th>Why</Table.Th>
-                <Table.Th>$</Table.Th>
-                <Table.Th />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {rows.map(({ row, reason }) => (
-                <Table.Tr key={row.fpid}>
-                  <Table.Td>
-                    <Group gap={6} wrap="wrap">
-                      <Anchor
-                        component="button"
-                        type="button"
-                        onClick={() => onSelectPlayer(row.fpid)}
-                      >
-                        {row.name}
-                      </Anchor>
-                      <Badge
-                        size="sm"
-                        variant="light"
-                        color={POSITION_COLORS[row.position]}
-                      >
-                        {row.position}
-                      </Badge>
-                      <Text size="xs" c="dimmed">
-                        {row.team ?? "—"}
-                      </Text>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" c="dimmed">
-                      {reason}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>${Math.round(row.dollarValue)}</Table.Td>
-                  <Table.Td>
-                    <Button
-                      size="compact-xs"
-                      disabled={hasActiveNomination}
-                      onClick={() => onNominate(row.fpid)}
-                    >
-                      Nominate
-                    </Button>
-                  </Table.Td>
+    <Card withBorder padding="md">
+      <Stack gap="sm">
+        <Group justify="space-between" wrap="wrap" gap="xs">
+          <Text size="sm" fw={500}>
+            Recommended nominations
+          </Text>
+          <SegmentedControl
+            size="xs"
+            value={strategy}
+            onChange={(value) => setStrategy(value as Strategy)}
+            data={STRATEGY_DATA.map(({ value, label }) => ({ value, label }))}
+          />
+        </Group>
+        {rows.length === 0 ? (
+          <Text size="sm" c="dimmed">
+            {active.emptyText}
+          </Text>
+        ) : (
+          <Table.ScrollContainer minWidth={420}>
+            <Table striped highlightOnHover verticalSpacing={4}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Player</Table.Th>
+                  <Table.Th>Why</Table.Th>
+                  <Table.Th>$</Table.Th>
+                  <Table.Th />
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      )}
-      {hasActiveNomination && (
-        <Text size="xs" c="dimmed">
-          Resolve the current nomination first.
-        </Text>
-      )}
-    </Stack>
+              </Table.Thead>
+              <Table.Tbody>
+                {rows.map(({ row, reason }) => (
+                  <Table.Tr key={row.fpid}>
+                    <Table.Td>
+                      <Group gap={6} wrap="wrap">
+                        <Anchor
+                          component="button"
+                          type="button"
+                          onClick={() => onSelectPlayer(row.fpid)}
+                        >
+                          {row.name}
+                        </Anchor>
+                        <Badge
+                          size="sm"
+                          variant="light"
+                          color={POSITION_COLORS[row.position]}
+                        >
+                          {row.position}
+                        </Badge>
+                        <Text size="xs" c="dimmed">
+                          {row.team ?? "—"}
+                        </Text>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" c="dimmed">
+                        {reason}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>${Math.round(row.dollarValue)}</Table.Td>
+                    <Table.Td>
+                      <Button
+                        size="compact-xs"
+                        disabled={hasActiveNomination}
+                        onClick={() => onNominate(row.fpid)}
+                      >
+                        Nominate
+                      </Button>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
+        {hasActiveNomination && (
+          <Text size="xs" c="dimmed">
+            Resolve the current nomination first.
+          </Text>
+        )}
+      </Stack>
+    </Card>
   );
 }

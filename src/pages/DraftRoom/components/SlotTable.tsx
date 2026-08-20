@@ -48,7 +48,7 @@ export function SlotTable({
   const rookieFpids = useRookieFpids();
   return (
     <Table.ScrollContainer minWidth={340}>
-      <Table highlightOnHover>
+      <Table highlightOnHover verticalSpacing={4}>
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Player</Table.Th>
@@ -78,6 +78,7 @@ export function SlotTable({
                 <Table.Td>
                   <Group gap={6} wrap="nowrap" align="center">
                     <Badge
+                      size="sm"
                       variant="light"
                       color={positionColorOrDefault(slot.label)}
                     >

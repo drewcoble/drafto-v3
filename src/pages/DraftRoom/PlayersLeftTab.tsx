@@ -438,6 +438,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
           onChange={(event) => setSearch(event.currentTarget.value)}
           w={{ base: "100%", sm: 260 }}
           mb="sm"
+          autoComplete="off"
         />
         <PositionFilterBar
           positions={activePositions}
