@@ -62,10 +62,6 @@ export function PlayerDetailModal({
       ? { fpid, week, ...(seasonId ? { seasonId } : {}) }
       : "skip",
   );
-  const news = useQuery(
-    api.news.getNewsForFpids,
-    fpid !== null ? { fpids: [fpid] } : "skip",
-  );
   // Pool-relative computations - deliberately reused as-is rather than
   // folded into getPlayerDetail (see convex/draft/playerDetail.ts). Convex
   // dedupes identical query+args subscriptions, so opening this from a page
@@ -141,13 +137,6 @@ export function PlayerDetailModal({
   const draftValue = useMemo(
     () => draftValues?.find((row) => row.fpid === fpid),
     [draftValues, fpid],
-  );
-  const recentNews = useMemo(
-    () =>
-      [...(news ?? [])]
-        .sort((a, b) => b.publishedAt - a.publishedAt)
-        .slice(0, 5),
-    [news],
   );
   const statsEntries = useMemo(
     () =>
@@ -329,22 +318,6 @@ export function PlayerDetailModal({
               })}
             </Accordion>
           </Stack>
-
-          {recentNews.length > 0 && (
-            <Stack gap={6}>
-              <Divider label="Recent news" labelPosition="left" />
-              {recentNews.map((item) => (
-                <Stack key={item._id} gap={0}>
-                  <Text size="sm" fw={500}>
-                    {item.title}
-                  </Text>
-                  <Text size="xs" c="dimmed" lineClamp={2}>
-                    {item.description}
-                  </Text>
-                </Stack>
-              ))}
-            </Stack>
-          )}
         </Stack>
       )}
     </Modal>

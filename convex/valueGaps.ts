@@ -22,10 +22,13 @@ type Position = (typeof POSITIONS)[number];
 // on. QB/RB/WR/TE only, per validated analysis.
 const VALUE_GAP_POSITIONS: Position[] = ["QB", "RB", "WR", "TE"];
 
-// Mirrors src/lib/relevantPlayers.ts's NO_REAL_ADP sentinel (see
+// Mirrors src/lib/relevantPlayers.ts's RELEVANT_ADP_CEILING (see
 // convex/draft/tiers.ts for why convex/ duplicates rather than imports it -
-// convex/ never depends on src/).
-const NO_REAL_ADP = 999;
+// convex/ never depends on src/). A real rank ceiling rather than Sleeper's
+// own "no real ADP" 999 sentinel - top 300 overall is roughly the depth of
+// even a large/deep redraft league; 999 lets through a long tail of
+// technically-non-999-but-still-noise ADP values.
+const RELEVANT_ADP_CEILING = 300;
 
 // Below this many recorded weeks, last season's points-per-game is too
 // small a sample (injury-shortened season, late call-up) to trust as a
@@ -161,7 +164,7 @@ async function computeValueGaps(
       const adp = adpRow
         ? adpForScoring(adpRow, args.scoringConfig.scoring)
         : undefined;
-      return adp !== undefined && adp < NO_REAL_ADP;
+      return adp !== undefined && adp < RELEVANT_ADP_CEILING;
     });
 
     // One row per fpid instead of scanning all 18 weeks - the week-by-week

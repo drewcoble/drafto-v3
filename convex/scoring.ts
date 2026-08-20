@@ -55,13 +55,49 @@ const TE_BONUS_PER_REC: Record<TeScoring, number> = {
   FULL: 1,
 };
 
-// Extra points beyond Sleeper's own pts_std/pts_half_ppr/pts_ppr columns -
-// TE-only reception bonus and/or the +2/passing-TD bump that turns the
-// already-baked-in 4pt TD into 6. Sleeper has no precomputed column for
-// either, so this is computed here from each row's raw per-category stats
-// blob (see sleeper/projections.ts's numericStats, which keeps "rec" and
-// "pass_td" alongside every other raw Sleeper stat key). Always additive on
-// top of pointsForScoring, never a replacement for it.
+// Base fantasy points (4pt passing TDs, no TE premium - both layered on
+// separately by bonusPoints below) from a raw per-category stats blob, for
+// any provider - see convex/projectionBlending.ts, which runs this over
+// each provider's own raw stats before averaging the results together.
+// Coefficients were reverse-engineered from Sleeper's own pts_std/
+// pts_half_ppr/pts_ppr and confirmed to reproduce them exactly (Josh Allen,
+// Ja'Marr Chase, 2026 season projections - see PR history), so running
+// Sleeper's own stats back through this function is a no-op versus trusting
+// its precomputed columns directly, the way this app did before multi-
+// provider blending existed. Two-point conversions aren't included - no
+// ESPN stat id could be reliably identified for them (rare enough, <1% of a
+// typical season total, that omitting them is an accepted gap rather than
+// blocking on it).
+export function computeProjectedPoints(stats: Record<string, number>): {
+  pointsStd: number;
+  pointsHalf: number;
+  pointsPpr: number;
+} {
+  const base =
+    (stats.pass_yd ?? 0) * 0.04 +
+    (stats.pass_td ?? 0) * 4 +
+    (stats.pass_int ?? 0) * -1 +
+    (stats.rush_yd ?? 0) * 0.1 +
+    (stats.rush_td ?? 0) * 6 +
+    (stats.rec_yd ?? 0) * 0.1 +
+    (stats.rec_td ?? 0) * 6 +
+    (stats.fum_lost ?? 0) * -2;
+  const rec = stats.rec ?? 0;
+  return {
+    pointsStd: base,
+    pointsHalf: base + rec * 0.5,
+    pointsPpr: base + rec * 1,
+  };
+}
+
+// Extra points beyond the base STD/HALF/PPR columns above - TE-only
+// reception bonus and/or the +2/passing-TD bump that turns the already-
+// baked-in 4pt TD into 6. Computed here from each row's raw per-category
+// stats blob (see sleeper/projections.ts's numericStats, which keeps "rec"
+// and "pass_td" alongside every other raw stat key) rather than folded into
+// computeProjectedPoints, since it's this app's own scoring config, not a
+// property of any provider's data. Always additive on top of
+// pointsForScoring, never a replacement for it.
 export function bonusPoints(
   row: { position: Position; stats: Record<string, number> },
   config: ScoringConfig,

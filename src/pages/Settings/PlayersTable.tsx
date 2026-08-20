@@ -220,15 +220,6 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     (draftSettingsList === undefined ||
       (seasonId !== undefined && draftValues === undefined));
 
-  const fpids = useMemo(
-    () => (allProjections ?? []).map((row) => row.fpid),
-    [allProjections],
-  );
-  const news = useQuery(
-    api.news.getNewsForFpids,
-    allProjections ? { fpids } : "skip",
-  );
-
   const injuriesByFpid = useMemo(() => {
     const map = new Map<number, { status: string; statusShort: string }>();
     for (const injury of injuries ?? []) {
@@ -236,17 +227,6 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     }
     return map;
   }, [injuries]);
-
-  const latestNewsByFpid = useMemo(() => {
-    const map = new Map<number, { title: string; publishedAt: number }>();
-    for (const item of news ?? []) {
-      const existing = map.get(item.fpid);
-      if (!existing || item.publishedAt > existing.publishedAt) {
-        map.set(item.fpid, item);
-      }
-    }
-    return map;
-  }, [news]);
 
   const adpByFpid = useMemo(() => {
     const map = new Map<
@@ -419,7 +399,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                     scoringConfig={scoringConfig}
                     injury={injuriesByFpid.get(row.fpid)}
                     isRookie={rookieFpids.has(row.fpid)}
-                    latestNews={latestNewsByFpid.get(row.fpid)}
+                    latestNews={undefined}
                     draftValue={draftValueByFpid.get(row.fpid)}
                     valueGap={valueGapByFpid.get(row.fpid)}
                     showValueColumn={!!draftValues}

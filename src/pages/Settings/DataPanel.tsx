@@ -17,7 +17,13 @@ interface DataPanelProps {
   week: string;
 }
 
-type ActionKey = "projections" | "news" | "playerPoints" | "caches";
+type ActionKey =
+  | "projections"
+  | "playerPoints"
+  | "caches"
+  | "espnLinks"
+  | "espnRankings"
+  | "blend";
 
 interface ActionState {
   isRunning: boolean;
@@ -28,11 +34,17 @@ const IDLE_STATE: ActionState = { isRunning: false, status: null };
 
 export function DataPanel({ week }: DataPanelProps) {
   const fetchProjections = useAction(api.sleeper.projections.fetchProjections);
-  const fetchNews = useAction(api.fantasyPros.news.fetchNews);
   const fetchPlayerPoints = useAction(
     api.sleeper.playerPoints.fetchAllPlayerPoints,
   );
   const refreshCaches = useAction(api.fetchAllData.refreshCaches);
+  const fetchSleeperPlayerLinks = useAction(
+    api.sleeper.playerLinks.fetchSleeperPlayerLinks,
+  );
+  const fetchEspnRankings = useAction(api.espn.rankings.fetchEspnRankings);
+  const blendAllProjections = useAction(
+    api.projectionBlending.blendAllProjections,
+  );
 
   // Defaults to the current season server-side (see fetchAllPlayerPoints)
   // when left blank - only needs to be filled in to backfill a past season
@@ -42,9 +54,11 @@ export function DataPanel({ week }: DataPanelProps) {
 
   const [states, setStates] = useState<Record<ActionKey, ActionState>>({
     projections: IDLE_STATE,
-    news: IDLE_STATE,
     playerPoints: IDLE_STATE,
     caches: IDLE_STATE,
+    espnLinks: IDLE_STATE,
+    espnRankings: IDLE_STATE,
+    blend: IDLE_STATE,
   });
 
   const actions: Array<{
@@ -52,21 +66,17 @@ export function DataPanel({ week }: DataPanelProps) {
     label: string;
     description: string;
     run: () => Promise<unknown>;
-    successMessage: string;
+    // Either a fixed string, or built from the resolved action result (e.g.
+    // match counts) - see runAction below.
+    successMessage: string | ((result: unknown) => string);
   }> = [
     {
       key: "projections",
       label: "Fetch projections",
-      description: "Players, projections, ADP/rankings, and injuries.",
+      description:
+        "Players, ADP/rankings, and injuries (K/DST projections too). QB/RB/WR/TE projections need \"Fetch ESPN values\" + \"Blend projections\" after this to actually update.",
       run: () => fetchProjections({ week }),
       successMessage: `Projections refreshed for week "${week}".`,
-    },
-    {
-      key: "news",
-      label: "Fetch news",
-      description: "Latest player news.",
-      run: () => fetchNews({}),
-      successMessage: "News refreshed.",
     },
     {
       key: "playerPoints",
@@ -87,6 +97,72 @@ export function DataPanel({ week }: DataPanelProps) {
       run: () => refreshCaches({ week }),
       successMessage: "Value caches refreshed.",
     },
+    {
+      key: "espnLinks",
+      label: "Link ESPN/Yahoo IDs",
+      description:
+        "Backfills each player's ESPN/Yahoo id from Sleeper's full player list, for joining external rankings.",
+      run: () => fetchSleeperPlayerLinks({}),
+      successMessage: (result) => {
+        const { patched, scanned } = result as {
+          patched: number;
+          skipped: number;
+          scanned: number;
+        };
+        return `Linked ${patched} of ${scanned} candidate players.`;
+      },
+    },
+    {
+      key: "espnRankings",
+      label: "Fetch ESPN values",
+      description:
+        "ESPN's standard/PPR/superflex draft-kit ranks & auction values, plus raw per-category projected stats, matched to players by ESPN id (falling back to name+position, which also backfills the id for next time).",
+      run: () => fetchEspnRankings({ week }),
+      successMessage: (result) => {
+        const {
+          directMatched,
+          nameMatched,
+          ambiguous,
+          unmatched,
+          totalPlayers,
+          rowsByFormat,
+          statRowsByPosition,
+        } = result as {
+          totalPlayers: number;
+          directMatched: number;
+          nameMatched: number;
+          ambiguous: number;
+          unmatched: number;
+          rowsByFormat: { standard: number; ppr: number; superflex: number };
+          statRowsByPosition: Record<string, number>;
+        };
+        const statCounts = Object.entries(statRowsByPosition)
+          .map(([position, count]) => `${position}=${count}`)
+          .join(", ");
+        return (
+          `Matched ${directMatched + nameMatched} of ${totalPlayers} players (${directMatched} by id, ` +
+          `${nameMatched} by name; ${ambiguous} ambiguous, ${unmatched} unmatched). ` +
+          `Values: standard=${rowsByFormat.standard}, ppr=${rowsByFormat.ppr}, superflex=${rowsByFormat.superflex}. ` +
+          `Stat rows: ${statCounts}.`
+        );
+      },
+    },
+    {
+      key: "blend",
+      label: "Blend projections",
+      description:
+        "Averages every provider's raw stats (Sleeper + ESPN) into the QB/RB/WR/TE projections everything else reads. Run after \"Fetch projections\" and \"Fetch ESPN values\".",
+      run: () => blendAllProjections({ week }),
+      successMessage: (result) => {
+        const byPosition = result as Record<
+          string,
+          { upserted: number; removed: number }
+        >;
+        return Object.entries(byPosition)
+          .map(([position, { upserted }]) => `${position}=${upserted}`)
+          .join(", ");
+      },
+    },
   ];
 
   const runAction = async (action: (typeof actions)[number]) => {
@@ -96,12 +172,16 @@ export function DataPanel({ week }: DataPanelProps) {
     }));
 
     try {
-      await action.run();
+      const result = await action.run();
+      const message =
+        typeof action.successMessage === "function"
+          ? action.successMessage(result)
+          : action.successMessage;
       setStates((prev) => ({
         ...prev,
         [action.key]: {
           isRunning: false,
-          status: { kind: "success", message: action.successMessage },
+          status: { kind: "success", message },
         },
       }));
     } catch (error) {

@@ -11,6 +11,7 @@ import { positionValidator, POSITIONS } from "./positions";
 import {
   scoringConfigValidator,
   pointsForScoringConfig,
+  scoringConfigFromSeason,
   ScoringConfig,
 } from "./scoring";
 import { Doc, Id } from "./_generated/dataModel";
@@ -32,45 +33,15 @@ export interface DraftValueRow {
   dollarValue: number;
 }
 
-// Canonical "generic" league shape served to free-plan users instead of
-// their real league's settings - mirrors src/constants/leagueSettings.ts's
-// DEFAULT_FORM (12 teams, $200 cap, standard roster). Duplicated here rather
-// than imported since Convex functions can't import from src/ - same
-// reasoning as DRAFT_PREP_WEEK in convex/leagues.ts duplicating a frontend
-// constant.
-const DEFAULT_GENERIC_LEAGUE_SETTINGS: {
-  teamCount: number;
-  salaryCap: number;
-  rosterSlots: RosterSlotCounts;
-  flexPositions: Position[];
-  superflexPositions: Position[];
-} = {
-  teamCount: 12,
-  salaryCap: 200,
-  rosterSlots: {
-    QB: 1,
-    RB: 2,
-    WR: 2,
-    TE: 1,
-    DST: 1,
-    K: 0,
-    FLEX: 1,
-    SUPERFLEX: 0,
-    BENCH: 8,
-  },
-  flexPositions: ["RB", "WR", "TE"],
-  superflexPositions: ["QB", "RB", "WR", "TE"],
-};
-
 /**
  * Auction/salary-cap $ value per player, computed from current projections +
  * an explicit league shape (roster slots, team count, total cap dollars,
  * keepers already off the board). Pure with respect to any one draft/season
  * - the only ctx.db read left in here is `projections`, which is
- * league-independent - so the exact same VBD engine can be pointed at a
- * real league's settings (computeDraftValues below) or the shared generic
- * default settings (computeGenericDraftValues below) without duplicating
- * the math.
+ * league-independent - so the exact same VBD engine, and the exact same
+ * computeDraftValues below, serve both a real league's own settings and the
+ * system-owned generic league free users see instead (convex/
+ * genericLeague.ts) - there's no separate "generic" computation path.
  *
  * Value-Based Drafting: find each position's replacement-level player (the
  * last one who'd realistically be rostered given league settings, including
@@ -391,8 +362,9 @@ export function estimateMarketValue(
 // Real per-league values - loads this draft's actual season settings,
 // keepers, and teams (for any per-team salary cap overrides), then defers to
 // computeDraftValuesForSettings for the shared VBD math. Only Pro users see
-// this (see getDraftValues below) - free users get computeGenericDraftValues
-// instead.
+// their own league's version of this (see getDraftValues below) - free
+// users get this exact same function pointed at the system-owned generic
+// league instead (convex/genericLeague.ts), not a separate code path.
 async function computeDraftValues(
   ctx: QueryCtx | MutationCtx,
   args: {
@@ -468,60 +440,61 @@ async function computeDraftValues(
   });
 }
 
-// Free-plan equivalent - same VBD engine, but pointed at a fixed shared
-// default league shape instead of any real league's settings, and with no
-// keepers (a generic estimate has no notion of any one league's keeper
-// picks). See getGenericDraftValues below for the (week, scoring)-keyed
-// cache this feeds.
-async function computeGenericDraftValues(
-  ctx: QueryCtx | MutationCtx,
-  args: { week: string; scoringConfig: ScoringConfig },
-): Promise<DraftValueRow[]> {
-  const defaults = DEFAULT_GENERIC_LEAGUE_SETTINGS;
-  return await computeDraftValuesForSettings(ctx, {
-    week: args.week,
-    scoringConfig: args.scoringConfig,
-    rosterSlots: defaults.rosterSlots,
-    flexPositions: defaults.flexPositions,
-    superflexPositions: defaults.superflexPositions,
-    teamCount: defaults.teamCount,
-    totalCapDollars: defaults.teamCount * defaults.salaryCap,
-    keptFpids: new Set(),
-    keptCountByPos: {},
-    keptDollars: 0,
-    keeperCount: 0,
-  });
+// Shared by both branches of getDraftValues below - a cached draftValues
+// row and a freshly computeDraftValues-derived DraftValueRow have the same
+// fields plus system ones (_id, _creationTime, draftId, ...) the caller
+// never wants, so both paths funnel through this instead of duplicating the
+// pick-list.
+function mapCachedDraftValueRows(
+  cached: Doc<"draftValues">[],
+): DraftValueRow[] {
+  return cached.map((row) => ({
+    fpid: row.fpid,
+    name: row.name,
+    team: row.team,
+    position: row.position,
+    points: row.points,
+    positionRank: row.positionRank,
+    replacementPoints: row.replacementPoints,
+    usedFallback: row.usedFallback,
+    valueOverReplacement: row.valueOverReplacement,
+    dollarValue: row.dollarValue,
+  }));
 }
 
-async function getGenericDraftValues(
+// Resolves the system-owned generic league's real draft (see convex/
+// genericLeague.ts's ensureGenericSeason) and that league's own fixed
+// scoring config - free users always see values for THIS scoring config,
+// never whatever their own real league happens to use. Ignoring the
+// caller's own scoringConfig entirely (rather than looking up a cache keyed
+// by it) is the actual fix for what used to let a free user get their real
+// league's exact numbers just by asking with their own scoring settings.
+async function getGenericDraftAndScoring(
   ctx: QueryCtx,
-  args: { week: string; scoringConfig: ScoringConfig },
-): Promise<DraftValueRow[]> {
-  const cached = await ctx.db
-    .query("genericDraftValues")
-    .withIndex("by_week_scoring_teScoring_sixPointPassTds", (q) =>
-      q
-        .eq("week", args.week)
-        .eq("scoring", args.scoringConfig.scoring)
-        .eq("teScoring", args.scoringConfig.teScoring)
-        .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
-    )
-    .collect();
-  if (cached.length > 0) {
-    return cached.map((row): DraftValueRow => ({
-      fpid: row.fpid,
-      name: row.name,
-      team: row.team,
-      position: row.position,
-      points: row.points,
-      positionRank: row.positionRank,
-      replacementPoints: row.replacementPoints,
-      usedFallback: row.usedFallback,
-      valueOverReplacement: row.valueOverReplacement,
-      dollarValue: row.dollarValue,
-    }));
+): Promise<{ draftId: Id<"drafts">; scoringConfig: ScoringConfig }> {
+  const config = await ctx.db.query("genericLeagueConfig").first();
+  if (!config) {
+    throw new Error(
+      "Generic league isn't set up - run genericLeague.ensureGenericSeason once.",
+    );
   }
-  return await computeGenericDraftValues(ctx, args);
+  const season = await ctx.db.get(config.seasonId);
+  if (!season) {
+    throw new Error("Generic league's season is missing.");
+  }
+  const draft = await ctx.db
+    .query("drafts")
+    .withIndex("by_season_kind", (q) =>
+      q.eq("seasonId", config.seasonId).eq("kind", "real"),
+    )
+    .first();
+  if (!draft) {
+    throw new Error("Generic league's draft is missing.");
+  }
+  return {
+    draftId: draft._id,
+    scoringConfig: scoringConfigFromSeason(season),
+  };
 }
 
 // Public, frontend-facing entry point - takes a seasonId (what every route/
@@ -530,9 +503,11 @@ async function getGenericDraftValues(
 // does.
 //
 // Gated on the caller's Pro plan: a free-plan (or signed-out) caller gets
-// generic default-league-settings values (isGeneric: true) instead of this
-// season's real ones, so free users still see directionally-useful numbers
-// without leaking a specific league's exact auction math. This is a
+// the system-owned generic league's values (isGeneric: true) instead of
+// this season's real ones - computed for ITS OWN fixed scoring config, not
+// whatever args.scoringConfig the caller's real league happens to use - so
+// free users still see directionally-useful numbers without leaking a
+// specific league's exact auction math or its own custom scoring. This is a
 // deliberate, narrow change to this query's contract - previously it had no
 // auth check at all (read-only derived data, cheap to expose by id) - see
 // the monetization plan for why. Report Card (convex/draft/reportCard.ts) is
@@ -553,14 +528,29 @@ export const getDraftValues = query({
     const proAccess = userId ? await hasProAccess(ctx, userId) : false;
 
     if (!proAccess) {
-      const rows = await getGenericDraftValues(ctx, {
-        week: args.week,
-        scoringConfig: args.scoringConfig,
-      });
-      // No keeperValues here: generic values never exclude any specific
-      // league's keepers in the first place (computeGenericDraftValues
-      // always runs with an empty keptFpids set), so a kept player already
-      // has a normal dollarValue entry in `values` above.
+      const { draftId, scoringConfig } = await getGenericDraftAndScoring(ctx);
+
+      const cached = await ctx.db
+        .query("draftValues")
+        .withIndex("by_draft_week_scoring_teScoring_sixPointPassTds", (q) =>
+          q
+            .eq("draftId", draftId)
+            .eq("week", args.week)
+            .eq("scoring", scoringConfig.scoring)
+            .eq("teScoring", scoringConfig.teScoring)
+            .eq("sixPointPassTds", scoringConfig.sixPointPassTds),
+        )
+        .collect();
+
+      const rows =
+        cached.length > 0
+          ? mapCachedDraftValueRows(cached)
+          : await computeDraftValues(ctx, { draftId, week: args.week, scoringConfig });
+
+      // No keeperValues here: the generic league never has any real picks
+      // against it (nobody drafts in the system draft), so there's nothing
+      // for estimateKeeperValues to estimate - every player already has a
+      // normal dollarValue entry in `values` above.
       return {
         isGeneric: true,
         values: args.position
@@ -592,18 +582,7 @@ export const getDraftValues = query({
 
     const rows: DraftValueRow[] =
       cached.length > 0
-        ? cached.map((row): DraftValueRow => ({
-            fpid: row.fpid,
-            name: row.name,
-            team: row.team,
-            position: row.position,
-            points: row.points,
-            positionRank: row.positionRank,
-            replacementPoints: row.replacementPoints,
-            usedFallback: row.usedFallback,
-            valueOverReplacement: row.valueOverReplacement,
-            dollarValue: row.dollarValue,
-          }))
+        ? mapCachedDraftValueRows(cached)
         : await computeDraftValues(ctx, {
             draftId: draft._id,
             week: args.week,
@@ -743,43 +722,6 @@ export const refreshDraftValues = internalMutation({
   },
 });
 
-// Generic-values equivalent of refreshDraftValuesForLeague above - called
-// once daily (for every scoring format) from fetchAllData, so free users
-// aren't hitting the expensive live-compute fallback on every cold cache.
-export async function refreshGenericDraftValuesForWeek(
-  ctx: MutationCtx,
-  args: { week: string; scoringConfig: ScoringConfig },
-) {
-  const rows = await computeGenericDraftValues(ctx, args);
-
-  const existing = await ctx.db
-    .query("genericDraftValues")
-    .withIndex("by_week_scoring_teScoring_sixPointPassTds", (q) =>
-      q
-        .eq("week", args.week)
-        .eq("scoring", args.scoringConfig.scoring)
-        .eq("teScoring", args.scoringConfig.teScoring)
-        .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
-    )
-    .collect();
-  for (const row of existing) await ctx.db.delete(row._id);
-
-  for (const row of rows) {
-    await ctx.db.insert("genericDraftValues", {
-      ...row,
-      week: args.week,
-      ...args.scoringConfig,
-    });
-  }
-}
-
-export const refreshGenericDraftValues = internalMutation({
-  args: { week: v.string(), scoringConfig: scoringConfigValidator },
-  handler: async (ctx, args) => {
-    await refreshGenericDraftValuesForWeek(ctx, args);
-  },
-});
-
 // Clears every cached combo (any week/scoring) for one draft - called
 // inline (same transaction, plain ctx.db, not a separate mutation call) by
 // whatever actually changes getDraftValues' inputs off the daily cycle: a
@@ -802,14 +744,15 @@ export async function invalidateDraftValues(
   for (const row of cached) await ctx.db.delete(row._id);
 }
 
-// One-off migration helpers: wipe draftValues/genericDraftValues so they can
-// be reseeded with the new required teScoring/sixPointPassTds fields (added
-// when TE Premium/6pt passing TDs shipped) - existing rows predate those
-// fields and would fail schema validation otherwise. Same wipe-and-rebuild
-// precedent as convex/playerPoints.ts's clearSeasonStats / convex/
-// valueGaps.ts's clearValueGaps. Safe to run any time after that:
-// getDraftValues' cache-miss fallback keeps every read correct while the
-// cache is empty, and refreshCaches (or the next daily cron) reseeds it.
+// One-off migration helper: wipe draftValues so it can be reseeded with the
+// new required teScoring/sixPointPassTds fields (added when TE Premium/6pt
+// passing TDs shipped) - existing rows predate those fields and would fail
+// schema validation otherwise. Same wipe-and-rebuild precedent as convex/
+// playerPoints.ts's clearSeasonStats / convex/valueGaps.ts's clearValueGaps.
+// Safe to run any time after that: getDraftValues' cache-miss fallback keeps
+// every read correct while the cache is empty, and refreshCaches (or the
+// next daily cron) reseeds it - including the generic league's own row,
+// which is just another real draft as far as this table is concerned.
 export const clearDraftValues = internalMutation({
   args: { cursor: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -829,23 +772,3 @@ export const clearDraftValues = internalMutation({
   },
 });
 
-export const clearGenericDraftValues = internalMutation({
-  args: { cursor: v.optional(v.string()) },
-  handler: async (ctx, args) => {
-    const result = await ctx.db
-      .query("genericDraftValues")
-      .paginate({ cursor: args.cursor ?? null, numItems: 500 });
-
-    for (const row of result.page) {
-      await ctx.db.delete(row._id);
-    }
-
-    if (!result.isDone) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.draftValues.clearGenericDraftValues,
-        { cursor: result.continueCursor },
-      );
-    }
-  },
-});

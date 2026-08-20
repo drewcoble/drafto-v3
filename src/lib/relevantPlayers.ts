@@ -74,12 +74,15 @@ export function scoringConfigFromSeason(season: {
 }
 
 // Sleeper's player pool includes thousands of practice-squad/deep-bench
-// players with no real draft relevance. Sleeper flags this itself: ADP is
-// 999 ("effectively never drafted") for the vast majority of QB/RB/WR/TE -
-// only ~245 skill-position players have a real ADP as of this writing. DST
-// never gets a real ADP from Sleeper at all, but it's already naturally
-// capped at exactly 32 (one per team), so it needs no filtering.
-const NO_REAL_ADP = 999;
+// players with no real draft relevance. Sleeper's own "no real ADP"
+// sentinel (999) doesn't actually catch these - its community ADP has a
+// long tail of technically-non-999-but-still-noise values (a QB drafted
+// once in some obscure deep dynasty startup still isn't relevant), so this
+// is a real rank ceiling instead: top 300 overall by ADP is roughly the
+// depth of even a large/deep redraft league. DST never gets a real ADP from
+// Sleeper at all, but it's already naturally capped at exactly 32 (one per
+// team), so it needs no filtering.
+const RELEVANT_ADP_CEILING = 300;
 
 export interface PositionedRow {
   fpid: number;
@@ -106,6 +109,8 @@ export function filterRelevantPlayers<T extends PositionedRow>(
     if (row.position === "DST") return true;
     if (row.position === "K") return getPoints(row) > 0;
     const adp = adpByFpid.get(row.fpid);
-    return adp !== undefined && adpForScoring(adp, scoring) < NO_REAL_ADP;
+    return (
+      adp !== undefined && adpForScoring(adp, scoring) < RELEVANT_ADP_CEILING
+    );
   });
 }

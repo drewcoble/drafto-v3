@@ -3,12 +3,14 @@ import { Scoring, adpForScoring } from "../scoring";
 
 type Position = (typeof POSITIONS)[number];
 
-// Sleeper's sentinel for "no real ADP" on deep-bench players - mirrors
-// src/lib/relevantPlayers.ts's identical constant for the frontend's
-// overall-relevance filter. Duplicated rather than imported: convex/ never
+// Mirrors src/lib/relevantPlayers.ts's RELEVANT_ADP_CEILING (the frontend's
+// overall-relevance filter). Duplicated rather than imported: convex/ never
 // depends on src/ (see convex/scoring.ts's pointsForScoring, which mirrors
-// that same file's helper instead of importing it).
-const NO_REAL_ADP = 999;
+// that same file's helper instead of importing it). A real rank ceiling
+// rather than Sleeper's own "no real ADP" 999 sentinel - top 300 overall is
+// roughly the depth of even a large/deep redraft league; 999 lets through a
+// long tail of technically-non-999-but-still-noise ADP values.
+const RELEVANT_ADP_CEILING = 300;
 
 // A player starts a new tier once their composite score drops below this
 // fraction of the *current tier's leader* (not the overall #1, and not just
@@ -110,7 +112,7 @@ export function computeTiers(
       } else {
         const adpRow = adpByFpid.get(row.fpid);
         const adp = adpRow ? adpForScoring(adpRow, scoring) : undefined;
-        if (adp !== undefined && adp < NO_REAL_ADP) {
+        if (adp !== undefined && adp < RELEVANT_ADP_CEILING) {
           relevant.push({ row, adp });
         } else {
           irrelevant.push(row);

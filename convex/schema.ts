@@ -147,12 +147,67 @@ export default defineSchema({
     // (synthetic team-defense fpids have no underlying Sleeper player
     // object) and for any player fetched before this field existed.
     yearsExp: v.optional(v.number()),
+    // Cross-platform ids, backfilled from Sleeper's full player list (see
+    // convex/sleeper/playerLinks.ts - NOT the trimmed per-player object
+    // nested in the projections/stats endpoints this table is otherwise
+    // populated from, which omits both). Confirmed live that ESPN's own
+    // numeric player id equals Sleeper's espn_id, so this is an exact join
+    // key for convex/espn/rankings.ts rather than a fuzzy name match.
+    // Absent for DST (synthetic fpids have no underlying Sleeper player
+    // object to source these from) and for any player never matched.
+    espnId: v.optional(v.number()),
+    yahooId: v.optional(v.number()),
     updatedAt: v.number(),
-  }).index("by_fpid", ["fpid"]),
+  })
+    .index("by_fpid", ["fpid"])
+    .index("by_espn_id", ["espnId"]),
+
+  // External platforms' own player values/rankings, for comparing against
+  // this app's own draft values rather than replacing them - see convex/
+  // espn/rankings.ts for the first source (ESPN's draft-kit ranks).
+  // platform/format are kept as growable literal unions (rather than
+  // free-form strings) so a bad source name fails at the schema instead of
+  // silently fragmenting rows; add a literal here when a new platform or
+  // format (e.g. Yahoo) is wired up. format is confirmed against ESPN's own
+  // draftRanksByRankType values - it has no half-PPR variant, and its
+  // fourth type (ELIMINATION) is a single-elimination survivor game mode,
+  // not a redraft scoring format, so it's deliberately not one of these.
+  // One row per (platform, format, season, fpid) - overwritten in place as
+  // a season's rankings move rather than kept as history, mirroring
+  // proPricingCache's refetch-and-overwrite approach above.
+  standardValues: defineTable({
+    platform: v.literal("espn"),
+    format: v.union(
+      v.literal("standard"),
+      v.literal("ppr"),
+      v.literal("superflex"),
+    ),
+    season: v.string(),
+    fpid: v.number(),
+    rank: v.number(),
+    auctionValue: v.number(),
+    fetchedAt: v.number(),
+  })
+    .index("by_platform_format_season_fpid", [
+      "platform",
+      "format",
+      "season",
+      "fpid",
+    ])
+    .index("by_fpid", ["fpid"]),
 
   // From Sleeper's projections endpoint (see convex/sleeper/projections.ts).
   // One row per (position, week, fpid); a single fetch returns all three
   // scoring variants at once.
+  // For QB/RB/WR/TE, this table is now a derived cache: convex/
+  // projectionBlending.ts writes it from providerProjections below (see that
+  // table's comment), not directly from any one provider - pointsStd/Half/
+  // Ppr are the average of every provider's own computeProjectedPoints
+  // result (convex/scoring.ts), and stats is those providers' raw category
+  // stats merged (averaged per shared category, else whichever provider has
+  // it). K/DST bypass blending entirely and are still written directly from
+  // Sleeper (see convex/sleeper/projections.ts) - K/DST scoring isn't
+  // reproduced by computeProjectedPoints, so there's nothing to blend yet.
   projections: defineTable({
     fpid: v.number(),
     season: v.string(),
@@ -173,6 +228,33 @@ export default defineSchema({
     .index("by_position_week", ["position", "week"])
     .index("by_position_week_fpid", ["position", "week", "fpid"]),
 
+  // Each external provider's own raw per-category projected stats, kept
+  // separate per provider rather than blended in place - convex/
+  // projectionBlending.ts reads every provider's row for a (position,
+  // season, week) here and averages them into the projections cache above.
+  // provider is a growable literal union (same reasoning as
+  // standardValues.platform above) so a new source is "add a literal + a
+  // fetch that translates its fields into this table's shared stat-category
+  // vocabulary" (Sleeper's own naming - pass_yd, rush_td, rec, etc., see
+  // sleeper/projections.ts's numericStats) without touching the blending
+  // logic at all. QB/RB/WR/TE only, for the same reason as projections above.
+  providerProjections: defineTable({
+    provider: v.union(v.literal("sleeper"), v.literal("espn")),
+    season: v.string(),
+    week: v.string(),
+    fpid: v.number(),
+    position: positionValidator,
+    stats: v.record(v.string(), v.number()),
+    fetchedAt: v.number(),
+  })
+    .index("by_provider_season_week_fpid", [
+      "provider",
+      "season",
+      "week",
+      "fpid",
+    ])
+    .index("by_position_season_week", ["position", "season", "week"]),
+
   // From Sleeper's projections endpoint's adp_* fields - a season/week
   // snapshot like projections, so ADP movement over time is preserved rather
   // than only ever holding the latest value. Sleeper has no "expert
@@ -189,24 +271,6 @@ export default defineSchema({
   })
     .index("by_position_week", ["position", "week"])
     .index("by_position_week_fpid", ["position", "week", "fpid"]),
-
-  // From /nfl/news. Append-only feed keyed by the API's own article id.
-  news: defineTable({
-    newsId: v.number(),
-    fpid: v.number(),
-    team: v.string(), // "FA" appears literally for free agents, not null
-    title: v.string(),
-    description: v.string(),
-    impact: v.string(),
-    categories: v.array(v.string()),
-    link: v.string(),
-    author: v.string(),
-    publishedAt: v.number(),
-    fetchedAt: v.number(),
-  })
-    .index("by_news_id", ["newsId"])
-    .index("by_fpid", ["fpid"])
-    .index("by_published_at", ["publishedAt"]),
 
   // From /nfl/{year}/player-points. Actual (not projected) fantasy points,
   // exploded from the API's nested `weeks` map into one row per week so this
@@ -478,6 +542,24 @@ export default defineSchema({
     historySource: v.optional(
       v.union(v.literal("sleeper"), v.literal("yahoo"), v.literal("manual")),
     ),
+    // Live sync from an in-progress Sleeper auction draft (see convex/
+    // sleeper/draftSync.ts) - distinct from historySource, which only ever
+    // describes a past, already-completed import. sleeperDraftId is the
+    // specific Sleeper draft this real draft is mirroring, resolved
+    // automatically from seasons.sleeperLeagueId at link time rather than
+    // pasted in by the user. sleeperSyncEnabled is the master on/off switch
+    // the poller re-reads every hop; sleeperSyncGeneration is bumped on
+    // every (re)enable so a stale poll chain (from a prior enable/disable
+    // cycle) recognizes it's superseded and stops instead of running
+    // alongside a fresh chain. sleeperLastSyncedAt/sleeperSyncError(Count)
+    // drive the UI's live status readout and the auto-disable-after-
+    // repeated-failures behavior.
+    sleeperDraftId: v.optional(v.string()),
+    sleeperSyncEnabled: v.optional(v.boolean()),
+    sleeperSyncGeneration: v.optional(v.number()),
+    sleeperLastSyncedAt: v.optional(v.number()),
+    sleeperSyncError: v.optional(v.string()),
+    sleeperSyncErrorCount: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_season", ["seasonId"])
@@ -813,33 +895,22 @@ export default defineSchema({
     generatedAt: v.number(),
   }).index("by_draft_week_scoring", ["draftId", "week", "scoring"]),
 
-  // Free-tier equivalent of draftValues above - one shared value set per
-  // (week, scoring), computed from a fixed default league config (12 teams,
-  // $200 cap, standard roster - see DEFAULT_GENERIC_LEAGUE_SETTINGS in
-  // convex/draftValues.ts) rather than any real league's actual settings.
-  // Mirrors valueGaps' "shared across every league at this scoring format"
-  // caching shape (no draftId) since this doesn't depend on one league.
-  // Served instead of draftValues to any user without Pro access - see
-  // getDraftValues' handler in convex/draftValues.ts.
-  genericDraftValues: defineTable({
-    week: v.string(),
-    scoring: scoringValidator,
-    teScoring: teScoringValidator,
-    sixPointPassTds: v.boolean(),
-    fpid: v.number(),
-    name: v.string(),
-    team: v.union(v.string(), v.null()),
-    position: positionValidator,
-    points: v.number(),
-    positionRank: v.number(),
-    replacementPoints: v.number(),
-    usedFallback: v.boolean(),
-    valueOverReplacement: v.number(),
-    dollarValue: v.number(),
-  }).index("by_week_scoring_teScoring_sixPointPassTds", [
-    "week",
-    "scoring",
-    "teScoring",
-    "sixPointPassTds",
-  ]),
+  // Points at the one system-owned league/season/draft used to serve every
+  // free-tier user the exact same draftValues - see convex/genericLeague.ts's
+  // ensureGenericSeason (idempotent - creates this once) and convex/
+  // draftValues.ts's getDraftValues (reads it for the !proAccess branch,
+  // ignoring the caller's own league's scoringConfig entirely, so a free
+  // user can't get their real league's exact custom numbers by just asking
+  // with their own scoring settings). Single row, always exactly one -
+  // nothing after ensureGenericSeason's first run ever inserts a second.
+  // That system league is a real row in leagues/seasons/drafts (kind:
+  // "real") owned by a dedicated placeholder users row, not any real
+  // person's account, so it flows through the exact same computeDraftValues/
+  // refreshDraftValues path (and the nightly refreshCachedComputations loop
+  // over listAllSeasons) as any other league, and never appears in any real
+  // user's own league list (leagues.by_owner is keyed by the signed-in
+  // user's id, which this placeholder owner never is).
+  genericLeagueConfig: defineTable({
+    seasonId: v.id("seasons"),
+  }),
 });

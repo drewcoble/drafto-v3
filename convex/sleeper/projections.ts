@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { action, internalAction, ActionCtx } from "../_generated/server";
 import { api } from "../_generated/api";
-import { POSITIONS } from "../positions";
+import { POSITIONS, BLENDED_POSITIONS } from "../positions";
 import {
   currentSeason,
   DEF_TEAM_FPIDS,
@@ -38,6 +38,7 @@ const SLEEPER_TO_OUR_POSITION: Record<string, Position> = {
   DEF: "DST",
   K: "K",
 };
+
 
 // Sleeper's injury_status values, mapped to the short badge codes the UI
 // already renders (see convex/injuries.ts / PlayersTable.tsx).
@@ -176,7 +177,13 @@ async function fetchProjectionsHandler(
       const name =
         `${record.player?.first_name ?? ""} ${record.player?.last_name ?? ""}`.trim();
       const team = record.team ?? null;
-      const yearsExp = record.player?.years_exp;
+      // Sleeper's season-long payload (unlike per-week) sometimes sends this
+      // as an explicit null rather than omitting it - the players table's
+      // yearsExp column only accepts a number or being left out entirely.
+      const yearsExp =
+        typeof record.player?.years_exp === "number"
+          ? record.player.years_exp
+          : undefined;
       const stats = { ...(record.stats ?? {}) };
 
       const pointsStd = stats.pts_std ?? 0;
@@ -229,10 +236,28 @@ async function fetchProjectionsHandler(
     const playersResult = await ctx.runMutation(api.players.upsertPlayers, {
       rows: playerRows,
     });
-    const projectionsResult = await ctx.runMutation(
-      api.projections.upsertProjections,
-      { position, season, week: args.week, rows: projectionRows },
-    );
+    const projectionsResult = (BLENDED_POSITIONS as readonly string[]).includes(
+      position,
+    )
+      ? await ctx.runMutation(
+          api.providerProjections.upsertProviderProjections,
+          {
+            provider: "sleeper",
+            position,
+            season,
+            week: args.week,
+            rows: projectionRows.map((row) => ({
+              fpid: row.fpid,
+              stats: row.stats,
+            })),
+          },
+        )
+      : await ctx.runMutation(api.projections.upsertProjections, {
+          position,
+          season,
+          week: args.week,
+          rows: projectionRows,
+        });
     const rankingsResult = await ctx.runMutation(
       api.rankings.upsertRankings,
       { position, season, week: args.week, rows: rankingRows },

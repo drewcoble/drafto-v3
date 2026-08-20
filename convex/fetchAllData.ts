@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import { requireSuperAdmin, currentSeason } from "./fantasyPros/client";
 import { fetchCurrentNflWeek, fetchNflSeasonState } from "./sleeper/state";
 import { Scoring, TeScoring, ScoringConfig, scoringConfigFromSeason } from "./scoring";
+import { BLENDED_POSITIONS } from "./positions";
 
 // valueGaps.getAllValueGaps is only ever called with the current draft week
 // (see src/constants/general.ts's WEEK), so these are the only combos worth
@@ -11,10 +12,11 @@ import { Scoring, TeScoring, ScoringConfig, scoringConfigFromSeason } from "./sc
 const SCORINGS: Scoring[] = ["STD", "HALF", "PPR"];
 const TE_SCORINGS: TeScoring[] = ["NONE", "HALF", "FULL"];
 
-// Full cross-product for the two league-independent shared caches
-// (valueGaps, genericDraftValues) - 3 x 3 x 2 = 18 combos. draftValues stays
-// one combo per real draft (that league's own scoringConfigFromSeason), so
-// its cardinality is unaffected by this fan-out.
+// Full cross-product for valueGaps, the one remaining league-independent
+// shared cache - 3 x 3 x 2 = 18 combos. draftValues (including the generic
+// league's own row - see convex/genericLeague.ts) stays one combo per real
+// draft (that draft's own scoringConfigFromSeason), so its cardinality is
+// unaffected by this fan-out.
 const ALL_SCORING_CONFIGS: ScoringConfig[] = SCORINGS.flatMap((scoring) =>
   TE_SCORINGS.flatMap((teScoring) =>
     [false, true].map((sixPointPassTds) => ({
@@ -42,6 +44,10 @@ async function refreshCachedComputations(
     });
   }
 
+  // Includes the system-owned generic league free users see instead of
+  // their own real league's numbers (see convex/genericLeague.ts) - it's a
+  // real seasons/drafts row like any other, so listAllSeasons picks it up
+  // and refreshes its one (fixed) scoring combo here with no special-casing.
   const seasons = await ctx.runQuery(internal.leagues.listAllSeasons, {});
   for (const season of seasons) {
     const draft = await ctx.runQuery(internal.draft.fetchHelpers.getRealDraftInternal, {
@@ -54,27 +60,16 @@ async function refreshCachedComputations(
       scoringConfig: scoringConfigFromSeason(season),
     });
   }
-
-  // Free-plan users get a shared, league-independent value set (see
-  // convex/draftValues.ts's computeGenericDraftValues) instead of any real
-  // league's numbers - refreshed for every scoring config so its cache is
-  // never cold for whichever combo a free user's league happens to use.
-  for (const scoringConfig of ALL_SCORING_CONFIGS) {
-    await ctx.runMutation(internal.draftValues.refreshGenericDraftValues, {
-      week: args.week,
-      scoringConfig,
-    });
-  }
 }
 
-// Runs every working data-fetch across both providers. players/projections/
-// rankings/injuries/player-points all come from Sleeper (see convex/sleeper/);
-// news still comes from FantasyPros, the only remaining reason
-// FANTASYPROS_API_KEY is needed. Delegates to each source's *Internal action
-// variant (not the public, requireSuperAdmin-gated one) - this function's own
-// callers (fetchAll below, or fetchAllInternal from the cron) already decide
-// once whether a human-auth check applies, so re-checking per sub-fetch would
-// be redundant and (for the cron path) would break it - see fetchAllInternal.
+// Runs every working data-fetch: players/projections/rankings/injuries/
+// player-points/espn-links/espn-values all come from Sleeper and ESPN (see
+// convex/sleeper/ and convex/espn/). Delegates to each source's *Internal
+// action variant (not the public, requireSuperAdmin-gated one) - this
+// function's own callers (fetchAll below, or fetchAllInternal from the
+// cron) already decide once whether a human-auth check applies, so
+// re-checking per sub-fetch would be redundant and (for the cron path)
+// would break it - see fetchAllInternal.
 async function fetchAllHandler(
   ctx: ActionCtx,
   args: { week?: string; season?: string },
@@ -93,11 +88,40 @@ async function fetchAllHandler(
     seasonType: nflState.seasonType,
   });
 
+  // Self-healing: idempotent no-op after the first run ever, but makes sure
+  // the system-owned generic league (convex/genericLeague.ts) always exists
+  // before the draftValues refresh loop below runs - free users depend on
+  // it and it should never require a manual setup step to stay present.
+  await ctx.runMutation(internal.genericLeague.ensureGenericSeason, {});
+
+  // Sleeper first (players/projections/rankings/injuries, and - for QB/RB/
+  // WR/TE - this provider's raw stats into providerProjections rather than
+  // straight into projections; see BLENDED_POSITIONS). playerLinks refreshes
+  // players.espnId/yahooId from Sleeper's full player directory next, so
+  // ESPN's own fetch right after has the freshest id links to match
+  // against (new rookies etc. Sleeper only recently backfilled). Then ESPN's
+  // rankings+raw-stats fetch, then the blend that turns both providers' raw
+  // stats into the actual projections rows every reader uses.
   await ctx.runAction(internal.sleeper.projections.fetchProjectionsInternal, {
     week,
     ...(args.season ? { season: args.season } : {}),
   });
-  await ctx.runAction(internal.fantasyPros.news.fetchNewsInternal, {});
+  await ctx.runAction(
+    internal.sleeper.playerLinks.fetchSleeperPlayerLinksInternal,
+    {},
+  );
+  await ctx.runAction(internal.espn.rankings.fetchEspnRankingsInternal, {
+    season,
+    week,
+  });
+  for (const position of BLENDED_POSITIONS) {
+    await ctx.runMutation(internal.projectionBlending.blendProjections, {
+      position,
+      season,
+      week,
+    });
+  }
+
   await ctx.runAction(
     internal.sleeper.playerPoints.fetchAllPlayerPointsInternal,
     { ...(args.season ? { year: args.season } : {}) },
@@ -140,9 +164,9 @@ export const fetchAllInternal = internalAction({
 
 // Cache-only counterpart to fetchAll - recomputes the valueGaps/draftValues
 // caches from whatever projections/rankings/playerSeasonStats data already
-// exists, without calling Sleeper/FantasyPros. For manually repairing the
-// cache (e.g. it was never seeded because the daily cron hasn't run yet)
-// without waiting for or forcing a full external refetch.
+// exists, without calling Sleeper. For manually repairing the cache (e.g. it
+// was never seeded because the daily cron hasn't run yet) without waiting
+// for or forcing a full external refetch.
 export const refreshCaches = action({
   args: {
     week: v.optional(v.string()),
