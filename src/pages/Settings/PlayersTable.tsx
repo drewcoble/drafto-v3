@@ -394,6 +394,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                       {draftValuesResult?.isGeneric ? "$ (est.)" : "$"}
                     </Table.Th>
                   )}
+                  {draftValues && <Table.Th>vs. market</Table.Th>}
                   {/* Target/avoid toggle - unlabeled icon column. */}
                   <Table.Th></Table.Th>
                   <Table.Th miw={70}>Pos</Table.Th>

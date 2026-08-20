@@ -600,6 +600,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                           <Table.Th>Player</Table.Th>
                           <Table.Th>Tier</Table.Th>
                           <Table.Th>$</Table.Th>
+                          <Table.Th visibleFrom="sm">vs. market</Table.Th>
                           <Table.Th visibleFrom="sm">Pts</Table.Th>
                           <Table.Th></Table.Th>
                         </Table.Tr>

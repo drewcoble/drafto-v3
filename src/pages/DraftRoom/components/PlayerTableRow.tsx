@@ -5,7 +5,6 @@ import {
   Badge,
   Button,
   Group,
-  Stack,
   Table,
   Text,
   ThemeIcon,
@@ -68,10 +67,10 @@ interface PlayerTableRowProps {
   onToggleExpand: () => void;
 }
 
-// Player, Tier, $, Pts, status-icon flags, chevron - kept in sync with the
-// header column count in PlayersLeftTab.tsx so the expanded actions row's
-// colSpan always spans the full table width.
-const COLUMN_COUNT = 6;
+// Player, Tier, $, vs. market, Pts, status-icon flags, chevron - kept in
+// sync with the header column count in PlayersLeftTab.tsx so the expanded
+// actions row's colSpan always spans the full table width.
+const COLUMN_COUNT = 7;
 
 // Table-view alternative to PlayerBar.tsx for the same DraftBoardRow data -
 // same status icons/actions (nominate, target/avoid), but as a plain
@@ -207,15 +206,16 @@ export function PlayerTableRow({
           </Tooltip>
         </Table.Td>
         <Table.Td>
-          <Stack gap={0}>
-            <Text size="sm" c={priceColor} fw={600}>
-              ${Math.round(row.dollarValue)}
-            </Text>
-            <StandardValueLabel
-              draftValue={row.dollarValue}
-              standardValue={standardValue}
-            />
-          </Stack>
+          <Text size="sm" c={priceColor} fw={600}>
+            ${Math.round(row.dollarValue)}
+          </Text>
+        </Table.Td>
+        <Table.Td visibleFrom="sm">
+          <StandardValueLabel
+            draftValue={row.dollarValue}
+            standardValue={standardValue}
+            showLabel={false}
+          />
         </Table.Td>
         <Table.Td visibleFrom="sm">
           <Text size="sm" c="dimmed">

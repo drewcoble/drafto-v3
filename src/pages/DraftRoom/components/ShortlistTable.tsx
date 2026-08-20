@@ -60,6 +60,7 @@ export function TargetsTable({
                 <Table.Tr>
                   <Table.Th>Player</Table.Th>
                   <Table.Th>Value / Status</Table.Th>
+                  <Table.Th>vs. market</Table.Th>
                   <Table.Th />
                 </Table.Tr>
               </Table.Thead>
@@ -100,10 +101,6 @@ export function TargetsTable({
                             ? `$${Math.round(row.dollarValue)} · ${row.tierLabel}`
                             : "—"}
                         </Text>
-                        <StandardValueLabel
-                          draftValue={row?.dollarValue}
-                          standardValue={standardValueByFpid.get(tag.fpid)}
-                        />
                         {pick ? (
                           <Badge
                             variant="light"
@@ -125,6 +122,13 @@ export function TargetsTable({
                           </Badge>
                         )}
                       </Stack>
+                    </Table.Td>
+                    <Table.Td>
+                      <StandardValueLabel
+                        draftValue={row?.dollarValue}
+                        standardValue={standardValueByFpid.get(tag.fpid)}
+                        showLabel={false}
+                      />
                     </Table.Td>
                     {/* Reorder + remove merged into one menu (was 2 columns -
                         2 discrete arrow buttons plus a remove button). */}

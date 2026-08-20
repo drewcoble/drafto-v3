@@ -104,6 +104,7 @@ export function RecommendedNominations({
                   <Table.Th>Player</Table.Th>
                   <Table.Th>Why</Table.Th>
                   <Table.Th>$</Table.Th>
+                  <Table.Th>vs. market</Table.Th>
                   <Table.Th />
                 </Table.Tr>
               </Table.Thead>
@@ -136,14 +137,13 @@ export function RecommendedNominations({
                         {reason}
                       </Text>
                     </Table.Td>
+                    <Table.Td>${Math.round(row.dollarValue)}</Table.Td>
                     <Table.Td>
-                      <Stack gap={0}>
-                        ${Math.round(row.dollarValue)}
-                        <StandardValueLabel
-                          draftValue={row.dollarValue}
-                          standardValue={standardValueByFpid.get(row.fpid)}
-                        />
-                      </Stack>
+                      <StandardValueLabel
+                        draftValue={row.dollarValue}
+                        standardValue={standardValueByFpid.get(row.fpid)}
+                        showLabel={false}
+                      />
                     </Table.Td>
                     <Table.Td>
                       <Button

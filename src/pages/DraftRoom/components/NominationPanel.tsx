@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   ActionIcon,
   Anchor,
@@ -38,6 +38,7 @@ import {
 } from "../../../lib/consistency";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { playerTagStyle } from "../../../lib/playerTagStyle";
+import { formatSignedDollar, keeperValueColor } from "../../../lib/keeperValue";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
 import { useHoldRepeat } from "../../../hooks/useHoldRepeat";
 
@@ -301,13 +302,21 @@ function ActiveNominationBody({
       : null;
   const valueParts = [
     nominatedValue ? `Fair ~$${Math.round(nominatedValue.dollarValue)}` : null,
-    marketDiff !== null
-      ? `vs. market ${marketDiff > 0 ? "+" : marketDiff < 0 ? "-" : "±"}$${Math.abs(marketDiff)}`
-      : null,
+    marketDiff !== null ? (
+      <Text
+        key="market"
+        component="span"
+        inherit
+        fw={600}
+        c={keeperValueColor(marketDiff)}
+      >
+        vs. market {formatSignedDollar(marketDiff)}
+      </Text>
+    ) : null,
     planMatch
       ? `${planMatch.slotLabel} ~$${Math.round(planMatch.amount)}`
       : null,
-  ].filter((part): part is string => part !== null);
+  ].filter((part) => part !== null);
 
   return (
     <Stack gap={6}>
@@ -384,7 +393,12 @@ function ActiveNominationBody({
       </Group>
       {valueParts.length > 0 && (
         <Text size="xs" c="dimmed">
-          {valueParts.join("  ·  ")}
+          {valueParts.map((part, index) => (
+            <Fragment key={index}>
+              {index > 0 && "  ·  "}
+              {part}
+            </Fragment>
+          ))}
         </Text>
       )}
       <Group gap={6} wrap="wrap">

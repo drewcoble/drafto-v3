@@ -5,7 +5,6 @@ import {
   Badge,
   Box,
   Group,
-  Stack,
   Table,
   Text,
   Tooltip,
@@ -83,11 +82,11 @@ export function PlayerRow({
   // so there's nothing to expand into when no league (and therefore no
   // Keeper data) is selected.
   const showChevron = showKeeperColumn;
-  // Rank, FPTS, $ (when shown), Target/Avoid, Pos, Player, Tags, Team, plus
-  // the chevron itself when shown - kept in sync with the header column
-  // count in PlayersTable.tsx so the expanded Keeper row's colSpan always
-  // spans the full table width.
-  const columnCount = 7 + (showValueColumn ? 1 : 0) + (showChevron ? 1 : 0);
+  // Rank, FPTS, $ + vs. market (when shown, 2 columns), Target/Avoid, Pos,
+  // Player, Tags, Team, plus the chevron itself when shown - kept in sync
+  // with the header column count in PlayersTable.tsx so the expanded
+  // Keeper row's colSpan always spans the full table width.
+  const columnCount = 7 + (showValueColumn ? 2 : 0) + (showChevron ? 1 : 0);
 
   return (
     <Fragment>
@@ -101,30 +100,33 @@ export function PlayerRow({
         </Table.Td>
         {showValueColumn && (
           <Table.Td>
-            <Stack gap={0}>
-              {draftValue ? (
-                draftValue.usedFallback ? (
-                  <Tooltip
-                    label="Approximate: this position's replacement-level player isn't in our data yet, so this uses a fallback estimate"
-                    multiline
-                    w={260}
-                    withArrow
-                  >
-                    <Text span size="sm" fs="italic" c="dimmed">
-                      ${Math.round(draftValue.dollarValue)}
-                    </Text>
-                  </Tooltip>
-                ) : (
-                  `$${Math.round(draftValue.dollarValue)}`
-                )
+            {draftValue ? (
+              draftValue.usedFallback ? (
+                <Tooltip
+                  label="Approximate: this position's replacement-level player isn't in our data yet, so this uses a fallback estimate"
+                  multiline
+                  w={260}
+                  withArrow
+                >
+                  <Text span size="sm" fs="italic" c="dimmed">
+                    ${Math.round(draftValue.dollarValue)}
+                  </Text>
+                </Tooltip>
               ) : (
-                "—"
-              )}
-              <StandardValueLabel
-                draftValue={draftValue?.dollarValue}
-                standardValue={standardValue}
-              />
-            </Stack>
+                `$${Math.round(draftValue.dollarValue)}`
+              )
+            ) : (
+              "—"
+            )}
+          </Table.Td>
+        )}
+        {showValueColumn && (
+          <Table.Td>
+            <StandardValueLabel
+              draftValue={draftValue?.dollarValue}
+              standardValue={standardValue}
+              showLabel={false}
+            />
           </Table.Td>
         )}
         <Table.Td>
