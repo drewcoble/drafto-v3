@@ -87,8 +87,7 @@ export function PlayerRow({
   // the chevron itself when shown - kept in sync with the header column
   // count in PlayersTable.tsx so the expanded Keeper row's colSpan always
   // spans the full table width.
-  const columnCount =
-    7 + (showValueColumn ? 1 : 0) + (showChevron ? 1 : 0);
+  const columnCount = 7 + (showValueColumn ? 1 : 0) + (showChevron ? 1 : 0);
 
   return (
     <Fragment>
@@ -121,7 +120,10 @@ export function PlayerRow({
               ) : (
                 "—"
               )}
-              <StandardValueLabel value={standardValue} />
+              <StandardValueLabel
+                draftValue={draftValue?.dollarValue}
+                standardValue={standardValue}
+              />
             </Stack>
           </Table.Td>
         )}
@@ -154,7 +156,11 @@ export function PlayerRow({
           </Tooltip>
         </Table.Td>
         <Table.Td miw={70}>
-          <Badge size="sm" color={POSITION_COLORS[row.position]} variant="light">
+          <Badge
+            size="sm"
+            color={POSITION_COLORS[row.position]}
+            variant="light"
+          >
             {row.position}
           </Badge>
         </Table.Td>

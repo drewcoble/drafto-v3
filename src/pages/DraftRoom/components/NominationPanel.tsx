@@ -294,10 +294,15 @@ function ActiveNominationBody({
   // The two market-value figures read as a short dotted sentence rather
   // than competing separately-labeled tags - only ever 0-2 short fragments,
   // so a plain join reads cleaner here than another row of badges.
+  const marketDiff =
+    nominatedValue && nominatedStandardValue
+      ? Math.round(nominatedValue.dollarValue) -
+        Math.round(nominatedStandardValue.auctionValue)
+      : null;
   const valueParts = [
     nominatedValue ? `Fair ~$${Math.round(nominatedValue.dollarValue)}` : null,
-    nominatedStandardValue
-      ? `ESPN ~$${Math.round(nominatedStandardValue.auctionValue)}`
+    marketDiff !== null
+      ? `vs. market ${marketDiff > 0 ? "+" : marketDiff < 0 ? "-" : "±"}$${Math.abs(marketDiff)}`
       : null,
     planMatch
       ? `${planMatch.slotLabel} ~$${Math.round(planMatch.amount)}`

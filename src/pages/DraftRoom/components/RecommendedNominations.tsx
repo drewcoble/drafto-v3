@@ -1,4 +1,14 @@
-import { Anchor, Badge, Button, Card, Group, SegmentedControl, Stack, Table, Text } from "@mantine/core";
+import {
+  Anchor,
+  Badge,
+  Button,
+  Card,
+  Group,
+  SegmentedControl,
+  Stack,
+  Table,
+  Text,
+} from "@mantine/core";
 import { ArrowRightLeft, Flame, Percent } from "lucide-react";
 import { useState } from "react";
 import { POSITION_COLORS } from "../../../lib/positionColors";
@@ -16,7 +26,11 @@ interface RecommendedNominationsProps {
 
 type Strategy = "highDemand" | "discount" | "dump";
 
-const STRATEGY_DATA: { value: Strategy; label: React.ReactNode; emptyText: string }[] = [
+const STRATEGY_DATA: {
+  value: Strategy;
+  label: React.ReactNode;
+  emptyText: string;
+}[] = [
   {
     value: "highDemand",
     label: (
@@ -126,7 +140,8 @@ export function RecommendedNominations({
                       <Stack gap={0}>
                         ${Math.round(row.dollarValue)}
                         <StandardValueLabel
-                          value={standardValueByFpid.get(row.fpid)}
+                          draftValue={row.dollarValue}
+                          standardValue={standardValueByFpid.get(row.fpid)}
                         />
                       </Stack>
                     </Table.Td>

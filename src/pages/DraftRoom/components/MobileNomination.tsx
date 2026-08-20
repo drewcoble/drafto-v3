@@ -776,7 +776,10 @@ function AssignDrawerBody({
             Est. ${Math.round(nominatedValue.dollarValue)}
           </Text>
         )}
-        <StandardValueLabel value={nominatedStandardValue} />
+        <StandardValueLabel
+          draftValue={nominatedValue?.dollarValue}
+          standardValue={nominatedStandardValue}
+        />
         {planMatch && (
           <Text size="xs" c="dimmed" truncate>
             {planMatch.slotLabel} budget:{" "}

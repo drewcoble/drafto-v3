@@ -101,7 +101,8 @@ export function TargetsTable({
                             : "—"}
                         </Text>
                         <StandardValueLabel
-                          value={standardValueByFpid.get(tag.fpid)}
+                          draftValue={row?.dollarValue}
+                          standardValue={standardValueByFpid.get(tag.fpid)}
                         />
                         {pick ? (
                           <Badge

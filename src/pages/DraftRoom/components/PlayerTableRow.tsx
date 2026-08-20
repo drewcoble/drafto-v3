@@ -211,7 +211,10 @@ export function PlayerTableRow({
             <Text size="sm" c={priceColor} fw={600}>
               ${Math.round(row.dollarValue)}
             </Text>
-            <StandardValueLabel value={standardValue} />
+            <StandardValueLabel
+              draftValue={row.dollarValue}
+              standardValue={standardValue}
+            />
           </Stack>
         </Table.Td>
         <Table.Td visibleFrom="sm">
