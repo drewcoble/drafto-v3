@@ -413,7 +413,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                           >
                             <Text
                               truncate
-                              size="md"
+                              size="lg"
                               fw={700}
                               ta="left"
                               style={{ flex: 1, minWidth: 0 }}
@@ -438,7 +438,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                             )}
                           </Group>
                           <Text
-                            size="md"
+                            size="lg"
                             ta="right"
                             w={35}
                             fw={700}
