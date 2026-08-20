@@ -77,10 +77,9 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
   const settings = useQuery(api.leagues.getSeasonPublic, { seasonId });
   const teams = useQuery(api.draft.teams.listSeasonTeamsPublic, { seasonId });
   const picks = useQuery(api.draft.picks.listDraftPicksPublic, { seasonId });
-  const activeNomination = useQuery(
-    api.draft.picks.getActiveNominationPublic,
-    { seasonId },
-  );
+  const activeNomination = useQuery(api.draft.picks.getActiveNominationPublic, {
+    seasonId,
+  });
   const nominationConfig = useQuery(
     api.draft.nominationOrder.getNominationConfigPublic,
     { seasonId },
@@ -166,7 +165,10 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
     name: string;
   } | null>(null);
   if (nominatingTeam && nominatingTeam._id !== stickyNominatedTeam?.id) {
-    setStickyNominatedTeam({ id: nominatingTeam._id, name: nominatingTeam.name });
+    setStickyNominatedTeam({
+      id: nominatingTeam._id,
+      name: nominatingTeam.name,
+    });
   }
   const [stickyTurnTeam, setStickyTurnTeam] = useState<{
     id: Id<"seasonTeams">;
@@ -360,10 +362,21 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                 }
               >
                 <Stack gap={6}>
-                  <Text fw={700} size="lg">
-                    {team.name}
-                  </Text>
-                  <BudgetStats stats={stats} />
+                  <Group
+                    justify="space-between"
+                    wrap="nowrap"
+                    align="flex-start"
+                  >
+                    <Text
+                      fw={700}
+                      size="lg"
+                      truncate
+                      style={{ flex: 1, minWidth: 0 }}
+                    >
+                      {team.name}
+                    </Text>
+                    <BudgetStats stats={stats} />
+                  </Group>
 
                   {slots.map((slot, slotIndex) => {
                     const pick = bySlot.get(slot.key);

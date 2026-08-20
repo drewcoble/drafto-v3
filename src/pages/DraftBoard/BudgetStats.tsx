@@ -3,8 +3,8 @@ import { TeamBudgetStats } from "../../lib/teamBudget";
 
 const BudgetStats = ({ stats }: { stats: TeamBudgetStats }) => {
   return (
-    <Stack gap={4} mb={4}>
-      <Group justify="space-between">
+    <Stack gap={4} align="flex-end" style={{ flexShrink: 0 }}>
+      <Group gap={6} wrap="nowrap">
         <Text size="xs" c="dimmed">
           max bid
         </Text>
@@ -12,7 +12,7 @@ const BudgetStats = ({ stats }: { stats: TeamBudgetStats }) => {
           ${Math.max(stats.maxBid, 0)}
         </Text>
       </Group>
-      <Group justify="space-between">
+      <Group gap={6} wrap="nowrap">
         <Text size="xs" c="dimmed">
           empty spots
         </Text>
