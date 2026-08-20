@@ -389,7 +389,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                           justify="space-between"
                         >
                           <Badge
-                            size="sm"
+                            size="md"
                             variant="light"
                             color={positionColorOrDefault(slot.label)}
                             w={65}
