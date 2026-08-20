@@ -427,7 +427,11 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                               size="xl"
                               fw={700}
                               ta="left"
-                              style={{ flex: 1, minWidth: 0 }}
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                letterSpacing: "0.3px",
+                              }}
                             >
                               {player?.name ?? "-"}
                             </Text>
