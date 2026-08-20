@@ -1,16 +1,9 @@
 import { Group, Stack, Text } from "@mantine/core";
 import { TeamBudgetStats } from "../../lib/teamBudget";
 
-const BudgetStats = ({
-  stats,
-  position,
-}: {
-  stats: TeamBudgetStats;
-  position: "top" | "bottom";
-}) => {
-  const mProps = position === "top" ? { marginBottom: 4 } : { marginTop: 4 };
+const BudgetStats = ({ stats }: { stats: TeamBudgetStats }) => {
   return (
-    <Stack gap={4} style={{ ...mProps }}>
+    <Stack gap={4} mb={4}>
       <Group justify="space-between">
         <Text size="xs" c="dimmed">
           max bid

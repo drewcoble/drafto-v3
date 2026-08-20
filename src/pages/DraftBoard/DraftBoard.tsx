@@ -342,7 +342,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
             </Group>
           </Group>
           <SimpleGrid cols={boardCols} spacing="md">
-            {teamSummaries.map(({ team, stats, slots, bySlot }, index) => (
+            {teamSummaries.map(({ team, stats, slots, bySlot }) => (
               <Card
                 key={team._id}
                 withBorder
@@ -363,9 +363,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                   <Text fw={700} size="lg">
                     {team.name}
                   </Text>
-                  {index + 1 > boardCols && (
-                    <BudgetStats stats={stats} position="top" />
-                  )}
+                  <BudgetStats stats={stats} />
 
                   {slots.map((slot, slotIndex) => {
                     const pick = bySlot.get(slot.key);
@@ -389,7 +387,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                           justify="space-between"
                         >
                           <Badge
-                            size="md"
+                            size="lg"
                             variant="light"
                             color={positionColorOrDefault(slot.label)}
                             w={65}
@@ -450,10 +448,6 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                       </Fragment>
                     );
                   })}
-
-                  {index < boardCols && (
-                    <BudgetStats stats={stats} position="bottom" />
-                  )}
                 </Stack>
               </Card>
             ))}
