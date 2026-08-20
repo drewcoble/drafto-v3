@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Group,
+  Stack,
   Table,
   Text,
   ThemeIcon,
@@ -32,7 +33,9 @@ import {
 } from "../../../lib/consistency";
 import { playerTagStyle } from "../../../lib/playerTagStyle";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
+import type { StandardValueRow } from "../../../lib/standardValues";
 import { RookieBadge } from "../../../components/RookieBadge";
+import { StandardValueLabel } from "../../../components/StandardValueLabel";
 
 // Matches the icon choices PlayerBar.tsx/PlayerBarDetails.tsx use for the
 // same consistency ratings - kept in sync there rather than imported, same
@@ -46,6 +49,7 @@ const CONSISTENCY_ICON: Record<ConsistencyLabel, typeof ShieldCheck> = {
 interface PlayerTableRowProps {
   row: DraftBoardRow;
   tag: PlayerTag | undefined;
+  standardValue: StandardValueRow | undefined;
   valueGap: ValueGap | undefined;
   consistency: ConsistencyLabel | undefined;
   isRookie: boolean;
@@ -78,6 +82,7 @@ const COLUMN_COUNT = 6;
 export function PlayerTableRow({
   row,
   tag,
+  standardValue,
   valueGap,
   consistency,
   isRookie,
@@ -202,9 +207,12 @@ export function PlayerTableRow({
           </Tooltip>
         </Table.Td>
         <Table.Td>
-          <Text size="sm" c={priceColor} fw={600}>
-            ${Math.round(row.dollarValue)}
-          </Text>
+          <Stack gap={0}>
+            <Text size="sm" c={priceColor} fw={600}>
+              ${Math.round(row.dollarValue)}
+            </Text>
+            <StandardValueLabel value={standardValue} />
+          </Stack>
         </Table.Td>
         <Table.Td visibleFrom="sm">
           <Text size="sm" c="dimmed">

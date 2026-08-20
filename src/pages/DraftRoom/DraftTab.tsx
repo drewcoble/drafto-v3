@@ -9,6 +9,7 @@ import {
   filterRelevantPlayers,
   scoringConfigFromSeason,
 } from "../../lib/relevantPlayers";
+import { buildStandardValueByFpid } from "../../lib/standardValues";
 import { computeNominationSuggestions } from "../../lib/nominationStrategies";
 import { WEEK } from "../../constants/general";
 import { POSITIONS, type DraftTierRow, type ValueGap } from "../../types";
@@ -46,6 +47,9 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
     seasonId,
   });
   const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
+  const standardValues = useQuery(api.standardValues.getStandardValues, {
+    season: thisSeason,
+  });
   const valueGaps = useQuery(
     api.valueGaps.getAllValueGaps,
     settings
@@ -191,6 +195,16 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
     return map;
   }, [valueGaps]);
 
+  const standardValueByFpid = useMemo(
+    () =>
+      buildStandardValueByFpid(
+        standardValues,
+        settings?.scoring ?? "PPR",
+        (settings?.rosterSlots.SUPERFLEX ?? 0) > 0,
+      ),
+    [standardValues, settings],
+  );
+
   const availableForNomination = useMemo(() => {
     if (!settings || !tieredValues) return [];
     const relevant = filterRelevantPlayers(
@@ -250,6 +264,7 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
           hasActiveNomination={!!activeNomination}
           onNominate={handleNominate}
           onSelectPlayer={setSelectedFpid}
+          standardValueByFpid={standardValueByFpid}
         />
       )}
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
@@ -270,6 +285,7 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
             runAction(() => clearPlayerTag({ seasonId, fpid }))
           }
           onSelectPlayer={setSelectedFpid}
+          standardValueByFpid={standardValueByFpid}
         />
       </SimpleGrid>
 

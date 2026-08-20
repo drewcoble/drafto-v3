@@ -5,6 +5,7 @@ import {
   Badge,
   Box,
   Group,
+  Stack,
   Table,
   Text,
   Tooltip,
@@ -16,10 +17,12 @@ import { POSITION_COLORS } from "../../../lib/positionColors";
 import { injuryColor } from "../../../lib/playerFormatting";
 import { pointsForScoringConfig } from "../../../lib/relevantPlayers";
 import type { ConsistencyLabel } from "../../../lib/consistency";
+import type { StandardValueRow } from "../../../lib/standardValues";
 import { playerTagStyle } from "../../../lib/playerTagStyle";
 import { ConsistencyIcon } from "./ConsistencyIcon";
 import { ValueGapIcon } from "./ValueGapIcon";
 import { RookieBadge } from "../../../components/RookieBadge";
+import { StandardValueLabel } from "../../../components/StandardValueLabel";
 
 // One player's keeper status for the pre-draft rankings' Keeper column - the
 // actual price/streak entered on the Keepers tab (see KeepersTab.tsx's
@@ -39,6 +42,7 @@ interface PlayerRowProps {
   injury: { status: string; statusShort: string } | undefined;
   isRookie: boolean;
   draftValue: { dollarValue: number; usedFallback: boolean } | undefined;
+  standardValue: StandardValueRow | undefined;
   valueGap: ValueGap | undefined;
   showValueColumn: boolean;
   tag: PlayerTag | undefined;
@@ -60,6 +64,7 @@ export function PlayerRow({
   injury,
   isRookie,
   draftValue,
+  standardValue,
   valueGap,
   showValueColumn,
   tag,
@@ -97,24 +102,27 @@ export function PlayerRow({
         </Table.Td>
         {showValueColumn && (
           <Table.Td>
-            {draftValue ? (
-              draftValue.usedFallback ? (
-                <Tooltip
-                  label="Approximate: this position's replacement-level player isn't in our data yet, so this uses a fallback estimate"
-                  multiline
-                  w={260}
-                  withArrow
-                >
-                  <Text span size="sm" fs="italic" c="dimmed">
-                    ${Math.round(draftValue.dollarValue)}
-                  </Text>
-                </Tooltip>
+            <Stack gap={0}>
+              {draftValue ? (
+                draftValue.usedFallback ? (
+                  <Tooltip
+                    label="Approximate: this position's replacement-level player isn't in our data yet, so this uses a fallback estimate"
+                    multiline
+                    w={260}
+                    withArrow
+                  >
+                    <Text span size="sm" fs="italic" c="dimmed">
+                      ${Math.round(draftValue.dollarValue)}
+                    </Text>
+                  </Tooltip>
+                ) : (
+                  `$${Math.round(draftValue.dollarValue)}`
+                )
               ) : (
-                `$${Math.round(draftValue.dollarValue)}`
-              )
-            ) : (
-              "—"
-            )}
+                "—"
+              )}
+              <StandardValueLabel value={standardValue} />
+            </Stack>
           </Table.Td>
         )}
         <Table.Td>

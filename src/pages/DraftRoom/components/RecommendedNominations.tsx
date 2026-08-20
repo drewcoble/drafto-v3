@@ -3,12 +3,15 @@ import { ArrowRightLeft, Flame, Percent } from "lucide-react";
 import { useState } from "react";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import type { NominationStrategyResults } from "../../../lib/nominationStrategies";
+import type { StandardValueRow } from "../../../lib/standardValues";
+import { StandardValueLabel } from "../../../components/StandardValueLabel";
 
 interface RecommendedNominationsProps {
   results: NominationStrategyResults;
   hasActiveNomination: boolean;
   onNominate: (fpid: number) => void;
   onSelectPlayer: (fpid: number) => void;
+  standardValueByFpid: Map<number, StandardValueRow>;
 }
 
 type Strategy = "highDemand" | "discount" | "dump";
@@ -55,6 +58,7 @@ export function RecommendedNominations({
   hasActiveNomination,
   onNominate,
   onSelectPlayer,
+  standardValueByFpid,
 }: RecommendedNominationsProps) {
   const [strategy, setStrategy] = useState<Strategy>("highDemand");
   const active = STRATEGY_DATA.find((s) => s.value === strategy)!;
@@ -118,7 +122,14 @@ export function RecommendedNominations({
                         {reason}
                       </Text>
                     </Table.Td>
-                    <Table.Td>${Math.round(row.dollarValue)}</Table.Td>
+                    <Table.Td>
+                      <Stack gap={0}>
+                        ${Math.round(row.dollarValue)}
+                        <StandardValueLabel
+                          value={standardValueByFpid.get(row.fpid)}
+                        />
+                      </Stack>
+                    </Table.Td>
                     <Table.Td>
                       <Button
                         size="compact-xs"

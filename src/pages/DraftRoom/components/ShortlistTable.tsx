@@ -13,6 +13,8 @@ import { ChevronDown, ChevronUp, MoreVertical, Trash2 } from "lucide-react";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import type { DraftTierRow } from "../../../types";
+import type { StandardValueRow } from "../../../lib/standardValues";
+import { StandardValueLabel } from "../../../components/StandardValueLabel";
 
 interface ShortlistRow {
   tag: Doc<"draftPlayerTags">;
@@ -26,6 +28,7 @@ interface ShortlistTableProps {
   onMove: (index: number, delta: number) => void;
   onRemove: (fpid: number) => void;
   onSelectPlayer: (fpid: number) => void;
+  standardValueByFpid: Map<number, StandardValueRow>;
 }
 
 // Mirrors RecentPicksTable's structure (title + empty state + table props)
@@ -38,6 +41,7 @@ export function TargetsTable({
   onMove,
   onRemove,
   onSelectPlayer,
+  standardValueByFpid,
 }: ShortlistTableProps) {
   return (
     <Card withBorder padding="md">
@@ -96,6 +100,9 @@ export function TargetsTable({
                             ? `$${Math.round(row.dollarValue)} · ${row.tierLabel}`
                             : "—"}
                         </Text>
+                        <StandardValueLabel
+                          value={standardValueByFpid.get(tag.fpid)}
+                        />
                         {pick ? (
                           <Badge
                             variant="light"

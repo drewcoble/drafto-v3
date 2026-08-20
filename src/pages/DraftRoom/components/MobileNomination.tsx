@@ -33,6 +33,8 @@ import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { GenericValueBadge } from "../../../components/GenericValueBadge";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
+import type { StandardValueRow } from "../../../lib/standardValues";
+import { StandardValueLabel } from "../../../components/StandardValueLabel";
 import {
   consistencyColor,
   type ConsistencyLabel,
@@ -57,6 +59,7 @@ interface MobileNominationProps {
   activeNomination: Doc<"draftNominations"> | undefined;
   nominatedPlayer: { name: string; team: string | null } | undefined;
   nominatedValue: { dollarValue: number } | undefined;
+  nominatedStandardValue: StandardValueRow | undefined;
   planMatch: PlanSlotMatch | undefined;
   // Same target/avoid tag, value-gap, and consistency badges SearchBody's
   // touchFriendly rows show, but for whichever player is actively
@@ -188,6 +191,7 @@ export function MobileNomination({
   activeNomination,
   nominatedPlayer,
   nominatedValue,
+  nominatedStandardValue,
   planMatch,
   activeTag,
   activeValueGap,
@@ -503,6 +507,7 @@ export function MobileNomination({
                 activeNomination={activeNomination}
                 nominatedPlayer={nominatedPlayer}
                 nominatedValue={nominatedValue}
+                nominatedStandardValue={nominatedStandardValue}
                 planMatch={planMatch}
                 tag={activeTag}
                 valueGap={activeValueGap}
@@ -552,6 +557,7 @@ interface AssignDrawerBodyProps {
   activeNomination: Doc<"draftNominations">;
   nominatedPlayer: { name: string; team: string | null } | undefined;
   nominatedValue: { dollarValue: number } | undefined;
+  nominatedStandardValue: StandardValueRow | undefined;
   planMatch: PlanSlotMatch | undefined;
   tag: PlayerTag | undefined;
   valueGap: ValueGap | undefined;
@@ -573,6 +579,7 @@ function AssignDrawerBody({
   activeNomination,
   nominatedPlayer,
   nominatedValue,
+  nominatedStandardValue,
   planMatch,
   tag,
   valueGap,
@@ -769,6 +776,7 @@ function AssignDrawerBody({
             Est. ${Math.round(nominatedValue.dollarValue)}
           </Text>
         )}
+        <StandardValueLabel value={nominatedStandardValue} />
         {planMatch && (
           <Text size="xs" c="dimmed" truncate>
             {planMatch.slotLabel} budget:{" "}

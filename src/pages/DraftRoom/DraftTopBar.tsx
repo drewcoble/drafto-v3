@@ -18,6 +18,7 @@ import {
   pointsForScoringConfig,
   scoringConfigFromSeason,
 } from "../../lib/relevantPlayers";
+import { buildStandardValueByFpid } from "../../lib/standardValues";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { assignSlotForPick } from "../../lib/slotAssignment";
 import {
@@ -69,6 +70,9 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
     week: WEEK,
   });
   const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
+  const standardValues = useQuery(api.standardValues.getStandardValues, {
+    season: thisSeason,
+  });
   const draftValuesResult = useQuery(
     api.draftValues.getDraftValues,
     settings
@@ -143,6 +147,16 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
     }
     return map;
   }, [draftValues]);
+
+  const standardValueByFpid = useMemo(
+    () =>
+      buildStandardValueByFpid(
+        standardValues,
+        settings?.scoring ?? "PPR",
+        (settings?.rosterSlots.SUPERFLEX ?? 0) > 0,
+      ),
+    [standardValues, settings],
+  );
 
   const adpByFpid = useMemo(() => {
     const map = new Map<
@@ -258,6 +272,10 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
     ? draftValueByFpid.get(activeNomination.fpid)
     : undefined;
 
+  const nominatedStandardValue = activeNomination
+    ? standardValueByFpid.get(activeNomination.fpid)
+    : undefined;
+
   const nominatedPlayer = activeNomination
     ? nameByFpid.get(activeNomination.fpid)
     : undefined;
@@ -360,6 +378,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
           activeNomination={activeNomination ?? undefined}
           nominatedPlayer={nominatedPlayer}
           nominatedValue={nominatedValue}
+          nominatedStandardValue={nominatedStandardValue}
           planMatch={planMatch}
           winnerTeamId={winnerTeamId}
           onWinnerTeamIdChange={setWinnerTeamId}
@@ -415,6 +434,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
         activeNomination={activeNomination ?? undefined}
         nominatedPlayer={nominatedPlayer}
         nominatedValue={nominatedValue}
+        nominatedStandardValue={nominatedStandardValue}
         planMatch={planMatch}
         activeTag={
           activeNomination ? tagByFpid.get(activeNomination.fpid) : undefined

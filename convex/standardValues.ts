@@ -1,11 +1,45 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 
 const espnFormatValidator = v.union(
   v.literal("standard"),
   v.literal("ppr"),
   v.literal("superflex"),
 );
+const ESPN_FORMATS = ["standard", "ppr", "superflex"] as const;
+
+// Every ESPN standard-value row for a season, grouped by format - one call
+// gets everything a caller needs regardless of which format their league
+// resolves to (see src/lib/standardValues.ts's resolveStandardValueByFpid,
+// which picks/blends the right one client-side, including averaging
+// standard+ppr for HALF-scoring leagues, which have no ESPN format of their
+// own). Bounded (a few thousand rows total across all three formats), so no
+// pagination - same reasoning as getAllProjections/getAllRankings.
+export const getStandardValues = query({
+  args: { season: v.string() },
+  handler: async (ctx, args) => {
+    const result: Record<
+      (typeof ESPN_FORMATS)[number],
+      Array<{ fpid: number; rank: number; auctionValue: number }>
+    > = { standard: [], ppr: [], superflex: [] };
+
+    for (const format of ESPN_FORMATS) {
+      const rows = await ctx.db
+        .query("standardValues")
+        .withIndex("by_platform_format_season_fpid", (q) =>
+          q.eq("platform", "espn").eq("format", format).eq("season", args.season),
+        )
+        .collect();
+      result[format] = rows.map((row) => ({
+        fpid: row.fpid,
+        rank: row.rank,
+        auctionValue: row.auctionValue,
+      }));
+    }
+
+    return result;
+  },
+});
 
 // Upserts ESPN's draft-kit ranks for one format (see convex/espn/
 // rankings.ts, which calls this once per format), which has already

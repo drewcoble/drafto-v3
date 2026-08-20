@@ -36,6 +36,7 @@ import {
 } from "../../lib/relevantPlayers";
 import { recommendationFor, groupByTier } from "../../lib/draftRecommendation";
 import { POSITION_COLORS } from "../../lib/positionColors";
+import { buildStandardValueByFpid } from "../../lib/standardValues";
 import {
   MOBILE_HEADER_HEIGHT,
   MOBILE_STATS_ROW_HEIGHT,
@@ -139,6 +140,9 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   // code, not a Convex query - queries can't read the wall clock, but
   // components aren't restricted that way).
   const thisSeason = settings?.year ?? String(new Date().getFullYear());
+  const standardValues = useQuery(api.standardValues.getStandardValues, {
+    season: thisSeason,
+  });
   const valueGaps = useQuery(
     api.valueGaps.getAllValueGaps,
     settings
@@ -224,6 +228,16 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
     for (const gap of valueGaps ?? []) map.set(gap.fpid, gap);
     return map;
   }, [valueGaps]);
+
+  const standardValueByFpid = useMemo(
+    () =>
+      buildStandardValueByFpid(
+        standardValues,
+        settings?.scoring ?? "PPR",
+        (settings?.rosterSlots.SUPERFLEX ?? 0) > 0,
+      ),
+    [standardValues, settings],
+  );
 
   // The cheap join: re-runs on every pick, but only touches the small
   // tieredValues/picks arrays already in memory - no server recompute.
@@ -596,6 +610,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                             key={row.fpid}
                             row={row}
                             tag={tagByFpid.get(row.fpid)}
+                            standardValue={standardValueByFpid.get(row.fpid)}
                             valueGap={valueGapByFpid.get(row.fpid)}
                             consistency={consistencyByFpid.get(row.fpid)}
                             isRookie={rookieFpids.has(row.fpid)}

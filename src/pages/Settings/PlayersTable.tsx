@@ -33,6 +33,7 @@ import {
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
+import { buildStandardValueByFpid } from "../../lib/standardValues";
 import {
   MOBILE_HEADER_HEIGHT,
   POSITION_FILTER_BAR_HEIGHT,
@@ -103,6 +104,19 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     scoringConfig,
     lastSeason,
   });
+  // ESPN's own draft-kit $ values, for an at-a-glance market comparison
+  // against this league's own computed $ (see StandardValueLabel). Fetched
+  // for the CURRENT season regardless of which season's projections are
+  // showing - ESPN's ranks aren't a per-season-selectable historical thing
+  // the way projections/valueGaps are.
+  const standardValues = useQuery(api.standardValues.getStandardValues, {
+    season: thisSeason,
+  });
+  const isSuperflex = (selectedSettings?.rosterSlots.SUPERFLEX ?? 0) > 0;
+  const standardValueByFpid = useMemo(
+    () => buildStandardValueByFpid(standardValues, scoring, isSuperflex),
+    [standardValues, scoring, isSuperflex],
+  );
   // Consistency rating (see src/lib/consistency.ts) - PPG/variance relative
   // to the rest of each position's cohort, so it doesn't need a league
   // selected (unlike the old replacement-rank cutoff, which did).
@@ -402,6 +416,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                     injury={injuriesByFpid.get(row.fpid)}
                     isRookie={rookieFpids.has(row.fpid)}
                     draftValue={draftValueByFpid.get(row.fpid)}
+                    standardValue={standardValueByFpid.get(row.fpid)}
                     valueGap={valueGapByFpid.get(row.fpid)}
                     showValueColumn={!!draftValues}
                     tag={tagByFpid.get(row.fpid)}

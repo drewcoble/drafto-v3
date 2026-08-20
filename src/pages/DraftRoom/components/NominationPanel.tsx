@@ -31,6 +31,7 @@ import {
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { Position, PlayerTag, ValueGap } from "../../../types";
 import type { PlanSlotMatch } from "../../../lib/planRecommendation";
+import type { StandardValueRow } from "../../../lib/standardValues";
 import {
   consistencyColor,
   type ConsistencyLabel,
@@ -78,6 +79,7 @@ interface NominationPanelProps {
   activeNomination: Doc<"draftNominations"> | undefined;
   nominatedPlayer: { name: string; team: string | null } | undefined;
   nominatedValue: { dollarValue: number } | undefined;
+  nominatedStandardValue: StandardValueRow | undefined;
   planMatch: PlanSlotMatch | undefined;
   winnerTeamId: string | null;
   onWinnerTeamIdChange: (id: string | null) => void;
@@ -119,6 +121,7 @@ export function NominationPanel({
   activeNomination,
   nominatedPlayer,
   nominatedValue,
+  nominatedStandardValue,
   planMatch,
   winnerTeamId,
   onWinnerTeamIdChange,
@@ -199,6 +202,7 @@ export function NominationPanel({
             activeNomination={activeNomination}
             nominatedPlayer={nominatedPlayer}
             nominatedValue={nominatedValue}
+            nominatedStandardValue={nominatedStandardValue}
             planMatch={planMatch}
             teams={teams}
             winnerTeamId={winnerTeamId}
@@ -229,6 +233,7 @@ interface ActiveNominationBodyProps {
   activeNomination: Doc<"draftNominations">;
   nominatedPlayer: { name: string; team: string | null } | undefined;
   nominatedValue: { dollarValue: number } | undefined;
+  nominatedStandardValue: StandardValueRow | undefined;
   planMatch: PlanSlotMatch | undefined;
   teams: Doc<"seasonTeams">[];
   winnerTeamId: string | null;
@@ -245,6 +250,7 @@ function ActiveNominationBody({
   activeNomination,
   nominatedPlayer,
   nominatedValue,
+  nominatedStandardValue,
   planMatch,
   teams,
   winnerTeamId,
@@ -290,6 +296,9 @@ function ActiveNominationBody({
   // so a plain join reads cleaner here than another row of badges.
   const valueParts = [
     nominatedValue ? `Fair ~$${Math.round(nominatedValue.dollarValue)}` : null,
+    nominatedStandardValue
+      ? `ESPN ~$${Math.round(nominatedStandardValue.auctionValue)}`
+      : null,
     planMatch
       ? `${planMatch.slotLabel} ~$${Math.round(planMatch.amount)}`
       : null,
