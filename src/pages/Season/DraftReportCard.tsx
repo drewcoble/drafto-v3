@@ -104,6 +104,26 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
     }
   }, [report, settings, seasonId, ensureSummaryGenerated]);
 
+  const ensureSnapshot = useMutation(
+    api.draft.reportCard.ensureReportCardSnapshotted,
+  );
+  // Backfills the frozen numbers snapshot (see draftReportCardSnapshots'
+  // schema comment) for a draft that completed before this existed, or the
+  // rare case where convex/draft/status.ts's scheduled snapshotReportCard
+  // hasn't landed yet - fires once per page view; idempotent no-op if a
+  // snapshot already exists.
+  const requestedSnapshotRef = useRef(false);
+  useEffect(() => {
+    if (report?.status === "ok" && !requestedSnapshotRef.current && settings) {
+      requestedSnapshotRef.current = true;
+      void ensureSnapshot({
+        seasonId,
+        week: WEEK,
+        scoringConfig: scoringConfigFromSeason(settings),
+      });
+    }
+  }, [report, settings, seasonId, ensureSnapshot]);
+
   const handleRegenerate = async () => {
     if (!settings) return;
     setIsRegenerating(true);

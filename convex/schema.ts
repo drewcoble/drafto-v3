@@ -880,11 +880,13 @@ export default defineSchema({
   // Report Card - see convex/gemini/reportSummary.ts's generateReportSummary
   // action, scheduled once by convex/draft/status.ts's syncDraftStatus the
   // moment a real draft transitions into status "complete". Generate-once,
-  // best-effort: stores only the generated text (not a snapshot of the
-  // stats that produced it - those are always recomputed live), and is
-  // never regenerated even if picks are corrected after the draft is
-  // marked complete. convex/draft/reportCard.ts's getDraftReportCard reads
-  // this table and falls back to a free templated recap
+  // best-effort, and is never regenerated even if picks are corrected
+  // after the draft is marked complete (same known gap as
+  // draftReportCardSnapshots below - see its comment). Generated from -
+  // and only ever consistent with - the frozen draftReportCardSnapshots row
+  // for the same (draftId, week, scoring), not whatever draftValues would
+  // compute live today. convex/draft/reportCard.ts's getDraftReportCard
+  // reads this table and falls back to a free templated recap
   // (src/lib/reportCardSummary.ts) when no row exists yet.
   draftReportSummaries: defineTable({
     draftId: v.id("drafts"),
@@ -899,6 +901,35 @@ export default defineSchema({
       v.array(v.object({ teamId: v.id("seasonTeams"), summary: v.string() })),
     ),
     model: v.string(),
+    generatedAt: v.number(),
+  }).index("by_draft_week_scoring", ["draftId", "week", "scoring"]),
+
+  // Freezes convex/draft/reportCard.ts's computeReportCardData output the
+  // first time it's computed for a (draftId, week, scoring) - see that
+  // file's ensureReportCardSnapshot. Exists because every number on the
+  // Report Card (dollar value, surplus, VOR, grade, every rank) is derived
+  // from draftValues, which is NOT stable over time: convex/crons.ts
+  // refetches projections daily, so re-running the computation later can
+  // produce different numbers than what was true right after the draft.
+  // Without this, the numeric stat rows (always recomputed live) and the
+  // cached AI recap (generated once, see draftReportSummaries above) would
+  // silently drift apart within a day or two.
+  //
+  // `data` is the verbatim return value of computeReportCardData - stored
+  // as v.any() rather than a full mirrored validator because that shape is
+  // large, nested, and owned entirely by reportCard.ts; the only reader is
+  // that same file, which casts it back on the way out.
+  //
+  // Known gap: a commissioner correcting a pick after the draft is already
+  // "complete" doesn't invalidate an existing row here, so the snapshot
+  // (and any AI recap built from it) can go stale relative to the actual
+  // roster, with no automated fix - same limitation GEMINI.md already
+  // documents for the AI recap alone.
+  draftReportCardSnapshots: defineTable({
+    draftId: v.id("drafts"),
+    week: v.string(),
+    scoring: scoringValidator,
+    data: v.any(),
     generatedAt: v.number(),
   }).index("by_draft_week_scoring", ["draftId", "week", "scoring"]),
 

@@ -58,6 +58,20 @@ export async function syncDraftStatus(
     // itself re-derives Pro access and no-ops if the league owner isn't Pro,
     // so this doesn't need to check that here.
     if (newStatus === "complete" && draft.kind === "real") {
+      // Freezes the Report Card's numbers before anything else touches
+      // them (see draftReportCardSnapshots' schema comment) - scheduled
+      // ahead of generateReportSummary so the AI recap, once it runs, reads
+      // off this same frozen snapshot rather than a separate live
+      // computation of its own.
+      await ctx.scheduler.runAfter(
+        0,
+        internal.draft.reportCard.snapshotReportCard,
+        {
+          draftId,
+          week: REPORT_CARD_WEEK,
+          scoringConfig: scoringConfigFromSeason(season),
+        },
+      );
       await ctx.scheduler.runAfter(
         0,
         internal.gemini.reportSummary.generateReportSummary,

@@ -2,8 +2,10 @@ import { v } from "convex/values";
 import {
   query,
   mutation,
+  internalMutation,
   internalQuery,
   type QueryCtx,
+  type MutationCtx,
 } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -515,6 +517,118 @@ async function computeReportCardData(
   };
 }
 
+type ReportCardData = Awaited<ReturnType<typeof computeReportCardData>>;
+
+// Read-only counterpart of ensureReportCardSnapshot below, for the two
+// query contexts (getDraftReportCard, getReportCardDataForSummary) that
+// can't write a snapshot themselves. Prefers an already-frozen snapshot;
+// falls back to a fresh live computation only when one doesn't exist yet
+// (e.g. a draft completed before snapshotting existed, or the scheduled/
+// frontend-triggered snapshot call below hasn't landed yet) so the page
+// still renders something in the meantime.
+async function readReportCardData(
+  ctx: QueryCtx,
+  draft: Doc<"drafts">,
+  season: Doc<"seasons">,
+  args: { week: string; scoringConfig: ScoringConfig },
+): Promise<ReportCardData> {
+  const snapshot = await ctx.db
+    .query("draftReportCardSnapshots")
+    .withIndex("by_draft_week_scoring", (q) =>
+      q
+        .eq("draftId", draft._id)
+        .eq("week", args.week)
+        .eq("scoring", args.scoringConfig.scoring),
+    )
+    .unique();
+  if (snapshot) return snapshot.data as ReportCardData;
+  return await computeReportCardData(ctx, draft, season, args);
+}
+
+// Freezes computeReportCardData's output the first time it's called for a
+// given (draftId, week, scoring), so the Report Card - and any AI recap
+// generated from it - reads the same numbers forever after, rather than
+// drifting as convex/crons.ts's daily projection refetch updates the
+// dollarValue/points everything else here is derived from. Idempotent: a
+// second call just returns the already-stored snapshot untouched.
+//
+// Doesn't check Pro access - freezing is a data-correctness concern, not a
+// monetization one, so a free-tier league still gets a snapshot ready to
+// show the moment its owner upgrades. (Doesn't check draft.kind === "real"
+// either for the same reason a mock draft's owner could still want to look
+// at one, though in practice only syncDraftStatus's real-draft-only
+// scheduling and the Pro-gated UI ever trigger this.)
+//
+// Known gap (shared with the AI recap, see GEMINI.md): a commissioner
+// correcting a pick after the draft is already "complete" doesn't
+// invalidate an existing snapshot - both the numbers here and the AI text
+// built from them go stale together in that case, with no automated fix.
+async function ensureReportCardSnapshot(
+  ctx: MutationCtx,
+  args: { draftId: Id<"drafts">; week: string; scoringConfig: ScoringConfig },
+): Promise<ReportCardData | null> {
+  const draft = await ctx.db.get(args.draftId);
+  if (!draft || draft.status !== "complete") return null;
+  const season = await ctx.db.get(draft.seasonId);
+  if (!season) return null;
+
+  const existing = await ctx.db
+    .query("draftReportCardSnapshots")
+    .withIndex("by_draft_week_scoring", (q) =>
+      q
+        .eq("draftId", args.draftId)
+        .eq("week", args.week)
+        .eq("scoring", args.scoringConfig.scoring),
+    )
+    .unique();
+  if (existing) return existing.data as ReportCardData;
+
+  const data = await computeReportCardData(ctx, draft, season, args);
+  await ctx.db.insert("draftReportCardSnapshots", {
+    draftId: args.draftId,
+    week: args.week,
+    scoring: args.scoringConfig.scoring,
+    data,
+    generatedAt: Date.now(),
+  });
+  return data;
+}
+
+// Scheduled once by convex/draft/status.ts's syncDraftStatus, right when a
+// real draft first transitions into status "complete" - primes the
+// snapshot immediately so it's ready before anyone even opens the Report
+// Card page.
+export const snapshotReportCard = internalMutation({
+  args: {
+    draftId: v.id("drafts"),
+    week: v.string(),
+    scoringConfig: scoringConfigValidator,
+  },
+  handler: ensureReportCardSnapshot,
+});
+
+// Frontend-triggered backfill (see DraftReportCard.tsx), same convention as
+// ensureReportSummaryGenerated below - covers a draft that completed before
+// this snapshotting existed, or the rare case where the scheduled
+// snapshotReportCard above hasn't run yet by the time the owner opens the
+// page.
+export const ensureReportCardSnapshotted = mutation({
+  args: {
+    seasonId: v.id("seasons"),
+    week: v.string(),
+    scoringConfig: scoringConfigValidator,
+  },
+  handler: async (ctx, args) => {
+    const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    if (draft.status !== "complete") return;
+    await ensureReportCardSnapshot(ctx, {
+      draftId: draft._id,
+      week: args.week,
+      scoringConfig: args.scoringConfig,
+    });
+  },
+});
+
 export const getDraftReportCard = query({
   args: {
     seasonId: v.id("seasons"),
@@ -537,7 +651,7 @@ export const getDraftReportCard = query({
       return { status: "requires_upgrade" as const };
     }
 
-    const data = await computeReportCardData(ctx, draft, season, args);
+    const data = await readReportCardData(ctx, draft, season, args);
 
     // AI-written recap (+ per-team blurbs), generated once by convex/gemini/
     // reportSummary.ts's generateReportSummary action when the draft first
@@ -599,7 +713,7 @@ export const getReportCardDataForSummary = internalQuery({
     const league = await ctx.db.get(season.leagueId);
     if (!league || !(await hasProAccess(ctx, league.ownerId))) return null;
 
-    return await computeReportCardData(ctx, draft, season, args);
+    return await readReportCardData(ctx, draft, season, args);
   },
 });
 

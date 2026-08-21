@@ -190,6 +190,15 @@ export const generateReportSummary = internalAction({
     );
     if (alreadyGenerated) return;
 
+    // Ensures (idempotently) that the frozen numbers snapshot this recap
+    // will be written against already exists - convex/draft/status.ts also
+    // schedules snapshotReportCard directly, but scheduling order between
+    // two same-tick jobs isn't guaranteed, and this recap must be built
+    // from the exact same snapshot getDraftReportCard will later read, not
+    // a separate live computation of its own (see draftReportCardSnapshots'
+    // schema comment on why those two can drift).
+    await ctx.runMutation(internal.draft.reportCard.snapshotReportCard, args);
+
     const data = await ctx.runQuery(
       internal.draft.reportCard.getReportCardDataForSummary,
       args,
