@@ -113,6 +113,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
   );
 
   const nominate = useMutation(api.draft.picks.nominate);
+  const addCustomPlayer = useMutation(api.draft.customPlayers.addCustomPlayer);
   const bumpNominationBid = useMutation(api.draft.picks.bumpNominationBid);
   const setNominationBid = useMutation(api.draft.picks.setNominationBid);
   const resolvePick = useMutation(api.draft.picks.resolvePick);
@@ -322,6 +323,28 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
     }
   };
 
+  // Escape hatch for search coming up empty - a real player the app has no
+  // data for yet (too new a signing/trade, or outside the relevant-players
+  // cutoff). Mints the player via addCustomPlayer, then nominates it exactly
+  // like any search result - see convex/draft/customPlayers.ts.
+  const onAddCustomPlayer = (name: string, position: Position) => {
+    runAction(async () => {
+      const fpid = await addCustomPlayer({
+        seasonId,
+        name,
+        position,
+        week: WEEK,
+      });
+      await nominate({
+        seasonId,
+        fpid,
+        ...(nominatingTeamId ? { nominatingTeamId } : {}),
+        openingBid: 1,
+      });
+    });
+    setSearch("");
+  };
+
   if (!settings || !teams || !picks || !stats) return null;
 
   const totalPicks =
@@ -405,6 +428,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
           search={search}
           onSearchChange={setSearch}
           searchResults={searchResults}
+          activePositions={activePositions}
           draftValueByFpid={draftValueByFpid}
           onNominate={(fpid) => {
             runAction(() =>
@@ -417,6 +441,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
             );
             setSearch("");
           }}
+          onAddCustomPlayer={onAddCustomPlayer}
           usingGenericValues={usingGenericValues}
           actionError={actionError}
           onSelectPlayer={setSelectedFpid}
@@ -465,6 +490,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
         search={search}
         onSearchChange={setSearch}
         searchResults={searchResults}
+        activePositions={activePositions}
         draftValueByFpid={draftValueByFpid}
         onNominate={(fpid) => {
           runAction(() =>
@@ -477,6 +503,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
           );
           setSearch("");
         }}
+        onAddCustomPlayer={onAddCustomPlayer}
         usingGenericValues={usingGenericValues}
         onSelectPlayer={setSelectedFpid}
       />

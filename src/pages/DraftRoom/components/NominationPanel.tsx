@@ -93,8 +93,10 @@ interface NominationPanelProps {
   search: string;
   onSearchChange: (value: string) => void;
   searchResults: SearchResult[];
+  activePositions: Position[];
   draftValueByFpid: Map<number, { dollarValue: number }>;
   onNominate: (fpid: number) => void;
+  onAddCustomPlayer: (name: string, position: Position) => void;
 
   // True when draftValueByFpid/nominatedValue are convex/draftValues.ts's
   // generic 12-team/$200 fallback rather than this league's real settings -
@@ -134,8 +136,10 @@ export function NominationPanel({
   search,
   onSearchChange,
   searchResults,
+  activePositions,
   draftValueByFpid,
   onNominate,
+  onAddCustomPlayer,
   usingGenericValues,
   actionError,
   onSelectPlayer,
@@ -220,8 +224,10 @@ export function NominationPanel({
             search={search}
             onSearchChange={onSearchChange}
             searchResults={searchResults}
+            activePositions={activePositions}
             draftValueByFpid={draftValueByFpid}
             onNominate={onNominate}
+            onAddCustomPlayer={onAddCustomPlayer}
             onSelectPlayer={onSelectPlayer}
           />
         )}
@@ -440,8 +446,15 @@ export interface SearchBodyProps {
   search: string;
   onSearchChange: (value: string) => void;
   searchResults: SearchResult[];
+  activePositions: Position[];
   draftValueByFpid: Map<number, { dollarValue: number }>;
   onNominate: (fpid: number) => void;
+  // Escape hatch for a real player the app has no data for (too recent a
+  // signing/trade, or outside the relevant-players cutoff) - search comes up
+  // empty even though the player is real. Lets the host type any name, pick
+  // a position, and nominate it directly - see DraftTopBar.tsx's
+  // onAddCustomPlayer and convex/draft/customPlayers.ts.
+  onAddCustomPlayer: (name: string, position: Position) => void;
   onSelectPlayer: (fpid: number) => void;
   // Bigger inputs/rows for MobileNomination's popover, where a finger (not
   // a precise mouse pointer) is doing the tapping - off by default for the
@@ -453,8 +466,10 @@ export function SearchBody({
   search,
   onSearchChange,
   searchResults,
+  activePositions,
   draftValueByFpid,
   onNominate,
+  onAddCustomPlayer,
   onSelectPlayer,
   touchFriendly = false,
 }: SearchBodyProps) {
@@ -462,7 +477,16 @@ export function SearchBody({
   // detail modal via the name) so the on-screen keyboard on iOS/Android
   // doesn't stick around covering the rest of the panel/modal.
   const inputRef = useRef<HTMLInputElement>(null);
+  // Position for the "can't find them" add-player form below.
+  const [addPosition, setAddPosition] = useState<Position | null>(null);
   const blurInput = () => inputRef.current?.blur();
+
+  // Cleared whenever the search text changes so a stale position picked for
+  // a previous search doesn't silently carry over and get submitted with a
+  // different player's name.
+  useEffect(() => {
+    setAddPosition(null);
+  }, [search]);
 
   return (
     <Stack gap={touchFriendly ? 10 : 6}>
@@ -627,6 +651,46 @@ export function SearchBody({
             </Table>
           </Table.ScrollContainer>
         </Box>
+      )}
+      {/* Escape hatch for a real player search can't find (see
+          onAddCustomPlayer's own comment) - only once there's an actual
+          query to seed the name from, same threshold DraftTopBar uses to
+          run the search itself. */}
+      {search.trim().length >= 2 && (
+        <Group gap={6} wrap="nowrap" align="center">
+          <Text
+            size={touchFriendly ? "sm" : "xs"}
+            c="dimmed"
+            style={{ whiteSpace: "nowrap" }}
+          >
+            Can&apos;t find them?
+          </Text>
+          <Select
+            size={touchFriendly ? "sm" : "xs"}
+            placeholder="Position"
+            data={activePositions.map((position) => ({
+              value: position,
+              label: position,
+            }))}
+            value={addPosition}
+            onChange={(value) => setAddPosition(value as Position | null)}
+            w={90}
+            allowDeselect={false}
+          />
+          <Button
+            size={touchFriendly ? "sm" : "compact-xs"}
+            variant="default"
+            disabled={!addPosition}
+            onClick={() => {
+              if (!addPosition) return;
+              blurInput();
+              onAddCustomPlayer(search.trim(), addPosition);
+              setAddPosition(null);
+            }}
+          >
+            Add &amp; nominate
+          </Button>
+        </Group>
       )}
     </Stack>
   );

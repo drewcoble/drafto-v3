@@ -96,10 +96,14 @@ export const upsertProjections = mutation({
       }
     }
 
-    // Drop players that disappeared from this position+week (e.g. off the board)
+    // Drop players that disappeared from this position+week (e.g. off the
+    // board) - but never a manually-added custom player (see
+    // draft/customPlayers.ts's addCustomPlayer), identifiable by its always-
+    // negative fpid. Those never come from Sleeper/ESPN, so they'd never be
+    // in `seen` and would otherwise get pruned on every fetch.
     let removed = 0;
     for (const row of existing) {
-      if (!seen.has(row.fpid)) {
+      if (!seen.has(row.fpid) && row.fpid > 0) {
         await ctx.db.delete(row._id);
         removed += 1;
       }
@@ -132,9 +136,13 @@ export const renameDraftWeekToZero = internalMutation({
     }
 
     if (!result.isDone) {
-      await ctx.scheduler.runAfter(0, internal.projections.renameDraftWeekToZero, {
-        cursor: result.continueCursor,
-      });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.projections.renameDraftWeekToZero,
+        {
+          cursor: result.continueCursor,
+        },
+      );
     }
 
     return { renamed, isDone: result.isDone };

@@ -41,7 +41,7 @@ import {
   type ConsistencyLabel,
 } from "../../../lib/consistency";
 import { playerTagStyle } from "../../../lib/playerTagStyle";
-import type { PlayerTag, ValueGap } from "../../../types";
+import type { PlayerTag, Position, ValueGap } from "../../../types";
 import {
   BOTTOM_NAV_BOTTOM_OFFSET,
   BOTTOM_NAV_HEIGHT,
@@ -80,8 +80,10 @@ interface MobileNominationProps {
   search: string;
   onSearchChange: (value: string) => void;
   searchResults: SearchResult[];
+  activePositions: Position[];
   draftValueByFpid: Map<number, { dollarValue: number }>;
   onNominate: (fpid: number) => void;
+  onAddCustomPlayer: (name: string, position: Position) => void;
 
   // See NominationPanelProps.usingGenericValues.
   usingGenericValues: boolean;
@@ -205,8 +207,10 @@ export function MobileNomination({
   search,
   onSearchChange,
   searchResults,
+  activePositions,
   draftValueByFpid,
   onNominate,
+  onAddCustomPlayer,
   usingGenericValues,
   onSelectPlayer,
 }: MobileNominationProps) {
@@ -499,9 +503,15 @@ export function MobileNomination({
                   search={search}
                   onSearchChange={onSearchChange}
                   searchResults={searchResults}
+                  activePositions={activePositions}
                   draftValueByFpid={draftValueByFpid}
                   onNominate={(fpid) => {
                     onNominate(fpid);
+                    setMode("closed");
+                    setMinimized(false);
+                  }}
+                  onAddCustomPlayer={(name, position) => {
+                    onAddCustomPlayer(name, position);
                     setMode("closed");
                     setMinimized(false);
                   }}
