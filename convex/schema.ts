@@ -920,11 +920,12 @@ export default defineSchema({
   // large, nested, and owned entirely by reportCard.ts; the only reader is
   // that same file, which casts it back on the way out.
   //
-  // Known gap: a commissioner correcting a pick after the draft is already
-  // "complete" doesn't invalidate an existing row here, so the snapshot
-  // (and any AI recap built from it) can go stale relative to the actual
-  // roster, with no automated fix - same limitation GEMINI.md already
-  // documents for the AI recap alone.
+  // A commissioner correcting a pick after the draft is already "complete"
+  // doesn't automatically invalidate an existing row here, so the
+  // snapshot (and any AI recap built from it) can go stale relative to
+  // the actual roster - the Report Card's "Regenerate" button
+  // (regenerateReportSummary) is the manual fix: it clears this row too,
+  // not just the AI text, and lets it recompute fresh.
   draftReportCardSnapshots: defineTable({
     draftId: v.id("drafts"),
     week: v.string(),

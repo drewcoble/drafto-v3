@@ -456,8 +456,12 @@ async function computeReportCardData(
     };
   });
 
+  // DST excluded here (but not from team grades/surplus totals elsewhere)
+  // - a $1-2 swing on a streamable defense reads as a huge "steal" or
+  // "reach" by percentage/surplus, but nobody actually believes a defense
+  // is a real draft-day steal the way a $30 RB at $15 is.
   const nonKeeperResolved = resolved.filter(
-    (p) => !p.isKeeper && p.surplus !== null,
+    (p) => !p.isKeeper && p.surplus !== null && p.position !== "DST",
   );
   const bySurplusDesc = [...nonKeeperResolved].sort(
     (a, b) => (b.surplus ?? 0) - (a.surplus ?? 0),
@@ -559,10 +563,11 @@ async function readReportCardData(
 // at one, though in practice only syncDraftStatus's real-draft-only
 // scheduling and the Pro-gated UI ever trigger this.)
 //
-// Known gap (shared with the AI recap, see GEMINI.md): a commissioner
-// correcting a pick after the draft is already "complete" doesn't
-// invalidate an existing snapshot - both the numbers here and the AI text
-// built from them go stale together in that case, with no automated fix.
+// Not auto-invalidated by a post-completion pick correction - a
+// commissioner fixing a pick after the draft is already "complete" leaves
+// any existing snapshot (and AI text built from it) stale until the
+// Report Card's "Regenerate" button (regenerateReportSummary) is clicked,
+// which clears this row too and lets it recompute.
 async function ensureReportCardSnapshot(
   ctx: MutationCtx,
   args: { draftId: Id<"drafts">; week: string; scoringConfig: ScoringConfig },
@@ -769,8 +774,15 @@ export const ensureReportSummaryGenerated = mutation({
 // this clears whatever's cached first, so it also covers a bad recap (e.g.
 // one that came back truncated - see convex/gemini/client.ts's
 // finishReason check, added after exactly that happened live) or one gone
-// stale after a commissioner corrected a pick post-completion (see
-// GEMINI.md's "known limitations").
+// stale after a commissioner corrected a pick post-completion.
+//
+// Also clears the frozen draftReportCardSnapshots row (not just the AI
+// text) and lets generateReportSummary recompute it fresh - otherwise this
+// button would refresh the prose but leave every number on the page locked
+// to whatever was true the first time the draft completed, which defeats
+// the point of a "regenerate everything" action. This is the only way an
+// existing snapshot ever gets recomputed post-completion (see that table's
+// schema comment on the commissioner-correction gap).
 export const regenerateReportSummary = mutation({
   args: {
     seasonId: v.id("seasons"),
@@ -788,7 +800,7 @@ export const regenerateReportSummary = mutation({
       throw new Error("Report Card is a Pro feature.");
     }
 
-    const existing = await ctx.db
+    const existingSummaries = await ctx.db
       .query("draftReportSummaries")
       .withIndex("by_draft_week_scoring", (q) =>
         q
@@ -797,7 +809,18 @@ export const regenerateReportSummary = mutation({
           .eq("scoring", args.scoringConfig.scoring),
       )
       .collect();
-    for (const row of existing) await ctx.db.delete(row._id);
+    for (const row of existingSummaries) await ctx.db.delete(row._id);
+
+    const existingSnapshot = await ctx.db
+      .query("draftReportCardSnapshots")
+      .withIndex("by_draft_week_scoring", (q) =>
+        q
+          .eq("draftId", draft._id)
+          .eq("week", args.week)
+          .eq("scoring", args.scoringConfig.scoring),
+      )
+      .unique();
+    if (existingSnapshot) await ctx.db.delete(existingSnapshot._id);
 
     await ctx.scheduler.runAfter(
       0,
