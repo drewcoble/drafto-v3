@@ -69,7 +69,14 @@ export async function generateGeminiText(
         // budget got fully consumed by thinking and the recap came back cut
         // off after one sentence. This is a pure recap, not a reasoning
         // task, so there's nothing worth spending that budget on.
-        thinkingConfig: { thinkingBudget: 0 },
+        //
+        // Only applied without a responseSchema, though - confirmed live
+        // that gemini-3.6-flash rejects thinkingBudget: 0 combined with
+        // structured JSON output (responseMimeType/responseSchema below)
+        // with a bare 400 INVALID_ARGUMENT. The JSON path's maxOutputTokens
+        // is sized generously enough to absorb the model's default thinking
+        // budget on top of the actual answer.
+        ...(responseSchema ? {} : { thinkingConfig: { thinkingBudget: 0 } }),
         ...(responseSchema
           ? { responseMimeType: "application/json", responseSchema }
           : {}),

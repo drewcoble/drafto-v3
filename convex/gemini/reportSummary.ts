@@ -200,9 +200,13 @@ export const generateReportSummary = internalAction({
     try {
       raw = await generateGeminiText(buildSummaryPrompt(data), {
         // One paragraph plus a 1-3 sentence blurb per team, as JSON - a
-        // dozen-team league easily clears the original 600-token budget
-        // for the single-paragraph recap.
-        maxOutputTokens: 3000,
+        // dozen-team league easily clears the original 600-token budget for
+        // the single-paragraph recap. Sized well above that estimate
+        // because client.ts can't zero out gemini-3.6-flash's thinking
+        // budget for a structured-output request (see its comment), so
+        // unmetered thinking tokens draw from this same pool before the
+        // visible answer does.
+        maxOutputTokens: 6000,
         responseSchema: RESPONSE_SCHEMA,
       });
     } catch (err) {
