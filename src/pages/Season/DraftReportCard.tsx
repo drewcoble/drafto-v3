@@ -532,7 +532,7 @@ function TeamReportCard({
             {team.letter}
           </Badge>
         </Group>
-        <Text size="sm">{buildTeamSummary(team, totalTeams)}</Text>
+        <Text size="sm">{team.aiSummary ?? buildTeamSummary(team, totalTeams)}</Text>
         <PositionalRadarChart team={team} totalTeams={totalTeams} />
         <Group justify="space-between">
           <Text size="sm" c="dimmed">

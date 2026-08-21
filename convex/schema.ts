@@ -891,6 +891,13 @@ export default defineSchema({
     week: v.string(),
     scoring: scoringValidator,
     summary: v.string(),
+    // Per-team blurbs from the same Gemini call as `summary` - optional
+    // because rows generated before this field existed won't have it; the
+    // Report Card just falls back to the templated per-team summary
+    // (src/lib/reportCardSummary.ts) whenever a team has no entry here.
+    teamSummaries: v.optional(
+      v.array(v.object({ teamId: v.id("seasonTeams"), summary: v.string() })),
+    ),
     model: v.string(),
     generatedAt: v.number(),
   }).index("by_draft_week_scoring", ["draftId", "week", "scoring"]),

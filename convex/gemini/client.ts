@@ -39,9 +39,22 @@ interface GenerateContentResponse {
 // in this codebase's plain-fetch convention - see fetchFantasyPros/
 // fetchSleeper/fetchYahooApi). maxOutputTokens bounds cost/length; this
 // isn't a chat, just a single free-form recap.
-export async function generateGeminiText(prompt: string): Promise<string> {
+export async function generateGeminiText(
+  prompt: string,
+  options?: {
+    // Default (600) fits the original single-paragraph recap. The
+    // structured per-team-summaries response (see reportSummary.ts) needs
+    // a much bigger budget, so callers generating that pass their own.
+    maxOutputTokens?: number;
+    // When set, forces the response to valid JSON matching this (OpenAPI
+    // subset) schema instead of free-form prose - see
+    // https://ai.google.dev/gemini-api/docs/structured-output.
+    responseSchema?: Record<string, unknown>;
+  },
+): Promise<string> {
   const apiKey = requireGeminiApiKey();
   const url = `${API_BASE_URL}/models/${MODEL}:generateContent?key=${apiKey}`;
+  const { maxOutputTokens = 600, responseSchema } = options ?? {};
 
   const response = await fetch(url, {
     method: "POST",
@@ -49,7 +62,7 @@ export async function generateGeminiText(prompt: string): Promise<string> {
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        maxOutputTokens: 600,
+        maxOutputTokens,
         // gemini-3.6-flash "thinks" before answering by default, and those
         // thinking tokens are drawn from the same maxOutputTokens budget as
         // the visible answer - confirmed live: without this, a 400-token
@@ -57,6 +70,9 @@ export async function generateGeminiText(prompt: string): Promise<string> {
         // off after one sentence. This is a pure recap, not a reasoning
         // task, so there's nothing worth spending that budget on.
         thinkingConfig: { thinkingBudget: 0 },
+        ...(responseSchema
+          ? { responseMimeType: "application/json", responseSchema }
+          : {}),
       },
     }),
   });

@@ -539,13 +539,15 @@ export const getDraftReportCard = query({
 
     const data = await computeReportCardData(ctx, draft, season, args);
 
-    // AI-written recap, generated once by convex/gemini/reportSummary.ts's
-    // generateReportSummary action when the draft first completes - see
-    // convex/draft/status.ts. Only the generated text is cached (not this
-    // query's inputs), so null here just means "not generated yet" (or the
-    // action failed/skipped, e.g. GEMINI_API_KEY unset) - the frontend falls
-    // back to the free templated recap (src/lib/reportCardSummary.ts)
-    // whenever this is null.
+    // AI-written recap (+ per-team blurbs), generated once by convex/gemini/
+    // reportSummary.ts's generateReportSummary action when the draft first
+    // completes - see convex/draft/status.ts. Only the generated text is
+    // cached (not this query's inputs), so null here just means "not
+    // generated yet" (or the action failed/skipped, e.g. GEMINI_API_KEY
+    // unset) - the frontend falls back to the free templated recap
+    // (src/lib/reportCardSummary.ts) whenever a summary is null, per team
+    // as well as league-wide (teamSummaries is also absent entirely on rows
+    // cached before per-team summaries existed).
     const cachedSummary = await ctx.db
       .query("draftReportSummaries")
       .withIndex("by_draft_week_scoring", (q) =>
@@ -555,10 +557,20 @@ export const getDraftReportCard = query({
           .eq("scoring", args.scoringConfig.scoring),
       )
       .unique();
+    const aiTeamSummaryByTeamId = new Map(
+      (cachedSummary?.teamSummaries ?? []).map((t) => [t.teamId, t.summary]),
+    );
 
     return {
       status: "ok" as const,
-      data: { ...data, aiSummary: cachedSummary?.summary ?? null },
+      data: {
+        ...data,
+        aiSummary: cachedSummary?.summary ?? null,
+        teams: data.teams.map((team) => ({
+          ...team,
+          aiSummary: aiTeamSummaryByTeamId.get(team.teamId) ?? null,
+        })),
+      },
     };
   },
 });
