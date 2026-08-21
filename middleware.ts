@@ -25,7 +25,20 @@ const DESCRIPTION =
   "See how every team's draft graded out - value surplus, VOR, and an AI-written recap.";
 
 export default async function middleware(request: Request): Promise<Response> {
-  const indexResponse = await fetch(new URL("/index.html", request.url));
+  // Deployment Protection applies to every request to a protected domain
+  // (e.g. develop.infinidraft.com - Vercel's "Standard Protection" covers
+  // every domain except production), including this internal fetch, which
+  // is a brand-new request that doesn't automatically inherit the incoming
+  // request's cookies. Without forwarding them explicitly, this fetch gets
+  // blocked and returns Vercel's own login page HTML instead of the real
+  // index.html - which this middleware would then unknowingly serve back
+  // as if it were the app. Documented fix: https://vercel.com/docs/deployment-protection
+  // ("For server-side requests... manually add request cookies").
+  const cookie = request.headers.get("cookie");
+  const indexResponse = await fetch(
+    new URL("/index.html", request.url),
+    cookie ? { headers: { cookie } } : undefined,
+  );
   let html = await indexResponse.text();
 
   html = html
