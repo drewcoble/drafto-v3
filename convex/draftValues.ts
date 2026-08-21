@@ -497,6 +497,45 @@ async function getGenericDraftAndScoring(
   };
 }
 
+// Real values for one draft, cache-first - shared by getDraftValues' Pro
+// branch below and anything server-side that needs this draft's actual
+// values unconditionally, regardless of who (if anyone) is signed in to
+// the current request. Report Card (convex/draft/reportCard.ts) is the
+// reason this needs to be its own function rather than inline in
+// getDraftValues: it's reached via convex/draft/status.ts's
+// syncDraftStatus scheduling an internalMutation with no signed-in caller
+// at all, or via the public getDraftReportCardPublic query where the
+// *viewer* (who might not be Pro, or signed in at all) is not who the
+// Report Card's own Pro gate is checked against (the drafting league's
+// owner is - see getDraftReportCardPublic's comment). Calling
+// getDraftValues directly from there would silently fall through to
+// isGeneric: true - a completely different league's roster shape/scoring/
+// values - any time the caller isn't personally a signed-in Pro user, even
+// though the actual league being graded is real and Pro. Confirmed live:
+// this is exactly what corrupted report card snapshots for superflex
+// leagues (QBs valued as single-QB, every other position's $ inflated to
+// compensate) before this function existed.
+export async function getRealDraftValues(
+  ctx: QueryCtx | MutationCtx,
+  args: { draftId: Id<"drafts">; week: string; scoringConfig: ScoringConfig },
+): Promise<DraftValueRow[]> {
+  const cached = await ctx.db
+    .query("draftValues")
+    .withIndex("by_draft_week_scoring_teScoring_sixPointPassTds", (q) =>
+      q
+        .eq("draftId", args.draftId)
+        .eq("week", args.week)
+        .eq("scoring", args.scoringConfig.scoring)
+        .eq("teScoring", args.scoringConfig.teScoring)
+        .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
+    )
+    .collect();
+
+  return cached.length > 0
+    ? mapCachedDraftValueRows(cached)
+    : await computeDraftValues(ctx, args);
+}
+
 // Public, frontend-facing entry point - takes a seasonId (what every route/
 // component actually has on hand) and resolves it to that season's real
 // draft internally, same lookup convex/draft/auth.ts's requireRealDraft
@@ -510,9 +549,11 @@ async function getGenericDraftAndScoring(
 // specific league's exact auction math or its own custom scoring. This is a
 // deliberate, narrow change to this query's contract - previously it had no
 // auth check at all (read-only derived data, cheap to expose by id) - see
-// the monetization plan for why. Report Card (convex/draft/reportCard.ts) is
-// entirely Pro-gated before it ever calls this, so it always gets real
-// values.
+// the monetization plan for why. Report Card (convex/draft/reportCard.ts)
+// does NOT call this - it calls getRealDraftValues above directly, since
+// its own Pro gate is checked against the drafting league's owner, not
+// whoever (if anyone) is making the request (see getRealDraftValues'
+// comment for what went wrong when it used to go through this instead).
 export const getDraftValues = query({
   args: {
     seasonId: v.id("seasons"),
@@ -568,26 +609,11 @@ export const getDraftValues = query({
       .first();
     if (!draft) return { isGeneric: false, values: [] };
 
-    const cached = await ctx.db
-      .query("draftValues")
-      .withIndex("by_draft_week_scoring_teScoring_sixPointPassTds", (q) =>
-        q
-          .eq("draftId", draft._id)
-          .eq("week", args.week)
-          .eq("scoring", args.scoringConfig.scoring)
-          .eq("teScoring", args.scoringConfig.teScoring)
-          .eq("sixPointPassTds", args.scoringConfig.sixPointPassTds),
-      )
-      .collect();
-
-    const rows: DraftValueRow[] =
-      cached.length > 0
-        ? mapCachedDraftValueRows(cached)
-        : await computeDraftValues(ctx, {
-            draftId: draft._id,
-            week: args.week,
-            scoringConfig: args.scoringConfig,
-          });
+    const rows = await getRealDraftValues(ctx, {
+      draftId: draft._id,
+      week: args.week,
+      scoringConfig: args.scoringConfig,
+    });
 
     const keeperValues = await estimateKeeperValues(ctx, {
       draftId: draft._id,

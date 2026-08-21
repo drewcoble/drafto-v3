@@ -18,6 +18,7 @@ import {
 import {
   buildValueCurveByPosition,
   estimateMarketValue,
+  getRealDraftValues,
   type DraftValueRow,
 } from "../draftValues";
 import { getAuthUserId } from "@convex-dev/auth/server";
@@ -175,12 +176,19 @@ async function computeReportCardData(
   season: Doc<"seasons">,
   args: { week: string; scoringConfig: ScoringConfig },
 ) {
-  const { values }: { isGeneric: boolean; values: DraftValueRow[] } =
-    await ctx.runQuery(api.draftValues.getDraftValues, {
-      seasonId: draft.seasonId,
-      week: args.week,
-      scoringConfig: args.scoringConfig,
-    });
+  // getRealDraftValues, NOT the public getDraftValues query - the latter
+  // decides real-vs-generic off whoever (if anyone) is making the current
+  // request, which is wrong here: this runs from contexts with no signed-
+  // in caller at all (the scheduled snapshot job) or where the caller
+  // viewing a public report card link isn't who Report Card's own Pro gate
+  // is checked against (the drafting league's owner). See
+  // getRealDraftValues' comment in draftValues.ts for what that bug looked
+  // like in practice.
+  const values: DraftValueRow[] = await getRealDraftValues(ctx, {
+    draftId: draft._id,
+    week: args.week,
+    scoringConfig: args.scoringConfig,
+  });
   const valueByFpid = new Map(values.map((row) => [row.fpid, row]));
 
   const replacementByPosition = new Map<Position, number>();
