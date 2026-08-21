@@ -13,6 +13,7 @@ import {
   ThemeIcon,
   Tooltip,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import {
   BanknoteArrowDown,
   BatteryLow,
@@ -212,6 +213,14 @@ export function MobileNomination({
   const [mode, setMode] = useState<SheetMode>("closed");
   const [minimized, setMinimized] = useState(false);
   const hasActiveNomination = !!activeNomination;
+  // hiddenFrom="sm" below only hides the Drawer visually - Mantine's Modal/
+  // Drawer internals (body scroll lock, focus trap) still run whenever
+  // `opened` is true regardless of that CSS class, which was locking page
+  // scroll on desktop the whole time a nomination was active even though
+  // this sheet was never actually shown there. Gating `opened` itself on
+  // the same breakpoint (matches route.tsx's Tabs visibleFrom="sm") keeps
+  // the Drawer from ever truly opening on desktop.
+  const isDesktop = useMediaQuery("(min-width: 48em)");
 
   // Mirrors the server: once a nomination lands (whether this device made it
   // or another team's client did), the sheet takes over in the expanded
@@ -322,7 +331,7 @@ export function MobileNomination({
 
       <Drawer
         hiddenFrom="sm"
-        opened={sheetOpen}
+        opened={sheetOpen && !isDesktop}
         onClose={dismiss}
         position="bottom"
         withCloseButton={false}
