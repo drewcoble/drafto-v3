@@ -206,6 +206,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
 
   return (
     <Stack gap="lg">
+      <Title order={2}>{settings.name} Report Card</Title>
       <Card withBorder padding="md">
         <Stack gap={4}>
           <Title order={4}>Recap</Title>
