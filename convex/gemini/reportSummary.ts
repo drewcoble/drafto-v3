@@ -31,7 +31,8 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
     grade: team.letter,
     valueSurplus: formatSigned(team.surplusTotal),
     pointsAboveReplacement: Math.round(team.vorTotal),
-    lineupEfficiencyPct: Math.round(team.lineup.efficiencyPct * 100),
+    startersRank: team.startersRank,
+    benchRank: team.benchRank,
     bestPick: team.bestPick
       ? `${team.bestPick.name} ($${team.bestPick.price}, ${formatSigned(team.bestPick.surplus ?? 0)})`
       : null,
@@ -46,6 +47,7 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
   }));
 
   const payload = {
+    totalTeams: data.teams.length,
     teams,
     biggestSteal: data.leagueSteals[0]
       ? `${data.leagueSteals[0].name} for $${data.leagueSteals[0].price} (${formatSigned(data.leagueSteals[0].surplus ?? 0)})`
@@ -66,6 +68,7 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
     "Use only the facts in the JSON data below - don't invent players, prices, or stats that aren't there.",
     "Write 150-250 words of plain prose (no markdown headers, no bullet lists), calling out 2-3 standout teams or picks by name.",
     "Tone: witty and a little playful, like a league commissioner's newsletter - not corporate, not mean-spirited.",
+    `Each team's startersRank/benchRank are 1-indexed league ranks out of totalTeams (1 = best) comparing how strong each team's starting lineup is vs. its bench - phrase these as e.g. "3rd-best starters" or "the best bench in the league" when they're notable. Don't call this "lineup efficiency" or talk about points "left on the bench" - a draft doesn't set an actual lineup, this is about roster construction (top-heavy stars vs. deep bench).`,
     "",
     JSON.stringify(payload),
   ].join("\n");

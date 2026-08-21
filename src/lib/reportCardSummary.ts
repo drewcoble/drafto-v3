@@ -23,12 +23,36 @@ function gradeDescriptor(letter: string): string {
   return "a rough night - plenty to learn from before next year";
 }
 
+function ordinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
+// "best" at rank 1, "worst" at the bottom of the league, "Nth best"
+// otherwise - used to describe a team's starters/bench rank in prose, e.g.
+// "the 6th best starters & the best bench".
+export function rankDescriptor(rank: number, totalTeams: number): string {
+  if (rank === 1) return "best";
+  if (rank === totalTeams) return "worst";
+  return `${ordinal(rank)} best`;
+}
+
 // Templated (not AI-generated) recap, built entirely from fields
 // getDraftReportCard already computes - free and instant, unlike the AI
 // option discussed for a future iteration. Reads like a few sentences of
 // prose rather than a stat block, but every number in it traces back to a
 // field already rendered elsewhere on the card.
-export function buildTeamSummary(team: TeamCard): string {
+export function buildTeamSummary(team: TeamCard, totalTeams: number): string {
   const sentences: string[] = [
     `${team.teamName} earns a ${team.letter} - ${gradeDescriptor(team.letter)}.`,
   ];
@@ -43,12 +67,10 @@ export function buildTeamSummary(team: TeamCard): string {
     );
   }
 
-  if (team.lineup.delta >= 5) {
+  if (totalTeams > 1) {
     sentences.push(
-      `Roughly ${team.lineup.delta.toFixed(0)} points were left on the bench by suboptimal lineup choices.`,
+      `They have the ${rankDescriptor(team.startersRank, totalTeams)} starters & the ${rankDescriptor(team.benchRank, totalTeams)} bench in the league.`,
     );
-  } else if (team.lineup.efficiencyPct >= 0.98) {
-    sentences.push("They also started a near-perfect lineup.");
   }
 
   if (team.bestKeeper && (team.bestKeeper.keeperSurplus ?? 0) >= 5) {

@@ -8,12 +8,14 @@ import {
   Center,
   Group,
   Loader,
+  Paper,
   SimpleGrid,
   Stack,
   Table,
   Text,
   Title,
 } from "@mantine/core";
+import { RadarChart } from "@mantine/charts";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../../lib/positionColors";
@@ -21,6 +23,7 @@ import { consistencyColor } from "../../lib/consistency";
 import {
   buildLeagueSummary,
   buildTeamSummary,
+  rankDescriptor,
   type PickRow,
   type RosterAward,
   type TeamCard,
@@ -248,6 +251,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
           <TeamReportCard
             key={team.teamId}
             team={team}
+            totalTeams={teams.length}
             expanded={expandedTeamIds.has(team.teamId)}
             onToggle={() => toggleExpanded(team.teamId)}
             onSelectPlayer={setSelectedFpid}
@@ -326,12 +330,6 @@ function ReportCardTeaser() {
                       Points above replacement
                     </Text>
                     <Text size="sm">312</Text>
-                  </Group>
-                  <Group justify="space-between">
-                    <Text size="sm" c="dimmed">
-                      Lineup efficiency
-                    </Text>
-                    <Text size="sm">94%</Text>
                   </Group>
                 </Stack>
               </Card>
@@ -442,14 +440,76 @@ function RosterAwardCard({
   );
 }
 
+// Per-team positional strength, starters only (no bench) - each axis is a
+// league-wide 1-indexed rank (1 = best) for that category's starters, so
+// the polygon's shape shows where a team is strong/weak relative to the
+// rest of the league rather than an absolute point total. QB folds in
+// SUPERFLEX and FLEX stays its own axis - see StarterCategory in
+// convex/draft/lineupOptimizer.ts for why.
+function PositionalRadarChart({
+  team,
+  totalTeams,
+}: {
+  team: TeamCard;
+  totalTeams: number;
+}) {
+  // Nothing to rank against with 0-1 other teams.
+  if (totalTeams <= 1 || team.positionalRanks.length === 0) return null;
+
+  const data = team.positionalRanks.map(({ category, rank }) => ({
+    category,
+    rank,
+  }));
+
+  return (
+    <RadarChart
+      h={200}
+      data={data}
+      dataKey="category"
+      series={[{ name: "rank", color: gradeColor(team.gradeScore) }]}
+      withPolarRadiusAxis
+      polarRadiusAxisProps={{
+        domain: [1, totalTeams],
+        reversed: true,
+        tick: false,
+        axisLine: false,
+        tickLine: false,
+      }}
+      withTooltip
+      tooltipProps={{
+        content: (props) => {
+          const entry = props.active ? props.payload?.[0] : undefined;
+          if (!entry) return null;
+          const point = entry.payload as {
+            category: string;
+            rank: number;
+          };
+          return (
+            <Paper withBorder shadow="sm" p="xs">
+              <Text size="sm" fw={700}>
+                {point.category}
+              </Text>
+              <Text size="xs" c="dimmed">
+                {rankDescriptor(point.rank, totalTeams)} in the league
+              </Text>
+            </Paper>
+          );
+        },
+      }}
+    />
+  );
+}
+
 function TeamReportCard({
   team,
+  totalTeams,
   expanded,
   onToggle,
   onSelectPlayer,
   rookieFpids,
 }: {
   team: TeamCard;
+  totalTeams: number;
   expanded: boolean;
   onToggle: () => void;
   onSelectPlayer: (fpid: number) => void;
@@ -472,7 +532,8 @@ function TeamReportCard({
             {team.letter}
           </Badge>
         </Group>
-        <Text size="sm">{buildTeamSummary(team)}</Text>
+        <Text size="sm">{buildTeamSummary(team, totalTeams)}</Text>
+        <PositionalRadarChart team={team} totalTeams={totalTeams} />
         <Group justify="space-between">
           <Text size="sm" c="dimmed">
             Value surplus
@@ -495,17 +556,6 @@ function TeamReportCard({
             {team.efficiencyDollarsPerVor === null
               ? "—"
               : `$${team.efficiencyDollarsPerVor.toFixed(2)}`}
-          </Text>
-        </Group>
-        <Group justify="space-between">
-          <Text size="sm" c="dimmed">
-            Lineup efficiency
-          </Text>
-          <Text size="sm">
-            {(team.lineup.efficiencyPct * 100).toFixed(0)}%
-            {team.lineup.delta > 0.5
-              ? ` (${team.lineup.delta.toFixed(0)} pts on bench)`
-              : ""}
           </Text>
         </Group>
         {team.bestPick && (

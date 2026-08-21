@@ -12,6 +12,14 @@ export interface LineupPick {
   sequence: number;
 }
 
+// Radar-chart categories for the Report Card's positional breakdown - one
+// bucket per dedicated position, plus FLEX kept separate from the positions
+// that can fill it. SUPERFLEX has no bucket of its own: whoever starts
+// there is folded into "QB" (the slot exists to add a second QB in most
+// leagues, so crediting it to QB reads more naturally than a rarely-used
+// "SUPERFLEX" category).
+export type StarterCategory = Position | "FLEX";
+
 export interface LineupResult {
   optimalPoints: number;
   actualPoints: number;
@@ -27,6 +35,12 @@ export interface LineupResult {
   shouldBeStartingFpids: number[];
   // Starting in the actual lineup but not part of the optimal one.
   shouldBeBenchedFpids: number[];
+  // Total points of the optimal lineup's starters, split by which category
+  // of slot they'd fill - see StarterCategory. Only the optimal side is
+  // broken down (not actual), matching startersPoints/benchPoints in
+  // reportCard.ts's convention of grading roster construction rather than
+  // in-draft slot-assignment choices.
+  optimalPointsByCategory: Record<StarterCategory, number>;
 }
 
 // Best-possible starting lineup for one team's already-drafted roster, vs.
@@ -71,6 +85,9 @@ export function optimizeLineup(
 
   const used = new Set<number>();
   const optimalStarters: LineupPick[] = [];
+  const optimalPointsByCategory = Object.fromEntries(
+    [...POSITIONS, "FLEX"].map((category) => [category, 0]),
+  ) as Record<StarterCategory, number>;
 
   for (const position of POSITIONS) {
     const dedicatedCount = rosterSlots[position];
@@ -79,6 +96,7 @@ export function optimizeLineup(
     for (const pick of candidates.slice(0, dedicatedCount)) {
       optimalStarters.push(pick);
       used.add(pick.fpid);
+      optimalPointsByCategory[position] += pick.points;
     }
   }
 
@@ -88,6 +106,7 @@ export function optimizeLineup(
   for (const pick of flexPool.slice(0, flexSlotCount)) {
     optimalStarters.push(pick);
     used.add(pick.fpid);
+    optimalPointsByCategory.FLEX += pick.points;
   }
 
   const superflexPool = teamPicks
@@ -98,6 +117,9 @@ export function optimizeLineup(
   for (const pick of superflexPool.slice(0, superflexSlotCount)) {
     optimalStarters.push(pick);
     used.add(pick.fpid);
+    // Superflex has no radar category of its own - folded into QB, see
+    // StarterCategory's comment.
+    optimalPointsByCategory.QB += pick.points;
   }
 
   const optimalPoints = optimalStarters.reduce((sum, p) => sum + p.points, 0);
@@ -134,5 +156,6 @@ export function optimizeLineup(
     shouldBeBenchedFpids: [...actualFpidSet].filter(
       (fpid) => !optimalFpidSet.has(fpid),
     ),
+    optimalPointsByCategory,
   };
 }

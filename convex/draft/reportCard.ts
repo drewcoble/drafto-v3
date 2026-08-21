@@ -20,7 +20,11 @@ import {
 } from "../draftValues";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireDraftOwner } from "./auth";
-import { optimizeLineup, type LineupResult } from "./lineupOptimizer";
+import {
+  optimizeLineup,
+  type LineupResult,
+  type StarterCategory,
+} from "./lineupOptimizer";
 import {
   computeConsistencyThresholds,
   getConsistencyLabel,
@@ -67,12 +71,13 @@ interface RosterAward {
   count: number;
 }
 
-// Value surplus, VOR, and lineup-efficiency are on different scales, so each
+// Value surplus, VOR, and starters strength are on different scales, so each
 // is percentile-ranked against the field before blending - see gradeTeams.
 // Surplus is the primary driver (bargain-hunting is the most direct
 // reading of "beat the market"); VOR rewards raw talent regardless of $;
-// lineup efficiency rewards actually starting your best players. Tunable,
-// same convention as draftValues.ts's FALLOFF_EXPONENT.
+// starters strength rewards drafting a roster whose best players (by the
+// optimizer's own read of the roster) actually make up the starting lineup.
+// Tunable, same convention as draftValues.ts's FALLOFF_EXPONENT.
 const SURPLUS_WEIGHT = 0.5;
 const VOR_WEIGHT = 0.3;
 const LINEUP_WEIGHT = 0.2;
@@ -92,6 +97,19 @@ const GRADE_BANDS: Array<{ min: number; letter: string }> = [
   { min: 20, letter: "C" },
   { min: 10, letter: "D" },
   { min: -Infinity, letter: "F" },
+];
+
+// Display order for the Report Card's positional radar chart - QB folds in
+// SUPERFLEX (see StarterCategory), FLEX sits with the skill positions it
+// pools from rather than at the end.
+const CATEGORY_ORDER: StarterCategory[] = [
+  "QB",
+  "RB",
+  "WR",
+  "TE",
+  "FLEX",
+  "DST",
+  "K",
 ];
 
 function letterForScore(score: number): string {
@@ -131,6 +149,13 @@ interface TeamRaw {
   bestKeeper: ResolvedPick | undefined;
   worstKeeper: ResolvedPick | undefined;
   lineup: LineupResult;
+  // Points from the optimal starting lineup vs. everyone else on the
+  // roster - ranked league-wide below into startersRank/benchRank. Framed
+  // as a starters-vs-bench comparison rather than "lineup efficiency"
+  // because a draft never actually sets a lineup; this is a read on roster
+  // construction (top-heavy vs. deep), not in-season lineup decisions.
+  startersPoints: number;
+  benchPoints: number;
   reliableCount: number;
   boomBustCount: number;
   lowOutputCount: number;
@@ -338,6 +363,7 @@ async function computeReportCardData(
       season.flexPositions,
       season.superflexPositions,
     );
+    const totalPoints = teamPicks.reduce((sum, p) => sum + p.points, 0);
 
     return {
       teamId: team._id,
@@ -355,6 +381,8 @@ async function computeReportCardData(
       bestKeeper,
       worstKeeper,
       lineup,
+      startersPoints: lineup.optimalPoints,
+      benchPoints: totalPoints - lineup.optimalPoints,
       reliableCount,
       boomBustCount,
       lowOutputCount,
@@ -365,6 +393,45 @@ async function computeReportCardData(
   const vorValues = rawTeams.map((t) => t.vorTotal);
   const lineupValues = rawTeams.map((t) => t.lineup.efficiencyPct);
 
+  // 1-indexed league rank (1 = best) for starters and bench strength,
+  // surfaced in buildTeamSummary/buildSummaryPrompt as "Nth-best
+  // starters/bench" instead of the old "points left on the bench" framing.
+  const startersRankByTeam = new Map(
+    [...rawTeams]
+      .sort((a, b) => b.startersPoints - a.startersPoints)
+      .map((t, i) => [t.teamId, i + 1]),
+  );
+  const benchRankByTeam = new Map(
+    [...rawTeams]
+      .sort((a, b) => b.benchPoints - a.benchPoints)
+      .map((t, i) => [t.teamId, i + 1]),
+  );
+
+  // Categories the league's roster shape actually uses - a league with no
+  // K/DST or no FLEX shouldn't show a flatlined rank-1-for-everyone wedge
+  // on the radar chart for a slot nobody starts.
+  const activeCategories = CATEGORY_ORDER.filter((category) => {
+    if (category === "FLEX") return season.rosterSlots.FLEX > 0;
+    if (category === "QB") {
+      return season.rosterSlots.QB > 0 || season.rosterSlots.SUPERFLEX > 0;
+    }
+    return season.rosterSlots[category] > 0;
+  });
+  const categoryRankByTeam = new Map(
+    activeCategories.map((category) => [
+      category,
+      new Map(
+        [...rawTeams]
+          .sort(
+            (a, b) =>
+              b.lineup.optimalPointsByCategory[category] -
+              a.lineup.optimalPointsByCategory[category],
+          )
+          .map((t, i) => [t.teamId, i + 1]),
+      ),
+    ]),
+  );
+
   const teamReportCards = rawTeams.map((team) => {
     const surplusPct = percentileRank(team.surplusTotal, surplusValues);
     const vorPct = percentileRank(team.vorTotal, vorValues);
@@ -374,7 +441,17 @@ async function computeReportCardData(
         VOR_WEIGHT * vorPct +
         LINEUP_WEIGHT * lineupPct,
     );
-    return { ...team, gradeScore, letter: letterForScore(gradeScore) };
+    return {
+      ...team,
+      gradeScore,
+      letter: letterForScore(gradeScore),
+      startersRank: startersRankByTeam.get(team.teamId) ?? 1,
+      benchRank: benchRankByTeam.get(team.teamId) ?? 1,
+      positionalRanks: activeCategories.map((category) => ({
+        category,
+        rank: categoryRankByTeam.get(category)?.get(team.teamId) ?? 1,
+      })),
+    };
   });
 
   const nonKeeperResolved = resolved.filter(
