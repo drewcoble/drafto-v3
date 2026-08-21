@@ -400,7 +400,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                           justify="space-between"
                         >
                           <Badge
-                            size="lg"
+                            size="sm"
                             variant="light"
                             color={positionColorOrDefault(slot.label)}
                             w={65}
@@ -424,7 +424,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                           >
                             <Text
                               truncate
-                              size="xl"
+                              size="md"
                               fw={700}
                               ta="left"
                               style={{
@@ -453,7 +453,7 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                             )}
                           </Group>
                           <Text
-                            size="xl"
+                            size="md"
                             ta="right"
                             w={35}
                             fw={700}
