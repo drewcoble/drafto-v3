@@ -12,7 +12,7 @@ import {
 // gated action (e.g. disabling "+ New League" instead of letting the
 // createLeague mutation throw) - a UX nicety, not the enforcement boundary.
 // The real checks live server-side in convex/leagues.ts's createLeague and
-// convex/draft/reportCard.ts's getDraftReportCard. Also surfaces
+// convex/draft/reportCard.ts's getDraftReportCardPublic. Also surfaces
 // freeLeaguesUsed/freeLeagueLimit so the delete-league warning
 // (LeagueDetails.tsx) can show a free-tier user's standing.
 export const getMyEntitlement = query({

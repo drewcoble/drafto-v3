@@ -26,25 +26,27 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-// Where "enter this league" goes and what to call it, depending on how far
-// its draft has gotten - mirrors AppHeader's modeSwitchButton branching
-// (unified league view vs. completed season).
+// What to call the "enter this league" button, depending on how far its
+// draft has gotten - purely a label difference now (see EnterLeagueLink
+// below), since every status lands in the same unified league view.
 const ENTER_ACTION: Record<DraftStatus, { label: string }> = {
   pre_draft: { label: "Enter League" },
   in_progress: { label: "Enter Draft Room" },
-  complete: { label: "Enter Season" },
+  complete: { label: "Enter League" },
 };
 
-// Renders the right <Link> for a league card's status - kept as explicit
-// branches (rather than a single Link fed a computed "to") because
-// TanStack Router's typed route params don't infer through a variable typed
-// as a union of routes.
+// Renders the <Link> for a league card - every draft status lands in the
+// same unified league view (see routes/league/$leagueId), which adapts to
+// phase (including "complete") on its own, so there's no separate
+// destination to branch on anymore. Report Card (the one thing that used
+// to live past a completed draft) moved to its own public link, reachable
+// from AppHeader's overflow menu instead - see that component's comment.
+// Settings (not league.tsx's live roster breakdown) is the general-purpose
+// landing tab.
 function EnterLeagueLink({
-  status,
   leagueId,
   children,
 }: {
-  status: DraftStatus;
   leagueId: string;
   children: ReactNode;
 }) {
@@ -54,21 +56,6 @@ function EnterLeagueLink({
     color: "inherit",
     textDecoration: "none",
   } as const;
-  if (status === "complete") {
-    return (
-      <Link
-        to="/season/$leagueId/freeAgents"
-        params={{ leagueId }}
-        style={linkStyle}
-      >
-        {children}
-      </Link>
-    );
-  }
-  // "pre_draft" and "in_progress" both land in the same unified league view now
-  // (see routes/league/$leagueId) - the view itself adapts to phase, so
-  // there's no separate "in progress" destination anymore. Settings (not
-  // league.tsx's live roster breakdown) is the general-purpose landing tab.
   return (
     <Link
       to="/league/$leagueId/settings"
@@ -137,11 +124,7 @@ function Dashboard() {
               {leagueGroups.map(({ latest }) => {
                 const status = DRAFT_STATUS_META[latest.draftStatus];
                 return (
-                  <EnterLeagueLink
-                    key={latest.leagueId}
-                    status={latest.draftStatus}
-                    leagueId={latest._id}
-                  >
+                  <EnterLeagueLink key={latest.leagueId} leagueId={latest._id}>
                     <Card
                       withBorder
                       padding="lg"

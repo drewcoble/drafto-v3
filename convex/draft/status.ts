@@ -18,7 +18,7 @@ const REPORT_CARD_WEEK = "0";
 // self-healing: a commissioner correction via the League tab that drops a
 // team below a full roster automatically reverts status from "complete"
 // back to "in_progress", instead of leaving a stale flag that no longer
-// matches reality. Gates convex/draft/reportCard.ts's getDraftReportCard.
+// matches reality. Gates convex/draft/reportCard.ts's getDraftReportCardPublic.
 //
 // Status is NOT derived from pick count alone - a draft with startedAt unset
 // is always "pre_draft" regardless of how many keepers have been added

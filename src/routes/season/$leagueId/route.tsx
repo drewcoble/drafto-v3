@@ -6,7 +6,7 @@ import {
   useLocation,
 } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { GraduationCap, Settings2, UserSearch } from "lucide-react";
+import { Settings2, UserSearch } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { AppHeader } from "../../../components/AppHeader";
@@ -26,12 +26,6 @@ const TABS = [
     to: "/season/$leagueId/freeAgents",
   },
   {
-    value: "reportCard",
-    label: "Report Card",
-    icon: GraduationCap,
-    to: "/season/$leagueId/reportCard",
-  },
-  {
     value: "settings",
     label: "Settings",
     icon: Settings2,
@@ -40,8 +34,11 @@ const TABS = [
 ] as const;
 
 // Mirrors src/routes/league/$leagueId/route.tsx's layout - same
-// AppHeader/tabs/BottomNav shell, just for the post-draft "Season" mode
-// (see AppHeader.tsx's Enter Season button, gated on useDraftPhase).
+// AppHeader/tabs/BottomNav shell, just for the post-draft "Season" mode.
+// No in-app entry point links here anymore (the old AppHeader "Enter
+// Season" button was removed as part of scoping the app down to purely a
+// draft tool - Report Card moved out to its own public route,
+// src/routes/reportCard/$leagueId.tsx); reachable only by a direct URL.
 function SeasonLayout() {
   const { leagueId } = Route.useParams();
   const location = useLocation();

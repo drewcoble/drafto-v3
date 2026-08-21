@@ -29,13 +29,16 @@ function RootComponent() {
     () => getConfiguredSuperAdminEmails(),
     [],
   );
-  // The TV board (/board/$leagueId) is a readonly page meant to be shared
-  // with anyone via link (e.g. cast on a TV during a live auction) - it
-  // must never sit behind this sign-in wall, so it's exempted here rather
-  // than nested under a protected layout route (see that route file's
-  // comment for why it isn't nested under one already).
+  // The TV board (/board/$leagueId) and the Report Card (/reportCard/
+  // $leagueId) are readonly pages meant to be shared with anyone via link
+  // (e.g. cast on a TV during a live auction, or dropped in the league
+  // group chat after a draft) - they must never sit behind this sign-in
+  // wall, so they're exempted here rather than nested under a protected
+  // layout route (see each route file's own comment for why it isn't
+  // nested under one already).
   const { pathname } = useLocation();
-  const isPublicRoute = pathname.startsWith("/board/");
+  const isPublicRoute =
+    pathname.startsWith("/board/") || pathname.startsWith("/reportCard/");
 
   useEffect(() => {
     if (isAuthenticated) {

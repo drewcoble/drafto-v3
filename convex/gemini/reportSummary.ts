@@ -194,7 +194,7 @@ export const generateReportSummary = internalAction({
     // will be written against already exists - convex/draft/status.ts also
     // schedules snapshotReportCard directly, but scheduling order between
     // two same-tick jobs isn't guaranteed, and this recap must be built
-    // from the exact same snapshot getDraftReportCard will later read, not
+    // from the exact same snapshot getDraftReportCardPublic will later read, not
     // a separate live computation of its own (see draftReportCardSnapshots'
     // schema comment on why those two can drift).
     await ctx.runMutation(internal.draft.reportCard.snapshotReportCard, args);
@@ -237,7 +237,7 @@ export const generateReportSummary = internalAction({
 
     // Drop any entry Gemini hallucinated an unrecognized id for, or
     // returned malformed - the team's card just falls back to the
-    // templated summary in that case (see getDraftReportCard).
+    // templated summary in that case (see getDraftReportCardPublic).
     const knownTeamIds = new Set(data.teams.map((t) => t.teamId as string));
     const teamSummaries = parsed.teamSummaries
       .filter(

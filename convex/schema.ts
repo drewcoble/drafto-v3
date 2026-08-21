@@ -885,7 +885,7 @@ export default defineSchema({
   // draftReportCardSnapshots below - see its comment). Generated from -
   // and only ever consistent with - the frozen draftReportCardSnapshots row
   // for the same (draftId, week, scoring), not whatever draftValues would
-  // compute live today. convex/draft/reportCard.ts's getDraftReportCard
+  // compute live today. convex/draft/reportCard.ts's getDraftReportCardPublic
   // reads this table and falls back to a free templated recap
   // (src/lib/reportCardSummary.ts) when no row exists yet.
   draftReportSummaries: defineTable({

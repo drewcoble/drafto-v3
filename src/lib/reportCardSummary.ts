@@ -2,7 +2,7 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 
 type ReportCardResult = FunctionReturnType<
-  typeof api.draft.reportCard.getDraftReportCard
+  typeof api.draft.reportCard.getDraftReportCardPublic
 >;
 // The "ok" branch's payload - the only branch with real data to summarize.
 // "not_ready"/"requires_upgrade" are handled by DraftReportCard.tsx before
@@ -48,7 +48,7 @@ export function rankDescriptor(rank: number, totalTeams: number): string {
 }
 
 // Templated (not AI-generated) recap, built entirely from fields
-// getDraftReportCard already computes - free and instant, unlike the AI
+// getDraftReportCardPublic already computes - free and instant, unlike the AI
 // option discussed for a future iteration. Reads like a few sentences of
 // prose rather than a stat block, but every number in it traces back to a
 // field already rendered elsewhere on the card.

@@ -16,10 +16,10 @@ import {
   Title,
 } from "@mantine/core";
 import { RadarChart } from "@mantine/charts";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
-import { POSITION_COLORS } from "../../lib/positionColors";
-import { consistencyColor } from "../../lib/consistency";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
+import { POSITION_COLORS } from "../lib/positionColors";
+import { consistencyColor } from "../lib/consistency";
 import {
   buildLeagueSummary,
   buildTeamSummary,
@@ -27,13 +27,13 @@ import {
   type PickRow,
   type RosterAward,
   type TeamCard,
-} from "../../lib/reportCardSummary";
-import { PlayerDetailModal } from "../../components/PlayerDetailModal";
-import { RookieBadge } from "../../components/RookieBadge";
-import { UpgradePrompt } from "../../components/UpgradePrompt";
-import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
-import { WEEK } from "../../constants/general";
-import { useRookieFpids } from "../../hooks/useRookieFpids";
+} from "../lib/reportCardSummary";
+import { PlayerDetailModal } from "../components/PlayerDetailModal";
+import { RookieBadge } from "../components/RookieBadge";
+import { UpgradePrompt } from "../components/UpgradePrompt";
+import { scoringConfigFromSeason } from "../lib/relevantPlayers";
+import { WEEK } from "../constants/general";
+import { useRookieFpids } from "../hooks/useRookieFpids";
 
 interface DraftReportCardProps {
   seasonId: Id<"seasons">;
@@ -58,11 +58,19 @@ function gradeColor(gradeScore: number): string {
   return "red";
 }
 
+// Shareable, no-sign-in-required page (see src/routes/reportCard/
+// $leagueId.tsx and __root.tsx's isPublicRoute exemption) - same "anyone
+// with the link" convention as the TV board (DraftBoard.tsx). Viewing is
+// still gated on the drafting league OWNER's Pro status (not the viewer's -
+// see getDraftReportCardPublic), but everything read here uses *Public
+// Convex queries with no ownership check. The AI "Regenerate" action stays
+// owner-only: `report.isOwner` (server-derived, not just a client guess)
+// gates rendering that control, and the mutations it calls still enforce
+// requireDraftOwner server-side regardless of what the UI shows.
 export function DraftReportCard({ seasonId }: DraftReportCardProps) {
-  const settingsList = useQuery(api.leagues.listSeasons, {});
-  const settings = settingsList?.find((s) => s._id === seasonId);
+  const settings = useQuery(api.leagues.getSeasonPublic, { seasonId });
   const report = useQuery(
-    api.draft.reportCard.getDraftReportCard,
+    api.draft.reportCard.getDraftReportCardPublic,
     settings
       ? { seasonId, week: WEEK, scoringConfig: scoringConfigFromSeason(settings) }
       : "skip",
@@ -72,6 +80,8 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
   );
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const rookieFpids = useRookieFpids();
+
+  const isOwner = report?.status === "ok" && report.isOwner;
 
   const ensureSummaryGenerated = useMutation(
     api.draft.reportCard.ensureReportSummaryGenerated,
@@ -85,11 +95,12 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
   // once, at the moment the draft completes) - fires once per page view
   // whenever there's no cached recap yet; the mutation itself is a no-op if
   // one's already cached or already being generated, so this is safe to
-  // call again on remount. The ref guard is just to avoid re-firing on
-  // every re-render while report is settling into "ok".
+  // call again on remount. Owner-only: the mutation requires it server-side
+  // anyway, so a non-owner viewer calling it would just fail.
   const requestedSummaryRef = useRef(false);
   useEffect(() => {
     if (
+      isOwner &&
       report?.status === "ok" &&
       report.data.aiSummary === null &&
       !requestedSummaryRef.current &&
@@ -102,7 +113,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
         scoringConfig: scoringConfigFromSeason(settings),
       });
     }
-  }, [report, settings, seasonId, ensureSummaryGenerated]);
+  }, [report, isOwner, settings, seasonId, ensureSummaryGenerated]);
 
   const ensureSnapshot = useMutation(
     api.draft.reportCard.ensureReportCardSnapshotted,
@@ -111,10 +122,15 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
   // schema comment) for a draft that completed before this existed, or the
   // rare case where convex/draft/status.ts's scheduled snapshotReportCard
   // hasn't landed yet - fires once per page view; idempotent no-op if a
-  // snapshot already exists.
+  // snapshot already exists. Owner-only, same reasoning as above.
   const requestedSnapshotRef = useRef(false);
   useEffect(() => {
-    if (report?.status === "ok" && !requestedSnapshotRef.current && settings) {
+    if (
+      isOwner &&
+      report?.status === "ok" &&
+      !requestedSnapshotRef.current &&
+      settings
+    ) {
       requestedSnapshotRef.current = true;
       void ensureSnapshot({
         seasonId,
@@ -122,7 +138,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
         scoringConfig: scoringConfigFromSeason(settings),
       });
     }
-  }, [report, settings, seasonId, ensureSnapshot]);
+  }, [report, isOwner, settings, seasonId, ensureSnapshot]);
 
   const handleRegenerate = async () => {
     if (!settings) return;
@@ -147,7 +163,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
     });
   };
 
-  if (settingsList === undefined || (settings && report === undefined)) {
+  if (settings === undefined || (settings && report === undefined)) {
     return (
       <Center py="xl">
         <Loader />
@@ -199,14 +215,16 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
               <Text size="xs" c="dimmed">
                 AI-written recap
               </Text>
-              <Anchor
-                size="xs"
-                c="dimmed"
-                onClick={handleRegenerate}
-                style={{ pointerEvents: isRegenerating ? "none" : undefined }}
-              >
-                {isRegenerating ? "Regenerating…" : "Regenerate"}
-              </Anchor>
+              {isOwner && (
+                <Anchor
+                  size="xs"
+                  c="dimmed"
+                  onClick={handleRegenerate}
+                  style={{ pointerEvents: isRegenerating ? "none" : undefined }}
+                >
+                  {isRegenerating ? "Regenerating…" : "Regenerate"}
+                </Anchor>
+              )}
             </Group>
           )}
         </Stack>
@@ -303,11 +321,12 @@ const TEASER_TEAMS: Array<{ name: string; letter: string }> = [
 
 // Free-tier empty state for the Report Card - a blurred, non-interactive
 // mock of the real layout (see the "ok" branch below) with the upgrade
-// callout centered on top, so a free owner sees the shape of what they're
+// callout centered on top, so a visitor sees the shape of what they're
 // missing rather than a plain "upgrade to Pro" message. Team names/grades
 // here are fixed placeholders, not this league's real data - the whole
 // point is this renders even though the real data was withheld server-side
-// (getDraftReportCard never sends numeric stats to a non-Pro caller).
+// (getDraftReportCardPublic never sends numeric stats when the drafting
+// league's owner isn't Pro).
 function ReportCardTeaser() {
   return (
     <Box pos="relative">

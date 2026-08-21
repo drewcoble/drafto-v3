@@ -163,12 +163,12 @@ interface TeamRaw {
   lowOutputCount: number;
 }
 
-// Shared by getDraftReportCard (a public query, gated on a signed-in Pro
-// owner) and getReportCardDataForSummary (an internalQuery, called from the
-// Gemini report-summary action with no signed-in caller) - both need the
-// exact same computation, just reached via different auth paths. Takes
-// draft/season as already-loaded docs rather than re-fetching, since each
-// caller resolves them differently (requireDraftOwner vs. plain ctx.db.get).
+// Shared by getDraftReportCardPublic (a public query, gated on the
+// drafting league owner's Pro status) and getReportCardDataForSummary (an
+// internalQuery, called from the Gemini report-summary action with no
+// signed-in caller) - both need the exact same computation, just reached
+// via different paths. Takes draft/season as already-loaded docs rather
+// than re-fetching, since each caller resolves them differently.
 async function computeReportCardData(
   ctx: QueryCtx,
   draft: Doc<"drafts">,
@@ -524,8 +524,8 @@ async function computeReportCardData(
 type ReportCardData = Awaited<ReturnType<typeof computeReportCardData>>;
 
 // Read-only counterpart of ensureReportCardSnapshot below, for the two
-// query contexts (getDraftReportCard, getReportCardDataForSummary) that
-// can't write a snapshot themselves. Prefers an already-frozen snapshot;
+// query contexts (getDraftReportCardPublic, getReportCardDataForSummary)
+// that can't write a snapshot themselves. Prefers an already-frozen snapshot;
 // falls back to a fresh live computation only when one doesn't exist yet
 // (e.g. a draft completed before snapshotting existed, or the scheduled/
 // frontend-triggered snapshot call below hasn't landed yet) so the page
@@ -634,25 +634,40 @@ export const ensureReportCardSnapshotted = mutation({
   },
 });
 
-export const getDraftReportCard = query({
+// Public, no-signed-in-required counterpart of the old owner-only
+// getDraftReportCard - the Report Card is now a shareable link
+// (src/routes/reportCard/$leagueId.tsx), same convention as the TV board's
+// *Public queries (see convex/leagues.ts's getSeasonPublic, convex/draft/
+// teams.ts's listSeasonTeamsPublic): no ownership check, the unguessable
+// seasonId in the URL is what limits who can find it.
+//
+// Still gated on Pro access, but on the drafting league's OWNER's status
+// (league.ownerId), not the viewer's - there may be no signed-in viewer at
+// all, and Report Card generation is something the league owner pays for,
+// not something every individual visitor would separately subscribe to.
+// This mirrors how the AI recap (convex/gemini/reportSummary.ts) already
+// gates off league.ownerId rather than the caller.
+export const getDraftReportCardPublic = query({
   args: {
     seasonId: v.id("seasons"),
     week: v.string(),
     scoringConfig: scoringConfigValidator,
   },
   handler: async (ctx, args) => {
-    const { season, draft } = await requireDraftOwner(ctx, args.seasonId);
-    if (draft.status !== "complete") {
+    const season = await ctx.db.get(args.seasonId);
+    if (!season) return { status: "not_ready" as const };
+    const draft = await ctx.db
+      .query("drafts")
+      .withIndex("by_season_kind", (q) =>
+        q.eq("seasonId", args.seasonId).eq("kind", "real"),
+      )
+      .first();
+    if (!draft || draft.status !== "complete") {
       return { status: "not_ready" as const };
     }
 
-    // requireDraftOwner already confirmed a signed-in league owner - Report
-    // Card is a Pro-only feature (see plan's monetization doc), so a free
-    // user gets a typed "requires_upgrade" result instead of the computed
-    // data, letting the frontend render an upgrade prompt rather than an
-    // error boundary.
-    const userId = await getAuthUserId(ctx);
-    if (!userId || !(await hasProAccess(ctx, userId))) {
+    const league = await ctx.db.get(season.leagueId);
+    if (!league || !(await hasProAccess(ctx, league.ownerId))) {
       return { status: "requires_upgrade" as const };
     }
 
@@ -680,8 +695,18 @@ export const getDraftReportCard = query({
       (cachedSummary?.teamSummaries ?? []).map((t) => [t.teamId, t.summary]),
     );
 
+    // Purely a UI hint for the frontend (show the Regenerate button? fire
+    // the auto-backfill mutations?) - NOT a security boundary. Even if a
+    // client spoofed this to true, ensureReportCardSnapshotted/
+    // ensureReportSummaryGenerated/regenerateReportSummary each still run
+    // their own requireDraftOwner check server-side, so a non-owner's
+    // mutation call would just fail regardless of what this said.
+    const userId = await getAuthUserId(ctx);
+    const isOwner = userId !== null && userId === league.ownerId;
+
     return {
       status: "ok" as const,
+      isOwner,
       data: {
         ...data,
         aiSummary: cachedSummary?.summary ?? null,
@@ -694,14 +719,13 @@ export const getDraftReportCard = query({
   },
 });
 
-// Internal counterpart of getDraftReportCard, for convex/gemini/
+// Internal counterpart of getDraftReportCardPublic, for convex/gemini/
 // reportSummary.ts's generateReportSummary action - a scheduled background
-// job with no signed-in caller, so it can't go through requireDraftOwner
-// (needs ctx.auth). Re-derives the same status/kind/Pro-access checks
-// directly off draftId instead, returning null (rather than throwing)
-// whenever any of them fail - the action just skips generating a summary
-// in that case, since there's no user waiting on a response to show an
-// error to.
+// job with no signed-in caller. Re-derives the same status/kind/Pro-access
+// checks directly off draftId instead, returning null (rather than
+// throwing) whenever any of them fail - the action just skips generating a
+// summary in that case, since there's no user waiting on a response to
+// show an error to.
 export const getReportCardDataForSummary = internalQuery({
   args: {
     draftId: v.id("drafts"),
@@ -727,8 +751,8 @@ export const getReportCardDataForSummary = internalQuery({
 // completes, checking Pro access at that exact instant. A free-tier owner
 // who upgrades later would otherwise never get an AI recap for a draft
 // that already finished while they were free (the numeric report card
-// itself doesn't have this problem, since getDraftReportCard re-checks
-// Pro access live on every read). The Report Card page calls this once on
+// itself doesn't have this problem, since getDraftReportCardPublic
+// re-checks Pro access live on every read). The Report Card page calls this once on
 // load whenever it sees status "ok" with a null aiSummary - idempotent
 // (checks for an existing cached row, and generateReportSummary itself
 // re-checks Pro access + a cache row before spending a Gemini call), so

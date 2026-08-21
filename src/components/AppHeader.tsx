@@ -24,6 +24,7 @@ import {
   ChevronDown,
   CreditCard,
   Database,
+  GraduationCap,
   LogOut,
   Moon,
   MoreVertical,
@@ -50,7 +51,8 @@ const NEW_LEAGUE_VALUE = "new";
 // (+ New League), the Setup/Draft Room mode switch, and sign out. Reads
 // which league/section is current from the URL rather than local state.
 //
-// TV Board (any real league, any draft phase - see DraftBoard.tsx)/theme
+// TV Board (any real league, any draft phase - see DraftBoard.tsx)/Report
+// Card (once the draft's complete - see DraftReportCard.tsx)/theme
 // toggle/sign out all collapse into one
 // overflow menu at every breakpoint, rather than spreading across inline
 // buttons on desktop - keeps the bar from getting crowded as more
@@ -171,12 +173,13 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
     </>
   );
 
-  // No more Setup<->Draft Room switch now that both live in one /league view
-  // - this only ever needs to get someone back from the post-draft Season
-  // view, or forward into it once the draft's complete. Renders nothing
-  // otherwise (e.g. already on the League view, or no real league selected).
-  // Settings (not league.tsx's live roster breakdown) is the
-  // general-purpose landing tab.
+  // Only ever needs to get someone back from the post-draft Season view now
+  // - there's no forward direction into it anymore (see the removed "Enter
+  // Season" button; the app is scoped to purely a draft tool, and Report
+  // Card - the one thing that used to live in Season - moved to its own
+  // public link, surfaced below in the overflow menu instead). Renders
+  // nothing otherwise (e.g. already on the League view, or no real league
+  // selected).
   const modeSwitchButton = inSeason ? (
     <Link
       to="/league/$leagueId/settings"
@@ -188,17 +191,6 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
         </Text>
         <Text visibleFrom="sm" component="span" inherit>
           Back to League
-        </Text>
-      </Button>
-    </Link>
-  ) : draftComplete && leagueId ? (
-    <Link to="/season/$leagueId/freeAgents" params={{ leagueId }}>
-      <Button component="span" variant="filled" size="sm" color="green.8">
-        <Text hiddenFrom="sm" component="span" inherit>
-          Season
-        </Text>
-        <Text visibleFrom="sm" component="span" inherit>
-          Enter Season
         </Text>
       </Button>
     </Link>
@@ -289,6 +281,21 @@ export function AppHeader({ hideLeagueControls = false }: AppHeaderProps = {}) {
                 >
                   <Menu.Item component="span" leftSection={<Tv size={16} />}>
                     TV Board
+                  </Menu.Item>
+                </Link>
+              )}
+              {inLeagueView && hasRealLeague && draftComplete && (
+                <Link
+                  to="/reportCard/$leagueId"
+                  params={{ leagueId }}
+                  target="_blank"
+                  style={{ textDecoration: "none" }}
+                >
+                  <Menu.Item
+                    component="span"
+                    leftSection={<GraduationCap size={16} />}
+                  >
+                    Report Card
                   </Menu.Item>
                 </Link>
               )}
