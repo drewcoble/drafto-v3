@@ -56,11 +56,12 @@ interface PlayerTableRowMobileProps {
   isSwiped: boolean;
   onSwipeOpen: () => void;
   onSetTag: (tag: PlayerTag) => void;
-  // Whatever tapping the row's own content (not the name, not the swiped-
-  // open actions) should do - PlayersLeftTab.tsx swaps this between
-  // "open player details" and "close whichever row is swiped open"
-  // depending on whether anything currently is.
-  onRowTap: () => void;
+  // Tapping the row's own content (not the name, not the swiped-open
+  // actions) only ever closes a swiped-open row - it doesn't open player
+  // details itself, since that touch target used to cover the whole row
+  // and made it too easy to open a modal by accident. Only the name text
+  // (onSelectPlayer below) opens details.
+  onCloseSwipe: () => void;
   onSelectPlayer: (fpid: number) => void;
 }
 
@@ -81,13 +82,13 @@ export function PlayerTableRowMobile({
   isSwiped,
   onSwipeOpen,
   onSetTag,
-  onRowTap,
+  onCloseSwipe,
   onSelectPlayer,
 }: PlayerTableRowMobileProps) {
   const ConsistencyIcon = consistency
     ? CONSISTENCY_ICON[consistency]
     : undefined;
-  const swipeHandlers = useSwipeReveal(onSwipeOpen, onRowTap);
+  const swipeHandlers = useSwipeReveal(onSwipeOpen, onCloseSwipe);
 
   return (
     <Box style={{ position: "relative", overflow: "hidden" }}>
@@ -127,7 +128,7 @@ export function PlayerTableRowMobile({
       <Group
         gap={8}
         wrap="nowrap"
-        onClick={onRowTap}
+        onClick={onCloseSwipe}
         {...swipeHandlers}
         style={{
           position: "relative",

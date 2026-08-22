@@ -725,11 +725,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                             onSetTag={(nextTag) =>
                               handleSetTag(row.fpid, nextTag)
                             }
-                            onRowTap={() =>
-                              swipedFpid !== null
-                                ? setSwipedFpid(null)
-                                : setSelectedFpid(row.fpid)
-                            }
+                            onCloseSwipe={() => setSwipedFpid(null)}
                             onSelectPlayer={setSelectedFpid}
                           />
                         ))}
