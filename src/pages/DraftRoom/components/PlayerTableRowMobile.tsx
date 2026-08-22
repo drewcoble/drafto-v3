@@ -28,6 +28,7 @@ import { POSITION_COLORS } from "../../../lib/positionColors";
 import type { StandardValueRow } from "../../../lib/standardValues";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
 import { RookieBadge } from "../../../components/RookieBadge";
+import { StandardValueLabel } from "../../../components/StandardValueLabel";
 import { useSwipeReveal } from "../../../hooks/useSwipeReveal";
 
 // Same icon choices PlayerTableRow.tsx/PlayerBar.tsx use for the same
@@ -156,9 +157,13 @@ export function PlayerTableRowMobile({
         <Text size="sm" fw={700} style={{ width: 36, flexShrink: 0 }}>
           ${Math.round(row.dollarValue)}
         </Text>
-        <Text size="xs" c="dimmed" style={{ width: 36, flexShrink: 0 }}>
-          {standardValue ? `$${Math.round(standardValue.auctionValue)}` : "—"}
-        </Text>
+        <Box style={{ width: 36, flexShrink: 0 }}>
+          <StandardValueLabel
+            draftValue={row.dollarValue}
+            standardValue={standardValue}
+            showLabel={false}
+          />
+        </Box>
         <Text
           size="xs"
           fw={700}

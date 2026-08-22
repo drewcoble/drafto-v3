@@ -679,7 +679,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                             tt="uppercase"
                             style={{ width: 36, flexShrink: 0 }}
                           >
-                            Mkt $
+                            vs Mkt
                           </Text>
                           <Text
                             size="10px"
