@@ -669,6 +669,14 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                             size="10px"
                             c="dimmed"
                             tt="uppercase"
+                            style={{ flex: 1 }}
+                          >
+                            Player
+                          </Text>
+                          <Text
+                            size="10px"
+                            c="dimmed"
+                            tt="uppercase"
                             style={{ width: 36, flexShrink: 0 }}
                           >
                             $
@@ -688,14 +696,6 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                             style={{ width: 40, flexShrink: 0 }}
                           >
                             Pos
-                          </Text>
-                          <Text
-                            size="10px"
-                            c="dimmed"
-                            tt="uppercase"
-                            style={{ flex: 1 }}
-                          >
-                            Player
                           </Text>
                           <Text
                             size="10px"

@@ -154,28 +154,6 @@ export function PlayerTableRowMobile({
           touchAction: "pan-y",
         }}
       >
-        <Text size="sm" fw={700} style={{ width: 36, flexShrink: 0 }}>
-          ${Math.round(row.dollarValue)}
-        </Text>
-        <Box style={{ width: 36, flexShrink: 0 }}>
-          <StandardValueLabel
-            draftValue={row.dollarValue}
-            standardValue={standardValue}
-            showLabel={false}
-          />
-        </Box>
-        <Text
-          size="xs"
-          fw={700}
-          style={{
-            width: 40,
-            flexShrink: 0,
-            color: POSITION_COLORS[row.position],
-          }}
-        >
-          {row.position}
-          {row.positionRank}
-        </Text>
         <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
           <Group gap={4} wrap="nowrap">
             {valueGap?.direction === "undervalued" ? (
@@ -237,6 +215,28 @@ export function PlayerTableRowMobile({
             </Text>
           )}
         </Stack>
+        <Text size="sm" fw={700} style={{ width: 36, flexShrink: 0 }}>
+          ${Math.round(row.dollarValue)}
+        </Text>
+        <Box style={{ width: 36, flexShrink: 0 }}>
+          <StandardValueLabel
+            draftValue={row.dollarValue}
+            standardValue={standardValue}
+            showLabel={false}
+          />
+        </Box>
+        <Text
+          size="xs"
+          fw={700}
+          style={{
+            width: 40,
+            flexShrink: 0,
+            color: POSITION_COLORS[row.position],
+          }}
+        >
+          {row.position}
+          {row.positionRank}
+        </Text>
         <Text
           size="xs"
           c="dimmed"
