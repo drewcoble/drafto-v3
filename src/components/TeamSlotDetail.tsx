@@ -1,17 +1,7 @@
-import {
-  ActionIcon,
-  Anchor,
-  Badge,
-  Group,
-  Menu,
-  Stack,
-  Text,
-} from "@mantine/core";
-import { MoreVertical } from "lucide-react";
+import { ActionIcon, Anchor, Badge, Group, Stack, Text } from "@mantine/core";
+import { Trash2 } from "lucide-react";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
-import type { Position } from "../types";
 import type { SlotDescriptor } from "../lib/rosterSlots";
-import { eligibleSlotsForPosition } from "../lib/slotAssignment";
 import { positionColorOrDefault } from "../lib/positionColors";
 import { RookieBadge } from "./RookieBadge";
 import { useRookieFpids } from "../hooks/useRookieFpids";
@@ -20,10 +10,7 @@ interface TeamSlotDetailProps {
   slots: SlotDescriptor[];
   bySlot: Map<string, Doc<"draftPicks">>;
   nameByFpid: Map<number, { name: string; team: string | null }>;
-  flexPositions?: readonly Position[];
-  superflexPositions?: readonly Position[];
   onRemove?: (pickId: Id<"draftPicks">) => void;
-  onMove?: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer?: (fpid: number) => void;
   // Gates the "· Yr X" suffix on the Keeper badge below - true when the
   // league has a maxConsecutiveYears cap set (see schema.ts's
@@ -32,41 +19,28 @@ interface TeamSlotDetailProps {
 }
 
 // Expandable per-slot roster breakdown for one team - used by both the live
-// Draft Room's LeagueTab (with Remove/Move actions) and Settings'
-// SeasonSummary (read-only, for a past season, which passes neither), so it
-// lives in the shared components/ folder rather than either page. Move only
-// renders when both onMove and flexPositions/superflexPositions are given -
-// it needs those to work out which other slots this pick is even eligible
-// for (e.g. bumping a flex-caliber RB2 down to FLEX to free up budget).
+// Draft Room's LeagueTab (with a Remove action) and Settings' SeasonSummary
+// (read-only, for a past season, which passes no onRemove at all), so it
+// lives in the shared components/ folder rather than either page. Slot
+// assignment itself is always computed fresh by points elsewhere (see
+// src/lib/slotAssignment.ts's optimalAssignPicksToSlots) - there's no manual
+// move affordance anymore, so this only ever needs to render whatever `bySlot`
+// it's handed.
 export function TeamSlotDetail({
   slots,
   bySlot,
   nameByFpid,
-  flexPositions,
-  superflexPositions,
   onRemove,
-  onMove,
   onSelectPlayer,
   trackConsecutiveYears,
 }: TeamSlotDetailProps) {
-  const canMove = onMove && flexPositions && superflexPositions;
   const rookieFpids = useRookieFpids();
   return (
     <Stack gap={10} mt="xs">
       {slots.map((slot) => {
         const pick = bySlot.get(slot.key);
         const player = pick ? nameByFpid.get(pick.fpid) : undefined;
-        const moveTargets =
-          canMove && pick
-            ? eligibleSlotsForPosition(
-                pick.position,
-                slots,
-                flexPositions,
-                superflexPositions,
-              ).filter((target) => target.key !== slot.key)
-            : [];
-        const hasActions =
-          pick && ((canMove && moveTargets.length > 0) || onRemove);
+        const hasActions = pick && onRemove;
         return (
           <Group
             key={slot.key}
@@ -111,45 +85,17 @@ export function TeamSlotDetail({
               )}
             </Group>
             {hasActions && (
-              <Menu shadow="md" width={170} position="bottom-end">
-                <Menu.Target>
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    onClick={(event) => event.stopPropagation()}
-                    aria-label="Slot actions"
-                  >
-                    <MoreVertical size={16} />
-                  </ActionIcon>
-                </Menu.Target>
-                <Menu.Dropdown onClick={(event) => event.stopPropagation()}>
-                  {pick &&
-                    canMove &&
-                    moveTargets.map((target) => {
-                      const occupant = bySlot.get(target.key);
-                      const occupantName = occupant
-                        ? nameByFpid.get(occupant.fpid)?.name
-                        : undefined;
-                      return (
-                        <Menu.Item
-                          key={target.key}
-                          onClick={() => onMove(pick._id, target.key)}
-                        >
-                          Move to {target.label}
-                          {occupantName ? ` (swap w/ ${occupantName})` : ""}
-                        </Menu.Item>
-                      );
-                    })}
-                  {pick && canMove && moveTargets.length > 0 && onRemove && (
-                    <Menu.Divider />
-                  )}
-                  {pick && onRemove && (
-                    <Menu.Item color="red" onClick={() => onRemove(pick._id)}>
-                      Remove
-                    </Menu.Item>
-                  )}
-                </Menu.Dropdown>
-              </Menu>
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRemove(pick._id);
+                }}
+                aria-label="Remove pick"
+              >
+                <Trash2 size={16} />
+              </ActionIcon>
             )}
           </Group>
         );

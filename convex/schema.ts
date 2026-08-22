@@ -653,14 +653,14 @@ export default defineSchema({
     position: positionValidator,
     teamId: v.id("seasonTeams"),
     price: v.number(),
-    // Which roster slot this fills, e.g. "RB2" - auto-assigned only for the
-    // self team's picks at pick time (since only self has a budget plan to
-    // reconcile against), but any team's pick can have this manually set
-    // afterward via convex/draft/picks.ts's setPickSlot (e.g. bumping a
-    // flex-caliber player down from RB2 to FLEX). Every other team's slot
-    // display falls back to computing this on the fly (see
-    // src/lib/slotAssignment.ts's assignPicksToSlots) for whichever picks
-    // don't have it set.
+    // Which budget-plan slot this fills, e.g. "RB2" - only ever set (and only
+    // ever read) for the self team, at pick time, to reconcile the live
+    // auction price against that slot's pre-draft $ plan (see
+    // convex/draft/budgetAutoAdjust.ts). Purely a budget bucket tag now, not
+    // a lineup/starter assignment - which roster slot a player is actually
+    // starting in is always computed fresh from current points (see
+    // src/lib/slotAssignment.ts's optimalAssignPicksToSlots), for every team,
+    // with no manual override.
     planSlotKey: v.optional(v.string()),
     // True for a pre-draft keeper assignment (see convex/draft/picks.ts's
     // addKeeper), absent/false for a normal auction result. Optional rather

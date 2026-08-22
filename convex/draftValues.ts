@@ -554,6 +554,34 @@ export async function getRealDraftValues(
 // its own Pro gate is checked against the drafting league's owner, not
 // whoever (if anyone) is making the request (see getRealDraftValues'
 // comment for what went wrong when it used to go through this instead).
+// Shared generic-league fallback for getDraftValues and getDraftValuesPublic
+// below - what a non-Pro (or, on the public board, not-signed-in-at-all)
+// viewer sees instead of a real league's own numbers: the system-owned
+// generic league's values, computed for ITS OWN fixed scoring config, never
+// the caller's real one (see getGenericDraftAndScoring's comment for why).
+async function getGenericDraftValueRows(
+  ctx: QueryCtx,
+  week: string,
+): Promise<DraftValueRow[]> {
+  const { draftId, scoringConfig } = await getGenericDraftAndScoring(ctx);
+
+  const cached = await ctx.db
+    .query("draftValues")
+    .withIndex("by_draft_week_scoring_teScoring_sixPointPassTds", (q) =>
+      q
+        .eq("draftId", draftId)
+        .eq("week", week)
+        .eq("scoring", scoringConfig.scoring)
+        .eq("teScoring", scoringConfig.teScoring)
+        .eq("sixPointPassTds", scoringConfig.sixPointPassTds),
+    )
+    .collect();
+
+  return cached.length > 0
+    ? mapCachedDraftValueRows(cached)
+    : await computeDraftValues(ctx, { draftId, week, scoringConfig });
+}
+
 export const getDraftValues = query({
   args: {
     seasonId: v.id("seasons"),
@@ -569,24 +597,7 @@ export const getDraftValues = query({
     const proAccess = userId ? await hasProAccess(ctx, userId) : false;
 
     if (!proAccess) {
-      const { draftId, scoringConfig } = await getGenericDraftAndScoring(ctx);
-
-      const cached = await ctx.db
-        .query("draftValues")
-        .withIndex("by_draft_week_scoring_teScoring_sixPointPassTds", (q) =>
-          q
-            .eq("draftId", draftId)
-            .eq("week", args.week)
-            .eq("scoring", scoringConfig.scoring)
-            .eq("teScoring", scoringConfig.teScoring)
-            .eq("sixPointPassTds", scoringConfig.sixPointPassTds),
-        )
-        .collect();
-
-      const rows =
-        cached.length > 0
-          ? mapCachedDraftValueRows(cached)
-          : await computeDraftValues(ctx, { draftId, week: args.week, scoringConfig });
+      const rows = await getGenericDraftValueRows(ctx, args.week);
 
       // No keeperValues here: the generic league never has any real picks
       // against it (nobody drafts in the system draft), so there's nothing
@@ -629,6 +640,56 @@ export const getDraftValues = query({
         : rows,
       keeperValues,
     };
+  },
+});
+
+// Points-only counterpart to getDraftValues for surfaces with no signed-in
+// caller to gate against - the TV board (src/pages/DraftBoard/DraftBoard.tsx),
+// viewed on a second screen/projector that's frequently not logged in at all
+// even while the host's own device is. Gates Pro access against the drafting
+// league's OWNER instead of getAuthUserId(ctx) - the same fix
+// getDraftReportCardPublic already applies (see getRealDraftValues' comment
+// for what breaks otherwise: an anonymous or non-Pro viewer would silently
+// see the unrelated generic league's numbers even for a real Pro league).
+// Unlike Report Card, a non-Pro league doesn't get a blocked
+// "requires_upgrade" state here - it falls back to the same generic-league
+// values a non-Pro signed-in viewer gets from getDraftValues, since this
+// only drives the board's own lineup-ordering display, not a $-value feature
+// being sold on its own.
+export const getDraftValuesPublic = query({
+  args: {
+    seasonId: v.id("seasons"),
+    week: v.string(),
+    scoringConfig: scoringConfigValidator,
+  },
+  handler: async (ctx, args) => {
+    const season = await ctx.db.get(args.seasonId);
+    if (!season) return { isGeneric: true, values: [] as DraftValueRow[] };
+
+    const league = await ctx.db.get(season.leagueId);
+    const proAccess = league ? await hasProAccess(ctx, league.ownerId) : false;
+
+    if (!proAccess) {
+      return {
+        isGeneric: true,
+        values: await getGenericDraftValueRows(ctx, args.week),
+      };
+    }
+
+    const draft = await ctx.db
+      .query("drafts")
+      .withIndex("by_season_kind", (q) =>
+        q.eq("seasonId", args.seasonId).eq("kind", "real"),
+      )
+      .first();
+    if (!draft) return { isGeneric: false, values: [] as DraftValueRow[] };
+
+    const rows = await getRealDraftValues(ctx, {
+      draftId: draft._id,
+      week: args.week,
+      scoringConfig: args.scoringConfig,
+    });
+    return { isGeneric: false, values: rows };
   },
 });
 

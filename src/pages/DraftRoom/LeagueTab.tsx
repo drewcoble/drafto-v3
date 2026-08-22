@@ -24,7 +24,7 @@ import {
 } from "../../lib/positionColors";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { getErrorMessage } from "../../lib/errors";
-import { assignPicksToSlots } from "../../lib/slotAssignment";
+import { optimalAssignPicksToSlots } from "../../lib/slotAssignment";
 import {
   computeMaxPerStarter,
   computeTeamBudgetStats,
@@ -50,12 +50,21 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
+  const draftValues = useQuery(
+    api.draftValues.getDraftValues,
+    settings
+      ? {
+          seasonId,
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
+      : "skip",
+  );
   const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(
     new Set(),
   );
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const removePick = useMutation(api.draft.picks.removePick);
-  const setPickSlot = useMutation(api.draft.picks.setPickSlot);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
   const handleRemove = async (pickId: Id<"draftPicks">) => {
@@ -67,20 +76,19 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
     }
   };
 
-  const handleMove = async (pickId: Id<"draftPicks">, slotKey: string) => {
-    setRemoveError(null);
-    try {
-      await setPickSlot({ pickId, slotKey });
-    } catch (err) {
-      setRemoveError(getErrorMessage(err, "Failed to move pick."));
-    }
-  };
-
   const nameByFpid = useMemo(() => {
     const map = new Map<number, { name: string; team: string | null }>();
     for (const row of allProjections ?? []) map.set(row.fpid, row);
     return map;
   }, [allProjections]);
+
+  const pointsByFpid = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const row of draftValues?.values ?? []) {
+      map.set(row.fpid, row.points);
+    }
+    return map;
+  }, [draftValues]);
 
   const teamSummaries = useMemo(() => {
     if (!settings || !picks) return [];
@@ -96,11 +104,15 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
         spent,
       );
       const slots = expandRosterSlots(settings.rosterSlots);
-      const bySlot = assignPicksToSlots(
+      // Always the current points-optimal placement (see MyTeamTab's
+      // pickBySlotKey comment) - applies to every team, not just self, so
+      // the host sees each opponent's true best lineup too.
+      const bySlot = optimalAssignPicksToSlots(
         teamPicks,
         settings.rosterSlots,
         settings.flexPositions,
         settings.superflexPositions,
+        pointsByFpid,
       );
       const openSlots = slots.filter((slot) => !bySlot.has(slot.key));
       // How many still-open slots this team has in each group - same
@@ -129,7 +141,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
         maxPerStarter,
       };
     });
-  }, [teams, settings, picks]);
+  }, [teams, settings, picks, pointsByFpid]);
 
   // The full, fixed set of position groups a "needs" row could ever show for
   // this league (same roster shape for every team), and how many slots each
@@ -336,10 +348,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                       slots={slots}
                       bySlot={bySlot}
                       nameByFpid={nameByFpid}
-                      flexPositions={settings.flexPositions}
-                      superflexPositions={settings.superflexPositions}
                       onRemove={handleRemove}
-                      onMove={handleMove}
                       onSelectPlayer={setSelectedFpid}
                       trackConsecutiveYears={
                         settings.keeperRules?.maxConsecutiveYears !== undefined

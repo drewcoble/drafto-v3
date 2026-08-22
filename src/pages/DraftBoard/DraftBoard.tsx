@@ -28,7 +28,8 @@ import {
   positionColorOrDefault,
 } from "../../lib/positionColors";
 import { expandRosterSlots } from "../../lib/rosterSlots";
-import { assignPicksToSlots } from "../../lib/slotAssignment";
+import { optimalAssignPicksToSlots } from "../../lib/slotAssignment";
+import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
 import {
   computeTeamBudgetStats,
   resolveTeamSalaryCap,
@@ -58,11 +59,13 @@ const REFERENCE_CARD_WIDTH = 320;
 // opened in its own tab on a second screen while the host runs the actual
 // draft elsewhere (see the "TV Board" link in AppHeader.tsx), so it
 // deliberately shows only what's already public knowledge in a live
-// auction: drafted players, prices paid, and each team's remaining
-// budget/max bid (every bidder needs to see max bids to bid validly). It
-// never reads this app's own analysis - no $ values (draftValues.ts), ADP,
-// target/avoid tags (draftPlayerTags), or budget plans - since those are the
-// host's private prep, not something to broadcast to the room.
+// auction: drafted players, prices paid, each team's remaining budget/max
+// bid (every bidder needs to see max bids to bid validly), and - since the
+// starting lineup itself is just a deterministic read of "who's the better
+// player at this position," not a $-value/strategy signal - each team's
+// current points-optimal starting lineup. It still never reads $ values
+// (draftValues.ts's dollarValue), ADP, target/avoid tags (draftPlayerTags),
+// or budget plans, which stay the host's private prep.
 //
 // Viewable any time, not just once the draft starts - a host might want it
 // up on the TV before the room's ready to go. Nomination-status badges only
@@ -73,7 +76,10 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
   // All queries below use their *Public variants (no ownership check) -
   // this page is meant to be opened by anyone with the link (see the file
   // comment above and src/routes/__root.tsx's isPublicRoute exemption for
-  // /board/*), not just the signed-in league owner.
+  // /board/*), not just the signed-in league owner. getDraftValuesPublic in
+  // particular exists because this screen frequently has nobody signed in
+  // at all (it's the projector, not the host's own device) - see that
+  // query's own comment for why it can't just reuse getDraftValues.
   const settings = useQuery(api.leagues.getSeasonPublic, { seasonId });
   const teams = useQuery(api.draft.teams.listSeasonTeamsPublic, { seasonId });
   const picks = useQuery(api.draft.picks.listDraftPicksPublic, { seasonId });
@@ -91,6 +97,16 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
+  const draftValues = useQuery(
+    api.draftValues.getDraftValuesPublic,
+    settings
+      ? {
+          seasonId,
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
+      : "skip",
+  );
   const rookieFpids = useRookieFpids();
 
   const playerByFpid = useMemo(() => {
@@ -98,6 +114,14 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
     for (const row of allProjections ?? []) map.set(row.fpid, row);
     return map;
   }, [allProjections]);
+
+  const pointsByFpid = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const row of draftValues?.values ?? []) {
+      map.set(row.fpid, row.points);
+    }
+    return map;
+  }, [draftValues]);
 
   const teamSummaries = useMemo(() => {
     if (!settings || !teams || !picks) return [];
@@ -135,15 +159,16 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
           spent,
         );
         const slots = expandRosterSlots(settings.rosterSlots);
-        const bySlot = assignPicksToSlots(
+        const bySlot = optimalAssignPicksToSlots(
           teamPicks,
           settings.rosterSlots,
           settings.flexPositions,
           settings.superflexPositions,
+          pointsByFpid,
         );
         return { team, stats, slots, bySlot };
       });
-  }, [settings, teams, picks, nominationConfig]);
+  }, [settings, teams, picks, nominationConfig, pointsByFpid]);
 
   const nominatingTeam = teams?.find(
     (team) => team._id === activeNomination?.nominatingTeamId,

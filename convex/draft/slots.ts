@@ -63,8 +63,9 @@ export function expandRosterSlots(
 // Whether a player at `position` is allowed to sit in `slot` - an exact
 // position match, a flex-eligible slot when the position is in
 // flexPositions, a superflex-eligible slot when it's in superflexPositions,
-// or any bench slot (bench takes anyone). Shared by setPickSlot's server-side
-// validation and, in duplicate, src/lib/slotAssignment.ts's UI-facing
+// or any bench slot (bench takes anyone). Used by convex/season/faabValues.ts
+// to work out which of a synced roster's open slots a free agent could fill,
+// and, in duplicate, by src/lib/slotAssignment.ts's UI-facing
 // eligibleSlotsForPosition (see that file's comment on why it's duplicated
 // rather than imported).
 export function isEligibleForSlot(

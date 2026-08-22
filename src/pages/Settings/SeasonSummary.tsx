@@ -8,7 +8,7 @@ import {
   resolveTeamSalaryCap,
 } from "../../lib/teamBudget";
 import { expandRosterSlots } from "../../lib/rosterSlots";
-import { assignPicksToSlots } from "../../lib/slotAssignment";
+import { optimalAssignPicksToSlots } from "../../lib/slotAssignment";
 import { WEEK } from "../../constants/general";
 import { TeamSlotDetail } from "../../components/TeamSlotDetail";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
@@ -20,8 +20,8 @@ interface SeasonSummaryProps {
 
 // Read-only per-team roster/spend breakdown for a past season - the same
 // reconstruction LeagueTab.tsx uses for the live draft (expandRosterSlots +
-// assignPicksToSlots + computeTeamBudgetStats), just pointed at a historical
-// seasonId with no mutation affordances (no Remove/Edit/keeper-add).
+// optimalAssignPicksToSlots + computeTeamBudgetStats), just pointed at a
+// historical seasonId with no mutation affordances (no Remove/Edit/keeper-add).
 export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
@@ -30,6 +30,16 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
+  const draftValues = useQuery(
+    api.draftValues.getDraftValues,
+    settings
+      ? {
+          seasonId,
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
+      : "skip",
+  );
   const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(
     new Set(),
   );
@@ -40,6 +50,14 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
     for (const row of allProjections ?? []) map.set(row.fpid, row);
     return map;
   }, [allProjections]);
+
+  const pointsByFpid = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const row of draftValues?.values ?? []) {
+      map.set(row.fpid, row.points);
+    }
+    return map;
+  }, [draftValues]);
 
   const teamSummaries = useMemo(() => {
     if (!settings || !picks || !teams) return [];
@@ -55,15 +73,16 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
         spent,
       );
       const slots = expandRosterSlots(settings.rosterSlots);
-      const bySlot = assignPicksToSlots(
+      const bySlot = optimalAssignPicksToSlots(
         teamPicks,
         settings.rosterSlots,
         settings.flexPositions,
         settings.superflexPositions,
+        pointsByFpid,
       );
       return { team, teamPicks, stats, slots, bySlot };
     });
-  }, [teams, settings, picks]);
+  }, [teams, settings, picks, pointsByFpid]);
 
   const toggleExpanded = (teamId: string) => {
     setExpandedTeamIds((current) => {

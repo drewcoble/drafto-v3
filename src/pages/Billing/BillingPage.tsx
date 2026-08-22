@@ -160,6 +160,22 @@ export function BillingPage() {
                   >
                     Manage subscription
                   </Button>
+                ) : subscription?.comped ? (
+                  <Stack gap={4}>
+                    <Button
+                      onClick={() => void handleSubscribe()}
+                      loading={isRedirecting}
+                      variant="light"
+                    >
+                      {pricing
+                        ? `Pay anyway - ${formatProPrice(pricing)}`
+                        : "Pay anyway"}
+                    </Button>
+                    <Text size="xs" c="dimmed">
+                      If you cancel later, you'll keep your complimentary Pro
+                      access.
+                    </Text>
+                  </Stack>
                 ) : (
                   <Text size="sm" c="dimmed">
                     Contact support to make changes to your complimentary

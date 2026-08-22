@@ -4,6 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>infinidraft</title>
+    <script>
+      (function () {
+        var host = window.location.hostname;
+        var suffix =
+          host === "localhost" || host === "127.0.0.1"
+            ? " (local)"
+            : host.startsWith("develop.")
+              ? " (dev)"
+              : "";
+        if (suffix) document.title += suffix;
+      })();
+    </script>
     <meta
       name="description"
       content="infinidraft has customizable auction draft tools for fantasy football — set your salary cap budget, choose keepers, and track draft values live."

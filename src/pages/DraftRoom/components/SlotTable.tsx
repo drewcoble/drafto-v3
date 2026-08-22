@@ -3,16 +3,13 @@ import {
   Anchor,
   Badge,
   Group,
-  Menu,
   Stack,
   Table,
   Text,
 } from "@mantine/core";
-import { MoreVertical } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
-import type { Position } from "../../../types";
 import type { SlotDescriptor } from "../../../lib/rosterSlots";
-import { eligibleSlotsForPosition } from "../../../lib/slotAssignment";
 import { positionColorOrDefault } from "../../../lib/positionColors";
 import { RookieBadge } from "../../../components/RookieBadge";
 import { useRookieFpids } from "../../../hooks/useRookieFpids";
@@ -22,10 +19,7 @@ interface SlotTableProps {
   pickBySlotKey: Map<string, Doc<"draftPicks">>;
   planAmounts: Record<string, number>;
   nameByFpid: Map<number, { name: string; team: string | null }>;
-  flexPositions: readonly Position[];
-  superflexPositions: readonly Position[];
   onRemove: (pickId: Id<"draftPicks">) => void;
-  onMove: (pickId: Id<"draftPicks">, slotKey: string) => void;
   onSelectPlayer: (fpid: number) => void;
   // Gates the "· Yr X" suffix on the Keeper badge below - true when the
   // league has a maxConsecutiveYears cap set (see schema.ts's
@@ -38,10 +32,7 @@ export function SlotTable({
   pickBySlotKey,
   planAmounts,
   nameByFpid,
-  flexPositions,
-  superflexPositions,
   onRemove,
-  onMove,
   onSelectPlayer,
   trackConsecutiveYears,
 }: SlotTableProps) {
@@ -62,14 +53,6 @@ export function SlotTable({
             const player = pick ? nameByFpid.get(pick.fpid) : undefined;
             const planAmount = planAmounts[slot.key] ?? 0;
             const diff = pick ? planAmount - pick.price : 0;
-            const moveTargets = pick
-              ? eligibleSlotsForPosition(
-                  pick.position,
-                  slots,
-                  flexPositions,
-                  superflexPositions,
-                ).filter((target) => target.key !== slot.key)
-              : [];
             return (
               <Table.Tr key={slot.key}>
                 {/* Slot badge + player name + keeper badge all in one cell
@@ -145,43 +128,14 @@ export function SlotTable({
                 <Table.Td>
                   {pick && (
                     <Group gap={4} wrap="nowrap" justify="flex-end">
-                      <Menu shadow="md" width={170} position="bottom-end">
-                        <Menu.Target>
-                          <ActionIcon
-                            variant="subtle"
-                            color="gray"
-                            aria-label="Slot actions"
-                          >
-                            <MoreVertical size={16} />
-                          </ActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                          {moveTargets.map((target) => {
-                            const occupant = pickBySlotKey.get(target.key);
-                            const occupantName = occupant
-                              ? nameByFpid.get(occupant.fpid)?.name
-                              : undefined;
-                            return (
-                              <Menu.Item
-                                key={target.key}
-                                onClick={() => onMove(pick._id, target.key)}
-                              >
-                                Move to {target.label}
-                                {occupantName
-                                  ? ` (swap w/ ${occupantName})`
-                                  : ""}
-                              </Menu.Item>
-                            );
-                          })}
-                          {moveTargets.length > 0 && <Menu.Divider />}
-                          <Menu.Item
-                            color="red"
-                            onClick={() => onRemove(pick._id)}
-                          >
-                            Remove
-                          </Menu.Item>
-                        </Menu.Dropdown>
-                      </Menu>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        aria-label="Remove pick"
+                        onClick={() => onRemove(pick._id)}
+                      >
+                        <Trash2 size={16} />
+                      </ActionIcon>
                     </Group>
                   )}
                 </Table.Td>

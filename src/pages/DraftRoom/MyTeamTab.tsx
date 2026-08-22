@@ -1,19 +1,10 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import {
-  ActionIcon,
-  Anchor,
-  Badge,
-  Card,
-  Group,
-  Progress,
-  Stack,
-  Text,
-} from "@mantine/core";
-import { Trash2 } from "lucide-react";
+import { Card, Group, Progress, Stack, Text } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { expandRosterSlots } from "../../lib/rosterSlots";
+import { optimalAssignPicksToSlots } from "../../lib/slotAssignment";
 import { useTeamBudget } from "../../hooks/useTeamBudget";
 import { positionColorOrDefault } from "../../lib/positionColors";
 import { WEEK } from "../../constants/general";
@@ -35,9 +26,19 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
+  const settings = settingsList?.find((s) => s._id === seasonId);
+  const draftValues = useQuery(
+    api.draftValues.getDraftValues,
+    settings
+      ? {
+          seasonId,
+          week: WEEK,
+          scoringConfig: scoringConfigFromSeason(settings),
+        }
+      : "skip",
+  );
   const stats = useTeamBudget(seasonId, selfTeamId);
   const removePick = useMutation(api.draft.picks.removePick);
-  const setPickSlot = useMutation(api.draft.picks.setPickSlot);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
 
@@ -49,17 +50,6 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
       setRemoveError(getErrorMessage(err, "Failed to remove pick."));
     }
   };
-
-  const handleMove = async (pickId: Id<"draftPicks">, slotKey: string) => {
-    setRemoveError(null);
-    try {
-      await setPickSlot({ pickId, slotKey });
-    } catch (err) {
-      setRemoveError(getErrorMessage(err, "Failed to move pick."));
-    }
-  };
-
-  const settings = settingsList?.find((s) => s._id === seasonId);
 
   const nameByFpid = useMemo(() => {
     const map = new Map<number, { name: string; team: string | null }>();
@@ -74,22 +64,36 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
     [picks, selfTeamId],
   );
 
-  const pickBySlotKey = useMemo(() => {
-    const map = new Map<string, (typeof myPicks)[number]>();
-    for (const pick of myPicks) {
-      if (pick.planSlotKey) map.set(pick.planSlotKey, pick);
+  const pointsByFpid = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const row of draftValues?.values ?? []) {
+      map.set(row.fpid, row.points);
     }
     return map;
-  }, [myPicks]);
+  }, [draftValues]);
 
   const slots = useMemo(
     () => (settings ? expandRosterSlots(settings.rosterSlots) : []),
     [settings],
   );
 
-  const unassignedPicks = useMemo(
-    () => myPicks.filter((pick) => !pick.planSlotKey),
-    [myPicks],
+  // Always the current points-optimal placement, not a stored/manual one -
+  // see optimalAssignPicksToSlots's comment. Recomputes from scratch on
+  // every pick add/remove so the highest scorers at each position are
+  // always the ones starting, with leftovers pooled into FLEX/SUPERFLEX by
+  // points.
+  const pickBySlotKey = useMemo(
+    () =>
+      settings
+        ? optimalAssignPicksToSlots(
+            myPicks,
+            settings.rosterSlots,
+            settings.flexPositions,
+            settings.superflexPositions,
+            pointsByFpid,
+          )
+        : new Map<string, (typeof myPicks)[number]>(),
+    [myPicks, settings, pointsByFpid],
   );
 
   // Group plan vs actual by position (FLEX/SFLEX/BN slots - which have no
@@ -141,10 +145,7 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
             pickBySlotKey={pickBySlotKey}
             planAmounts={plan?.amounts ?? {}}
             nameByFpid={nameByFpid}
-            flexPositions={settings?.flexPositions ?? []}
-            superflexPositions={settings?.superflexPositions ?? []}
             onRemove={handleRemove}
-            onMove={handleMove}
             onSelectPlayer={setSelectedFpid}
             trackConsecutiveYears={
               settings?.keeperRules?.maxConsecutiveYears !== undefined
@@ -152,46 +153,6 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
           />
         </Stack>
       </Card>
-
-      {unassignedPicks.length > 0 && (
-        <Card withBorder padding="md">
-          <Stack gap="sm">
-            <Text size="sm" fw={500}>
-              Unassigned picks
-            </Text>
-            {unassignedPicks.map((pick) => (
-              <Group key={pick._id} gap={6}>
-                <Text size="sm" c="dimmed">
-                  <Anchor
-                    component="button"
-                    type="button"
-                    size="sm"
-                    onClick={() => setSelectedFpid(pick.fpid)}
-                  >
-                    {nameByFpid.get(pick.fpid)?.name ?? `#${pick.fpid}`}
-                  </Anchor>{" "}
-                  - ${pick.price}
-                </Text>
-                {pick.isKeeper && (
-                  <Badge variant="light" color="gray" size="sm">
-                    {settings?.keeperRules?.maxConsecutiveYears !== undefined
-                      ? `Keeper · Yr ${pick.keeperStreak ?? 1}`
-                      : "Keeper"}
-                  </Badge>
-                )}
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  aria-label="Remove pick"
-                  onClick={() => handleRemove(pick._id)}
-                >
-                  <Trash2 size={16} />
-                </ActionIcon>
-              </Group>
-            ))}
-          </Stack>
-        </Card>
-      )}
 
       <Card withBorder padding="md">
         <Stack gap="sm">
