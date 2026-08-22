@@ -129,6 +129,17 @@ export function PlayerTableRowMobile({
       <Group
         gap={8}
         wrap="nowrap"
+        // Stretch (not Group's own default "center") - the name/team Stack
+        // has two lines but one of them (icons + an Anchor rendered as a
+        // real <button>) is taller than the other, so its own content
+        // isn't evenly split top/bottom around the row's true center. That
+        // skewed the $/vs Mkt/Pos/Pts cells - centered as plain single-
+        // line items - visibly toward the name line instead of the row's
+        // middle. Stretching every cell to the row's full height and
+        // centering each one's own content inside it (below) anchors them
+        // to the actual row center regardless of how the name/team text
+        // happens to split that height.
+        align="stretch"
         onClick={onCloseSwipe}
         {...swipeHandlers}
         style={{
@@ -220,35 +231,62 @@ export function PlayerTableRowMobile({
             </Text>
           )}
         </Stack>
-        <Text size="sm" fw={700} style={{ width: 36, flexShrink: 0 }}>
-          ${Math.round(row.dollarValue)}
-        </Text>
-        <Box style={{ width: 36, flexShrink: 0 }}>
+        <Box
+          style={{
+            width: 36,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          <Text size="sm" fw={700}>
+            ${Math.round(row.dollarValue)}
+          </Text>
+        </Box>
+        <Box
+          style={{
+            width: 36,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
           <StandardValueLabel
             draftValue={row.dollarValue}
             standardValue={standardValue}
             showLabel={false}
           />
         </Box>
-        <Text
-          size="xs"
-          fw={700}
+        <Box
           style={{
             width: 40,
             flexShrink: 0,
-            color: POSITION_COLORS[row.position],
+            display: "flex",
+            alignItems: "center",
           }}
         >
-          {row.position}
-          {row.positionRank}
-        </Text>
-        <Text
-          size="xs"
-          c="dimmed"
-          style={{ width: 34, flexShrink: 0, textAlign: "right" }}
+          <Text
+            size="xs"
+            fw={700}
+            style={{ color: POSITION_COLORS[row.position] }}
+          >
+            {row.position}
+            {row.positionRank}
+          </Text>
+        </Box>
+        <Box
+          style={{
+            width: 34,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+          }}
         >
-          {row.points.toFixed(0)}
-        </Text>
+          <Text size="xs" c="dimmed">
+            {row.points.toFixed(0)}
+          </Text>
+        </Box>
       </Group>
     </Box>
   );
