@@ -54,6 +54,7 @@ import {
 } from "../../lib/consistency";
 import { PlayerBar } from "./components/PlayerBar";
 import { PlayerTableRow } from "./components/PlayerTableRow";
+import { PlayerTableRowMobile } from "./components/PlayerTableRowMobile";
 import { getErrorMessage } from "../../lib/errors";
 
 type BoardView = "bar" | "table";
@@ -84,6 +85,10 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
       return next;
     });
   };
+  // Mobile table view's counterpart to expandedFpids above - only one row's
+  // Target/Avoid actions are ever swiped open at a time (see
+  // PlayerTableRowMobile.tsx), rather than each row tracking its own.
+  const [swipedFpid, setSwipedFpid] = useState<number | null>(null);
   // Narrows which position sections render, in both bar and table view -
   // useful even in the bar view's already position-grouped layout once a
   // league has many active positions and scrolling past ones you're not
@@ -492,6 +497,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
 
             const handleSetTag = (fpid: number, nextTag: PlayerTag) => {
               setActionError(null);
+              setSwipedFpid((current) => (current === fpid ? null : current));
               setPlayerTag({ seasonId, fpid, tag: nextTag }).catch((err) => {
                 setActionError(getErrorMessage(err, "Failed to update tag."));
               });
@@ -588,26 +594,124 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                     ))}
                   </Group>
                 ) : (
-                  <Table.ScrollContainer minWidth={300}>
-                    <Table
-                      verticalSpacing={4}
-                      horizontalSpacing="xs"
-                      highlightOnHover
-                    >
-                      <Table.Thead>
-                        <Table.Tr>
-                          <Table.Th></Table.Th>
-                          <Table.Th>Player</Table.Th>
-                          <Table.Th>Tier</Table.Th>
-                          <Table.Th>$</Table.Th>
-                          <Table.Th visibleFrom="sm">vs. market</Table.Th>
-                          <Table.Th visibleFrom="sm">Pts</Table.Th>
-                          <Table.Th></Table.Th>
-                        </Table.Tr>
-                      </Table.Thead>
-                      <Table.Tbody>
+                  <>
+                    <Box visibleFrom="sm">
+                      <Table.ScrollContainer minWidth={300}>
+                        <Table
+                          verticalSpacing={4}
+                          horizontalSpacing="xs"
+                          highlightOnHover
+                        >
+                          <Table.Thead>
+                            <Table.Tr>
+                              <Table.Th></Table.Th>
+                              <Table.Th>Player</Table.Th>
+                              <Table.Th>Tier</Table.Th>
+                              <Table.Th>$</Table.Th>
+                              <Table.Th>vs. market</Table.Th>
+                              <Table.Th>Pts</Table.Th>
+                              <Table.Th></Table.Th>
+                            </Table.Tr>
+                          </Table.Thead>
+                          <Table.Tbody>
+                            {rows.map((row) => (
+                              <PlayerTableRow
+                                key={row.fpid}
+                                row={row}
+                                tag={tagByFpid.get(row.fpid)}
+                                standardValue={standardValueByFpid.get(
+                                  row.fpid,
+                                )}
+                                valueGap={valueGapByFpid.get(row.fpid)}
+                                consistency={consistencyByFpid.get(row.fpid)}
+                                isRookie={rookieFpids.has(row.fpid)}
+                                isNominated={
+                                  activeNomination?.fpid === row.fpid
+                                }
+                                hasActiveNomination={!!activeNomination}
+                                budgetMatch={
+                                  budgetMatchByFpid.get(row.fpid) ?? false
+                                }
+                                isExpanded={expandedFpids.has(row.fpid)}
+                                onSetTag={(nextTag) =>
+                                  handleSetTag(row.fpid, nextTag)
+                                }
+                                onNominate={() => handleNominate(row.fpid)}
+                                onSelectPlayer={setSelectedFpid}
+                                onToggleExpand={() => toggleExpanded(row.fpid)}
+                              />
+                            ))}
+                          </Table.Tbody>
+                        </Table>
+                      </Table.ScrollContainer>
+                    </Box>
+
+                    <Box hiddenFrom="sm">
+                      <Box
+                        style={{
+                          border:
+                            "1px solid var(--mantine-color-default-border)",
+                          borderRadius: "var(--mantine-radius-sm)",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <Group
+                          gap={8}
+                          wrap="nowrap"
+                          px={6}
+                          py={4}
+                          style={{
+                            borderBottom:
+                              "1px solid var(--mantine-color-default-border)",
+                          }}
+                        >
+                          <Text
+                            size="10px"
+                            c="dimmed"
+                            tt="uppercase"
+                            style={{ width: 36, flexShrink: 0 }}
+                          >
+                            $
+                          </Text>
+                          <Text
+                            size="10px"
+                            c="dimmed"
+                            tt="uppercase"
+                            style={{ width: 36, flexShrink: 0 }}
+                          >
+                            Mkt $
+                          </Text>
+                          <Text
+                            size="10px"
+                            c="dimmed"
+                            tt="uppercase"
+                            style={{ width: 40, flexShrink: 0 }}
+                          >
+                            Pos
+                          </Text>
+                          <Text
+                            size="10px"
+                            c="dimmed"
+                            tt="uppercase"
+                            style={{ flex: 1 }}
+                          >
+                            Player
+                          </Text>
+                          <Text
+                            size="10px"
+                            c="dimmed"
+                            tt="uppercase"
+                            style={{
+                              width: 34,
+                              flexShrink: 0,
+                              textAlign: "right",
+                            }}
+                          >
+                            Pts
+                          </Text>
+                        </Group>
                         {rows.map((row) => (
-                          <PlayerTableRow
+                          <PlayerTableRowMobile
                             key={row.fpid}
                             row={row}
                             tag={tagByFpid.get(row.fpid)}
@@ -616,22 +720,25 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                             consistency={consistencyByFpid.get(row.fpid)}
                             isRookie={rookieFpids.has(row.fpid)}
                             isNominated={activeNomination?.fpid === row.fpid}
-                            hasActiveNomination={!!activeNomination}
-                            budgetMatch={
-                              budgetMatchByFpid.get(row.fpid) ?? false
-                            }
-                            isExpanded={expandedFpids.has(row.fpid)}
+                            isSwiped={swipedFpid === row.fpid}
+                            onSwipeOpen={() => setSwipedFpid(row.fpid)}
                             onSetTag={(nextTag) =>
                               handleSetTag(row.fpid, nextTag)
                             }
-                            onNominate={() => handleNominate(row.fpid)}
+                            onRowTap={() =>
+                              swipedFpid !== null
+                                ? setSwipedFpid(null)
+                                : setSelectedFpid(row.fpid)
+                            }
                             onSelectPlayer={setSelectedFpid}
-                            onToggleExpand={() => toggleExpanded(row.fpid)}
                           />
                         ))}
-                      </Table.Tbody>
-                    </Table>
-                  </Table.ScrollContainer>
+                      </Box>
+                      <Text size="xs" c="dimmed" mt={6}>
+                        Swipe a row left for Target/Avoid
+                      </Text>
+                    </Box>
+                  </>
                 )}
               </Stack>
             );
