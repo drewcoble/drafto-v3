@@ -142,12 +142,17 @@ export function PlayerTableRowMobile({
                 ? "var(--mantine-color-red-6)"
                 : "transparent"
           }`,
+          // Mantine's "-light" tokens are deliberately translucent (a tint
+          // meant to sit over the page), which let the Target/Avoid actions
+          // layer underneath bleed through here when not swiped open. An
+          // opaque blend against the solid body color instead fully hides
+          // it, same as the untagged case already does.
           background: isNominated
-            ? "var(--mantine-color-yellow-light)"
+            ? "color-mix(in srgb, var(--mantine-color-yellow-6) 20%, var(--mantine-color-body))"
             : tag === "target"
-              ? "var(--mantine-color-green-light)"
+              ? "color-mix(in srgb, var(--mantine-color-green-6) 15%, var(--mantine-color-body))"
               : tag === "avoid"
-                ? "var(--mantine-color-red-light)"
+                ? "color-mix(in srgb, var(--mantine-color-red-6) 15%, var(--mantine-color-body))"
                 : "var(--mantine-color-body)",
           transform: `translateX(${isSwiped ? -ACTIONS_WIDTH : 0}px)`,
           transition: "transform 150ms ease",
