@@ -44,6 +44,7 @@ import {
   type ConsistencyLabel,
 } from "../../lib/consistency";
 import { PlayerRow, type KeeperInfo } from "./components/PlayerRow";
+import { PlayerRowMobile } from "./components/PlayerRowMobile";
 import { useRookieFpids } from "../../hooks/useRookieFpids";
 
 interface PlayersTableProps {
@@ -74,6 +75,10 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
       return next;
     });
   };
+  // Mobile table view's counterpart to expandedIds above - only one row's
+  // Target/Avoid actions are ever swiped open at a time (see
+  // PlayerRowMobile.tsx), rather than each row tracking its own.
+  const [swipedId, setSwipedId] = useState<Id<"projections"> | null>(null);
 
   const allProjections = useQuery(api.projections.getAllProjections, {
     week,
@@ -262,7 +267,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   const draftValueByFpid = useMemo(() => {
     const map = new Map<
       number,
-      { dollarValue: number; usedFallback: boolean }
+      { dollarValue: number; usedFallback: boolean; positionRank: number }
     >();
     for (const value of draftValues ?? []) {
       map.set(value.fpid, value);
@@ -369,6 +374,17 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
       </Group>
       {draftValuesResult?.isGeneric && <GenericValuesNotice />}
 
+      {allProjections !== undefined &&
+        allRankings !== undefined &&
+        !isInitialValuesLoad &&
+        visibleRows.length > 0 && (
+          <Box hiddenFrom="sm">
+            <Text size="xs" c="dimmed">
+              Swipe a row left for Target/Avoid
+            </Text>
+          </Box>
+        )}
+
       <Card withBorder padding={0}>
         {allProjections === undefined ||
         allRankings === undefined ||
@@ -383,70 +399,158 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
               : "No projections yet for the selected position(s) - fetch data first."}
           </Text>
         ) : (
-          <Table.ScrollContainer minWidth={640}>
-            <Table striped highlightOnHover verticalSpacing={4}>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Rank</Table.Th>
-                  <Table.Th>FPTS</Table.Th>
-                  {draftValues && (
-                    <Table.Th>
-                      {draftValuesResult?.isGeneric ? "$ (est.)" : "$"}
-                    </Table.Th>
-                  )}
-                  {draftValues && <Table.Th>vs. market</Table.Th>}
-                  {/* Target/avoid toggle - unlabeled icon column. */}
-                  <Table.Th></Table.Th>
-                  <Table.Th miw={70}>Pos</Table.Th>
-                  <Table.Th miw={220}>Player</Table.Th>
-                  {/* Tags (value-gap/consistency) - unlabeled column, same
+          <>
+            <Box visibleFrom="sm">
+              <Table.ScrollContainer minWidth={640}>
+                <Table striped highlightOnHover verticalSpacing={4}>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Rank</Table.Th>
+                      <Table.Th>FPTS</Table.Th>
+                      {draftValues && (
+                        <Table.Th>
+                          {draftValuesResult?.isGeneric ? "$ (est.)" : "$"}
+                        </Table.Th>
+                      )}
+                      {draftValues && <Table.Th>vs. market</Table.Th>}
+                      {/* Target/avoid toggle - unlabeled icon column. */}
+                      <Table.Th></Table.Th>
+                      <Table.Th miw={70}>Pos</Table.Th>
+                      <Table.Th miw={220}>Player</Table.Th>
+                      {/* Tags (value-gap/consistency) - unlabeled column, same
                     placement every icon-flag table in the app uses. Keeper
                     moved into the expanded detail row (see PlayerRow.tsx). */}
-                  <Table.Th></Table.Th>
-                  <Table.Th>Team</Table.Th>
-                  {!!selectedSettings && <Table.Th />}
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {sortedRows.map((row, index) => (
-                  <PlayerRow
-                    key={row._id}
-                    row={row}
-                    index={index}
-                    scoringConfig={scoringConfig}
-                    injury={injuriesByFpid.get(row.fpid)}
-                    isRookie={rookieFpids.has(row.fpid)}
-                    draftValue={draftValueByFpid.get(row.fpid)}
-                    standardValue={standardValueByFpid.get(row.fpid)}
-                    valueGap={valueGapByFpid.get(row.fpid)}
-                    showValueColumn={!!draftValues}
-                    tag={tagByFpid.get(row.fpid)}
-                    onCycleTag={
-                      seasonId
-                        ? () => cyclePlayerTag({ seasonId, fpid: row.fpid })
-                        : undefined
-                    }
-                    onSelectPlayer={setSelectedFpid}
-                    consistency={
-                      selectedSettings
-                        ? consistencyByFpid.get(row.fpid)
-                        : undefined
-                    }
-                    showConsistencyColumn={!!selectedSettings}
-                    keeperInfo={
-                      selectedSettings
-                        ? keeperInfoByFpid.get(row.fpid)
-                        : undefined
-                    }
-                    showKeeperColumn={!!selectedSettings}
-                    showKeeperYear={showKeeperYear}
-                    isExpanded={expandedIds.has(row._id)}
-                    onToggleExpand={() => toggleExpanded(row._id)}
-                  />
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
+                      <Table.Th></Table.Th>
+                      <Table.Th>Team</Table.Th>
+                      {!!selectedSettings && <Table.Th />}
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {sortedRows.map((row, index) => (
+                      <PlayerRow
+                        key={row._id}
+                        row={row}
+                        index={index}
+                        scoringConfig={scoringConfig}
+                        injury={injuriesByFpid.get(row.fpid)}
+                        isRookie={rookieFpids.has(row.fpid)}
+                        draftValue={draftValueByFpid.get(row.fpid)}
+                        standardValue={standardValueByFpid.get(row.fpid)}
+                        valueGap={valueGapByFpid.get(row.fpid)}
+                        showValueColumn={!!draftValues}
+                        tag={tagByFpid.get(row.fpid)}
+                        onCycleTag={
+                          seasonId
+                            ? () => cyclePlayerTag({ seasonId, fpid: row.fpid })
+                            : undefined
+                        }
+                        onSelectPlayer={setSelectedFpid}
+                        consistency={
+                          selectedSettings
+                            ? consistencyByFpid.get(row.fpid)
+                            : undefined
+                        }
+                        showConsistencyColumn={!!selectedSettings}
+                        keeperInfo={
+                          selectedSettings
+                            ? keeperInfoByFpid.get(row.fpid)
+                            : undefined
+                        }
+                        showKeeperColumn={!!selectedSettings}
+                        showKeeperYear={showKeeperYear}
+                        isExpanded={expandedIds.has(row._id)}
+                        onToggleExpand={() => toggleExpanded(row._id)}
+                      />
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </Table.ScrollContainer>
+            </Box>
+
+            <Box hiddenFrom="sm">
+              <Group
+                gap={8}
+                wrap="nowrap"
+                px={6}
+                py={4}
+                style={{
+                  borderBottom: "1px solid var(--mantine-color-default-border)",
+                }}
+              >
+                <Text size="10px" c="dimmed" tt="uppercase" style={{ flex: 1 }}>
+                  Player
+                </Text>
+                {!!draftValues && (
+                  <Text
+                    size="10px"
+                    c="dimmed"
+                    tt="uppercase"
+                    style={{ width: 36, flexShrink: 0 }}
+                  >
+                    $
+                  </Text>
+                )}
+                {!!draftValues && (
+                  <Text
+                    size="10px"
+                    c="dimmed"
+                    tt="uppercase"
+                    style={{ width: 36, flexShrink: 0 }}
+                  >
+                    vs Mkt
+                  </Text>
+                )}
+                <Text
+                  size="10px"
+                  c="dimmed"
+                  tt="uppercase"
+                  style={{ width: 40, flexShrink: 0 }}
+                >
+                  Pos
+                </Text>
+                <Text
+                  size="10px"
+                  c="dimmed"
+                  tt="uppercase"
+                  style={{ width: 34, flexShrink: 0, textAlign: "right" }}
+                >
+                  Pts
+                </Text>
+              </Group>
+              {sortedRows.map((row) => (
+                <PlayerRowMobile
+                  key={row._id}
+                  row={row}
+                  points={pointsForScoringConfig(row, scoringConfig)}
+                  injury={injuriesByFpid.get(row.fpid)}
+                  isRookie={rookieFpids.has(row.fpid)}
+                  draftValue={draftValueByFpid.get(row.fpid)}
+                  standardValue={standardValueByFpid.get(row.fpid)}
+                  valueGap={valueGapByFpid.get(row.fpid)}
+                  showValueColumn={!!draftValues}
+                  tag={tagByFpid.get(row.fpid)}
+                  onCycleTag={
+                    seasonId
+                      ? () => {
+                          cyclePlayerTag({ seasonId, fpid: row.fpid });
+                          setSwipedId(null);
+                        }
+                      : undefined
+                  }
+                  onSelectPlayer={setSelectedFpid}
+                  consistency={
+                    selectedSettings
+                      ? consistencyByFpid.get(row.fpid)
+                      : undefined
+                  }
+                  showConsistencyColumn={!!selectedSettings}
+                  isSwiped={swipedId === row._id}
+                  onSwipeOpen={() => setSwipedId(row._id)}
+                  onCloseSwipe={() => setSwipedId(null)}
+                />
+              ))}
+            </Box>
+          </>
         )}
       </Card>
 
