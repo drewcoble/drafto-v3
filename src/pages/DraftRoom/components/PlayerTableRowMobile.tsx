@@ -44,7 +44,7 @@ const CONSISTENCY_ICON: Record<ConsistencyLabel, typeof ShieldCheck> = {
 
 // Width of the Target/Avoid action strip a row reveals when swiped left -
 // the row's own content slides left by exactly this much to expose it.
-const ACTIONS_WIDTH = 132;
+const ACTIONS_WIDTH = 192;
 
 interface PlayerTableRowMobileProps {
   row: DraftBoardRow;
