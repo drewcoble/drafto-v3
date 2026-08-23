@@ -123,9 +123,12 @@ export function PlayerRowMobile({
           fullWidth
           radius={0}
           h="100%"
+          size="xs"
+          fz="xs"
+          px={4}
           color="green"
           disabled={!onCycleTag}
-          leftSection={<Crosshair size={14} />}
+          leftSection={<Crosshair size={12} />}
           onClick={onCycleTag}
         >
           Target
@@ -134,9 +137,12 @@ export function PlayerRowMobile({
           fullWidth
           radius={0}
           h="100%"
+          size="xs"
+          fz="xs"
+          px={4}
           color="red"
           disabled={!onCycleTag}
-          leftSection={<CircleSlash size={14} />}
+          leftSection={<CircleSlash size={12} />}
           onClick={onCycleTag}
         >
           Avoid

@@ -112,8 +112,11 @@ export function PlayerTableRowMobile({
           fullWidth
           radius={0}
           h="100%"
+          size="xs"
+          fz="xs"
+          px={4}
           color="green"
-          leftSection={<Crosshair size={14} />}
+          leftSection={<Crosshair size={12} />}
           onClick={() => onSetTag("target")}
         >
           Target
@@ -122,8 +125,11 @@ export function PlayerTableRowMobile({
           fullWidth
           radius={0}
           h="100%"
+          size="xs"
+          fz="xs"
+          px={4}
           color="red"
-          leftSection={<CircleSlash size={14} />}
+          leftSection={<CircleSlash size={12} />}
           onClick={() => onSetTag("avoid")}
         >
           Avoid
