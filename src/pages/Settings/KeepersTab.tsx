@@ -18,6 +18,8 @@ import { KeeperEditModal } from "./components/KeeperEditModal";
 import { KeeperSearchForm } from "./components/KeeperSearchForm";
 import { KeeperRulesPanel } from "./components/KeeperRulesPanel";
 import { RecommendedKeepers } from "./components/RecommendedKeepers";
+import { SleeperKeeperSuggestions } from "./components/SleeperKeeperSuggestions";
+import { keeperPairKey } from "../../lib/keeperCost";
 import { ManualPreviousSeasonModal } from "./components/ManualPreviousSeasonModal";
 import { getErrorMessage } from "../../lib/errors";
 import { useRookieFpids } from "../../hooks/useRookieFpids";
@@ -165,6 +167,14 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   const keepers = useMemo(
     () => (picks ?? []).filter((pick) => pick.isKeeper),
     [picks],
+  );
+
+  // (teamId, fpid) pairs already confirmed as keepers - lets
+  // SleeperKeeperSuggestions drop a row the instant its own "Add" succeeds,
+  // just by re-filtering against this set on the next render.
+  const existingKeeperKeys = useMemo(
+    () => new Set(keepers.map((pick) => keeperPairKey(pick.teamId, pick.fpid))),
+    [keepers],
   );
 
   // Resolved live from `keepers` every render (rather than storing the
@@ -331,6 +341,18 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 Add a Keeper
               </Text>
               {usingGenericValues && <GenericValuesNotice />}
+              <SleeperKeeperSuggestions
+                seasonId={seasonId}
+                sleeperLeagueId={settings.sleeperLeagueId}
+                draftTeams={draftTeams}
+                allProjections={allProjections}
+                priceHistory={priceHistory}
+                keeperRules={settings.keeperRules}
+                existingKeeperKeys={existingKeeperKeys}
+                rookieFpids={rookieFpids}
+                onAddKeeper={handleAddKeeper}
+                onSelectPlayer={setSelectedFpid}
+              />
               <RecommendedKeepers
                 priceHistory={priceHistory}
                 keeperRules={settings.keeperRules}

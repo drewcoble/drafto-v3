@@ -78,3 +78,11 @@ export function prospectiveKeeperStreak(
   }
   return 1;
 }
+
+// Identity key for a (team, player) keeper pair - used by
+// SleeperKeeperSuggestions to tell which of Sleeper's suggested keepers are
+// already real draftPicks rows, so a confirmed row drops off the suggestion
+// list instead of staying there as a stale duplicate.
+export function keeperPairKey(teamId: string, fpid: number): string {
+  return `${teamId}:${fpid}`;
+}

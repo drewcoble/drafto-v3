@@ -15,6 +15,15 @@ interface SleeperRoster {
   roster_id: number;
   owner_id: string | null;
   players: string[] | null;
+  // Player ids this roster has designated as keepers for the upcoming
+  // draft - set by the commissioner/owner in Sleeper's own UI, independent
+  // of whether that draft has actually run yet (unlike draftPicks.is_keeper
+  // on the /draft/{id}/picks endpoint, which stays empty until the draft
+  // itself executes - confirmed live against a real pre_draft-status
+  // league). This is the only place Sleeper exposes pre-draft keeper
+  // selections. Absent/null means the league doesn't use Sleeper's keeper
+  // feature, or this owner hasn't picked any yet.
+  keepers?: string[] | null;
   settings?: {
     waiver_budget_used?: number;
   };
@@ -109,6 +118,60 @@ export const syncLeagueRoster = action({
     }
 
     return { syncedTeams };
+  },
+});
+
+export interface SleeperKeeperSuggestion {
+  teamId: Id<"seasonTeams">;
+  fpid: number;
+}
+
+// Reads which players each linked team has already marked as a keeper in
+// Sleeper (roster.keepers - see SleeperRoster's comment above), for the
+// "Import Keepers from Sleeper" panel on the Keepers tab. Deliberately
+// doesn't write anything itself - Sleeper only tells us WHO was kept, not
+// at what price, so this just hands the frontend a list of (team, fpid)
+// candidates to confirm a cost for and add via the normal addKeeper
+// mutation (convex/draft/picks.ts), same as any other keeper. Re-run on
+// demand (not auto-synced) since keeper selections can keep changing right
+// up to the commissioner's deadline.
+export const listSleeperKeeperSuggestions = action({
+  args: { seasonId: v.id("seasons") },
+  handler: async (
+    ctx: ActionCtx,
+    args,
+  ): Promise<SleeperKeeperSuggestion[]> => {
+    const { season } = await ctx.runQuery(
+      internal.season.rosterPlayers.requireOwnedSeasonForSync,
+      { seasonId: args.seasonId },
+    );
+    if (!season.sleeperLeagueId) {
+      throw new Error("This league isn't linked to a Sleeper league yet.");
+    }
+
+    const rosters = await fetchSleeperLeagueJson<SleeperRoster[]>(
+      season.sleeperLeagueId,
+      "/rosters",
+    );
+    const rosterById = new Map(
+      rosters.map((roster) => [String(roster.roster_id), roster]),
+    );
+
+    const teams: Doc<"seasonTeams">[] = await ctx.runQuery(
+      internal.draft.teams.listSeasonTeamsInternal,
+      { seasonId: args.seasonId },
+    );
+
+    const suggestions: SleeperKeeperSuggestion[] = [];
+    for (const team of teams) {
+      if (!team.sleeperRosterId) continue;
+      const roster = rosterById.get(team.sleeperRosterId);
+      if (!roster) continue;
+      for (const fpid of toFpids(roster.keepers ?? null)) {
+        suggestions.push({ teamId: team._id as Id<"seasonTeams">, fpid });
+      }
+    }
+    return suggestions;
   },
 });
 
