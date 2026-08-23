@@ -335,8 +335,8 @@ function buildInsightsPrompt(inputs: InsightsInputs): string {
     dollarValueVsMarketByPositionTier: inputs.tierGaps.map((gap) => ({
       position: gap.position,
       tier: gap.tier,
-      players: gap.playerCount,
-      avgDiffVsMarket: formatSigned(gap.avgDiff),
+      playersInTier: gap.playerCount,
+      avgDiffVsMarketPerPlayer: formatSigned(gap.avgDiff),
     })),
     valueGapSignal: inputs.valueGapCounts.map(
       (gap) => `${gap.position} ${gap.direction}: ${gap.count}`,
@@ -354,7 +354,7 @@ function buildInsightsPrompt(inputs: InsightsInputs): string {
     "Use only the facts in the JSON data below - don't invent players, prices, or stats that aren't there, and don't name individual players by name (this data is aggregated by position/tier, not per-player).",
     "Respond with JSON matching the given schema: at most 3 insights (fewer is fine - only include the strongest signals), each a punchy headline (5 words or fewer) plus exactly one short sentence of plain, conversational body text a casual fantasy player would understand. Be terse - no throat-clearing, no restating the headline in the body, no hedging.",
     "",
-    "dollarValueVsMarketByPositionTier: avgDiffVsMarket is this league's own computed value MINUS the broader market's typical auction value, averaged across the players in that position/tier. A negative number means this league's math values that tier LOWER than the market typically pays - i.e. other drafters in a market-priced auction might overpay there, so there's a strategic opportunity to let that tier go and find value lower down. A positive number means the opposite - this league's settings make that tier worth MORE than a typical market price, i.e. a bargain if it's still available near market price.",
+    "dollarValueVsMarketByPositionTier: avgDiffVsMarketPerPlayer is a PER-PLAYER AVERAGE (this league's own computed value MINUS the broader market's typical auction value, averaged across the playersInTier players in that position/tier) - it is NOT a total or a single player's price, and your wording must make that clear (e.g. 'about $X per player', 'on average'), never state it as a flat dollar figure that reads like one player's price or a lump sum. Cite playersInTier too when it fits without breaking the one-sentence limit (e.g. 'the 4 Tier 2 QBs'). A negative number means this league's math values that tier LOWER than the market typically pays - i.e. other drafters in a market-priced auction might overpay there, so there's a strategic opportunity to let that tier go and find value lower down. A positive number means the opposite - this league's settings make that tier worth MORE than a typical market price, i.e. a bargain if it's still available near market price.",
     "valueGapSignal: counts of players per position flagged as undervalued/overvalued (ADP vs. actual track record + projection mismatch) or breakout/falloff (a track-record-vs-outlook mismatch) - higher counts mean more mispriced players at that position this year.",
     "keeperScarcityByPosition: pctOfStartingSlotsAlreadyKept estimates how much of the league-wide starting need at a position has already been claimed by keepers before the draft even starts - a high percentage means that position's remaining pool is thin, so drafters may need to be more aggressive/pay a premium to lock in a starter there. Positions absent from this list have no notable keeper activity - don't invent a keeper angle for them.",
     "Ground every insight in these specific numbers - reference the position and tier or the percentage when relevant, don't give generic advice that could apply to any league. If a data section is empty, don't write an insight about it.",
