@@ -225,11 +225,9 @@ export function PlayerTableRowMobile({
             </Anchor>
             {isRookie && <RookieBadge />}
           </Group>
-          {row.team && (
-            <Text size="xs" c="dimmed" truncate>
-              {row.team}
-            </Text>
-          )}
+          <Text size="xs" c="dimmed" truncate>
+            {row.team ? `${row.team} - Tier ${row.tier}` : `Tier ${row.tier}`}
+          </Text>
         </Stack>
         <Box
           style={{
