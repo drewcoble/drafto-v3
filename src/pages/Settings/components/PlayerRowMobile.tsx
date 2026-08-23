@@ -283,11 +283,7 @@ export function PlayerRowMobile({
             alignItems: "center",
           }}
         >
-          <Text
-            size="xs"
-            fw={700}
-            style={{ color: POSITION_COLORS[row.position] }}
-          >
+          <Text size="xs" fw={700} c={POSITION_COLORS[row.position]}>
             {row.position}
             {draftValue?.positionRank ?? ""}
           </Text>
