@@ -30,6 +30,7 @@ import {
   consistencyColor,
   type ConsistencyLabel,
 } from "../../../lib/consistency";
+import { injuryColor } from "../../../lib/playerFormatting";
 import { playerTagStyle } from "../../../lib/playerTagStyle";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
 import type { StandardValueRow } from "../../../lib/standardValues";
@@ -51,6 +52,7 @@ interface PlayerTableRowProps {
   standardValue: StandardValueRow | undefined;
   valueGap: ValueGap | undefined;
   consistency: ConsistencyLabel | undefined;
+  injury: { status: string; statusShort: string } | undefined;
   isRookie: boolean;
   isNominated: boolean;
   hasActiveNomination: boolean;
@@ -84,6 +86,7 @@ export function PlayerTableRow({
   standardValue,
   valueGap,
   consistency,
+  injury,
   isRookie,
   isNominated,
   hasActiveNomination,
@@ -187,6 +190,15 @@ export function PlayerTableRow({
               {row.name}
             </Anchor>
             {isRookie && <RookieBadge />}
+            {injury && (
+              <Badge
+                color={injuryColor(injury.status)}
+                size="sm"
+                variant="light"
+              >
+                {injury.statusShort}
+              </Badge>
+            )}
             {row.team && (
               <Text size="xs" c="dimmed">
                 {row.team}

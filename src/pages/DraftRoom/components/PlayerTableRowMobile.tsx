@@ -1,5 +1,6 @@
 import {
   Anchor,
+  Badge,
   Box,
   Button,
   Group,
@@ -24,6 +25,7 @@ import {
   consistencyColor,
   type ConsistencyLabel,
 } from "../../../lib/consistency";
+import { injuryColor } from "../../../lib/playerFormatting";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import type { StandardValueRow } from "../../../lib/standardValues";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
@@ -50,6 +52,7 @@ interface PlayerTableRowMobileProps {
   standardValue: StandardValueRow | undefined;
   valueGap: ValueGap | undefined;
   consistency: ConsistencyLabel | undefined;
+  injury: { status: string; statusShort: string } | undefined;
   isRookie: boolean;
   isNominated: boolean;
   // Only one row is ever swiped open at a time - PlayersLeftTab.tsx owns
@@ -78,6 +81,7 @@ export function PlayerTableRowMobile({
   standardValue,
   valueGap,
   consistency,
+  injury,
   isRookie,
   isNominated,
   isSwiped,
@@ -224,6 +228,11 @@ export function PlayerTableRowMobile({
               {row.name}
             </Anchor>
             {isRookie && <RookieBadge />}
+            {injury && (
+              <Badge color={injuryColor(injury.status)} size="xs" circle>
+                {injury.statusShort}
+              </Badge>
+            )}
           </Group>
           <Text size="xs" c="dimmed" truncate>
             {row.team ? `${row.team} - Tier ${row.tier}` : `Tier ${row.tier}`}

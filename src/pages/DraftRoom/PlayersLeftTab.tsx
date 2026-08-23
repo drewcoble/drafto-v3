@@ -136,6 +136,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
     seasonId,
   });
   const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
+  const injuries = useQuery(api.injuries.getInjuries, {});
   const playerTags = useQuery(api.draft.tags.listPlayerTags, {
     seasonId,
   });
@@ -224,6 +225,14 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   }, [playerTags]);
 
   const rookieFpids = useRookieFpids();
+
+  const injuriesByFpid = useMemo(() => {
+    const map = new Map<number, { status: string; statusShort: string }>();
+    for (const injury of injuries ?? []) {
+      map.set(injury.fpid, injury);
+    }
+    return map;
+  }, [injuries]);
 
   const adpByFpid = useMemo(() => {
     const map = new Map<
@@ -649,6 +658,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                                 )}
                                 valueGap={valueGapByFpid.get(row.fpid)}
                                 consistency={consistencyByFpid.get(row.fpid)}
+                                injury={injuriesByFpid.get(row.fpid)}
                                 isRookie={rookieFpids.has(row.fpid)}
                                 isNominated={
                                   activeNomination?.fpid === row.fpid
@@ -743,6 +753,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                             standardValue={standardValueByFpid.get(row.fpid)}
                             valueGap={valueGapByFpid.get(row.fpid)}
                             consistency={consistencyByFpid.get(row.fpid)}
+                            injury={injuriesByFpid.get(row.fpid)}
                             isRookie={rookieFpids.has(row.fpid)}
                             isNominated={activeNomination?.fpid === row.fpid}
                             isSwiped={swipedFpid === row.fpid}
