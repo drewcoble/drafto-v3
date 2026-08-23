@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useQuery as useTanStackQuery } from "@tanstack/react-query";
 import { convexQuery } from "@convex-dev/react-query";
@@ -15,7 +15,7 @@ import {
 } from "@mantine/core";
 import { Search } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import {
   POSITIONS,
   type DraftTierRow,
@@ -25,14 +25,15 @@ import {
   type ValueGap,
 } from "../../types";
 import {
-  adpForScoring,
   filterRelevantPlayers,
   pointsForScoringConfig,
   scoringConfigFromSeason,
 } from "../../lib/relevantPlayers";
+import { compareSortValues, type SortDir } from "../../lib/tableSort";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
+import { SortArrow } from "../../components/SortArrow";
 import { buildStandardValueByFpid } from "../../lib/standardValues";
 import {
   MOBILE_HEADER_HEIGHT,
@@ -51,6 +52,20 @@ interface PlayersTableProps {
   week: string;
   selectedLeagueId: Id<"seasons"> | undefined;
 }
+
+type SortKey = "player" | "team" | "tier" | "dollar" | "market" | "pts";
+
+// Direction a column sorts to the first time it's clicked - numeric value
+// columns default to "best first" (highest $/points, lowest/best tier),
+// text columns default A-Z. Clicking the same header again flips it.
+const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
+  player: "asc",
+  team: "asc",
+  tier: "asc",
+  dollar: "desc",
+  market: "desc",
+  pts: "desc",
+};
 
 export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   const [selectedPositions, setSelectedPositions] = useState<Position[]>([
@@ -79,6 +94,19 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   // Target/Avoid actions are ever swiped open at a time (see
   // PlayerRowMobile.tsx), rather than each row tracking its own.
   const [swipedId, setSwipedId] = useState<Id<"projections"> | null>(null);
+  // null until a column header's been clicked - the table keeps its
+  // existing $ > position rank default order (see sortedRows below) until
+  // then, rather than starting on some arbitrary explicit column.
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(DEFAULT_SORT_DIR[key]);
+    }
+  };
 
   const allProjections = useQuery(api.projections.getAllProjections, {
     week,
@@ -307,50 +335,123 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     });
   }, [relevantProjections, selectedPositions, search]);
 
+  // Value for whichever column is currently sorted - $/vs. market/tier read
+  // through draftValueByFpid (undefined until a league's selected/loaded,
+  // which compareSortValues always sorts last), pts/player/team come
+  // straight off the row so they still work with no league selected.
+  const renderSortableTh = (label: string, key: SortKey, miw?: number) => (
+    <Table.Th
+      {...(miw !== undefined ? { miw } : {})}
+      onClick={() => handleSort(key)}
+      style={{ cursor: "pointer" }}
+    >
+      <Group gap={4} wrap="nowrap">
+        <Text size="sm" fw={sortKey === key ? 700 : undefined}>
+          {label}
+        </Text>
+        {sortKey === key && <SortArrow dir={sortDir} />}
+      </Group>
+    </Table.Th>
+  );
+
+  // Mobile counterpart to renderSortableTh above - same click/arrow
+  // behavior, styled to match this compact label strip's 10px/dimmed/
+  // uppercase look instead of a real table header.
+  const renderSortableLabel = (
+    label: string,
+    key: SortKey,
+    style: CSSProperties,
+  ) => {
+    const isActive = sortKey === key;
+    return (
+      <Group
+        gap={2}
+        wrap="nowrap"
+        onClick={() => handleSort(key)}
+        style={{ cursor: "pointer", ...style }}
+      >
+        <Text
+          size="10px"
+          {...(isActive ? {} : { c: "dimmed" as const })}
+          {...(isActive ? { fw: 700 } : {})}
+          tt="uppercase"
+        >
+          {label}
+        </Text>
+        {isActive && <SortArrow dir={sortDir} size={10} />}
+      </Group>
+    );
+  };
+
   // Global ranking across every visible position, by $ Value when available
   // (an auction draft board compares players across positions directly),
-  // falling back to raw points if no draft settings are configured yet.
+  // falling back to raw points if no draft settings are configured yet -
+  // both the default (no column clicked) and explicit column sorts share
+  // the same positionRank-then-name tiebreak, so ties never fall back to
+  // arbitrary array order.
   const sortedRows = useMemo(() => {
+    // Value for whichever column is currently sorted - $/vs. market/tier
+    // read through draftValueByFpid (undefined until a league's selected/
+    // loaded, which compareSortValues always sorts last), pts/player/team
+    // come straight off the row so they still work with no league selected.
+    const sortValueFor = (
+      row: Doc<"projections">,
+      key: SortKey,
+    ): number | string | undefined => {
+      switch (key) {
+        case "player":
+          return row.name;
+        case "team":
+          return row.team ?? undefined;
+        case "tier":
+          return draftValueByFpid.get(row.fpid)?.tier;
+        case "dollar":
+          return draftValueByFpid.get(row.fpid)?.dollarValue;
+        case "market": {
+          const draftValue = draftValueByFpid.get(row.fpid);
+          const standardValue = standardValueByFpid.get(row.fpid);
+          return draftValue && standardValue
+            ? Math.round(draftValue.dollarValue) -
+                Math.round(standardValue.auctionValue)
+            : undefined;
+        }
+        case "pts":
+          return pointsForScoringConfig(row, scoringConfig);
+      }
+    };
+
     const rows = [...visibleRows];
-    if (draftValues) {
-      rows.sort((a, b) => {
-        const dollarDiff =
-          (draftValueByFpid.get(b.fpid)?.dollarValue ?? 0) -
-          (draftValueByFpid.get(a.fpid)?.dollarValue ?? 0);
-        if (dollarDiff !== 0) return dollarDiff;
-        // $ ties (every player at or below a position's replacement level
-        // gets the same $1 floor - see computeDraftValuesForSettings) used
-        // to fall straight to ADP, which is an external consensus signal
-        // that can disagree sharply with our own points-based ranking -
-        // positionRank badges (also points-order, see draftValues.ts) would
-        // then show e.g. WR100 sorted above WR76. Points first keeps this
-        // tier in the same order as the positionRank badge; ADP only breaks
-        // a further tie (e.g. two $1 players with identical points).
-        const pointsDiff =
-          pointsForScoringConfig(b, scoringConfig) -
-          pointsForScoringConfig(a, scoringConfig);
-        if (pointsDiff !== 0) return pointsDiff;
-        const adpA = adpByFpid.get(a.fpid);
-        const adpB = adpByFpid.get(b.fpid);
-        return (
-          (adpA ? adpForScoring(adpA, scoring) : Infinity) -
-          (adpB ? adpForScoring(adpB, scoring) : Infinity)
-        );
-      });
-    } else {
-      rows.sort(
-        (a, b) =>
-          pointsForScoringConfig(b, scoringConfig) -
-          pointsForScoringConfig(a, scoringConfig),
+    const key: SortKey = sortKey ?? (draftValues ? "dollar" : "pts");
+    const dir: SortDir = sortKey ? sortDir : DEFAULT_SORT_DIR[key];
+    rows.sort((a, b) => {
+      const primary = compareSortValues(
+        sortValueFor(a, key),
+        sortValueFor(b, key),
+        dir,
       );
-    }
+      if (primary !== 0) return primary;
+      // $ ties (every player at or below a position's replacement level
+      // gets the same $1 floor - see computeDraftValuesForSettings) - and
+      // any other column's own ties - fall back to position rank: a total
+      // order within a position (draftValues.ts assigns strictly
+      // increasing ranks even across a points tie), so this always matches
+      // the positionRank badge shown rather than an external/arbitrary
+      // signal. Name is the final, fully deterministic tiebreak.
+      const rankDiff =
+        (draftValueByFpid.get(a.fpid)?.positionRank ??
+          Number.MAX_SAFE_INTEGER) -
+        (draftValueByFpid.get(b.fpid)?.positionRank ?? Number.MAX_SAFE_INTEGER);
+      if (rankDiff !== 0) return rankDiff;
+      return a.name.localeCompare(b.name);
+    });
     return rows;
   }, [
     visibleRows,
+    sortKey,
+    sortDir,
     draftValues,
     draftValueByFpid,
-    adpByFpid,
-    scoring,
+    standardValueByFpid,
     scoringConfig,
   ]);
 
@@ -428,23 +529,23 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th>Rank</Table.Th>
-                      <Table.Th>FPTS</Table.Th>
-                      {draftValues && (
-                        <Table.Th>
-                          {draftValuesResult?.isGeneric ? "$ (est.)" : "$"}
-                        </Table.Th>
-                      )}
-                      {draftValues && <Table.Th>vs. market</Table.Th>}
-                      {draftValues && <Table.Th>Tier</Table.Th>}
+                      {renderSortableTh("FPTS", "pts")}
+                      {draftValues &&
+                        renderSortableTh(
+                          draftValuesResult?.isGeneric ? "$ (est.)" : "$",
+                          "dollar",
+                        )}
+                      {draftValues && renderSortableTh("vs. market", "market")}
+                      {draftValues && renderSortableTh("Tier", "tier")}
                       {/* Target/avoid toggle - unlabeled icon column. */}
                       <Table.Th></Table.Th>
                       <Table.Th miw={70}>Pos</Table.Th>
-                      <Table.Th miw={220}>Player</Table.Th>
+                      {renderSortableTh("Player", "player", 220)}
                       {/* Tags (value-gap/consistency) - unlabeled column, same
                     placement every icon-flag table in the app uses. Keeper
                     moved into the expanded detail row (see PlayerRow.tsx). */}
                       <Table.Th></Table.Th>
-                      <Table.Th>Team</Table.Th>
+                      {renderSortableTh("Team", "team")}
                       {!!selectedSettings && <Table.Th />}
                     </Table.Tr>
                   </Table.Thead>
@@ -500,29 +601,17 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                   borderBottom: "1px solid var(--mantine-color-default-border)",
                 }}
               >
-                <Text size="10px" c="dimmed" tt="uppercase" style={{ flex: 1 }}>
-                  Player
-                </Text>
-                {!!draftValues && (
-                  <Text
-                    size="10px"
-                    c="dimmed"
-                    tt="uppercase"
-                    style={{ width: 36, flexShrink: 0 }}
-                  >
-                    $
-                  </Text>
-                )}
-                {!!draftValues && (
-                  <Text
-                    size="10px"
-                    c="dimmed"
-                    tt="uppercase"
-                    style={{ width: 36, flexShrink: 0 }}
-                  >
-                    vs Mkt
-                  </Text>
-                )}
+                {renderSortableLabel("Player", "player", { flex: 1 })}
+                {!!draftValues &&
+                  renderSortableLabel("$", "dollar", {
+                    width: 36,
+                    flexShrink: 0,
+                  })}
+                {!!draftValues &&
+                  renderSortableLabel("vs Mkt", "market", {
+                    width: 36,
+                    flexShrink: 0,
+                  })}
                 <Text
                   size="10px"
                   c="dimmed"
@@ -531,14 +620,11 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                 >
                   Pos
                 </Text>
-                <Text
-                  size="10px"
-                  c="dimmed"
-                  tt="uppercase"
-                  style={{ width: 34, flexShrink: 0, textAlign: "right" }}
-                >
-                  Pts
-                </Text>
+                {renderSortableLabel("Pts", "pts", {
+                  width: 34,
+                  flexShrink: 0,
+                  justifyContent: "flex-end",
+                })}
               </Group>
               {sortedRows.map((row) => (
                 <PlayerRowMobile

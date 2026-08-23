@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
   Badge,
@@ -37,6 +37,8 @@ import {
 import { recommendationFor, groupByTier } from "../../lib/draftRecommendation";
 import { POSITION_COLORS } from "../../lib/positionColors";
 import { buildStandardValueByFpid } from "../../lib/standardValues";
+import { compareSortValues, type SortDir } from "../../lib/tableSort";
+import { SortArrow } from "../../components/SortArrow";
 import {
   MOBILE_HEADER_HEIGHT,
   MOBILE_STATS_ROW_HEIGHT,
@@ -69,6 +71,23 @@ function getStoredView(): BoardView {
     ? "table"
     : "bar";
 }
+
+// Table-view-only column sort (see PlayersLeftTab's table-view rendering
+// below) - Bar view stays tier-grouped regardless, per its own column-chart
+// layout. "tier" is included so a click flattens straight into tier order
+// without touching bar view's grouping.
+type SortKey = "player" | "tier" | "dollar" | "market" | "pts";
+
+// Direction a column sorts to the first time it's clicked - numeric value
+// columns default to "best first" (highest $/points, lowest/best tier),
+// text columns default A-Z. Clicking the same header again flips it.
+const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
+  player: "asc",
+  tier: "asc",
+  dollar: "desc",
+  market: "desc",
+  pts: "desc",
+};
 
 interface PlayersLeftTabProps {
   seasonId: Id<"seasons">;
@@ -103,6 +122,19 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   // Target/Avoid actions are ever swiped open at a time (see
   // PlayerTableRowMobile.tsx), rather than each row tracking its own.
   const [swipedFpid, setSwipedFpid] = useState<number | null>(null);
+  // null until a column header's been clicked in Table view - the default
+  // tier order (see rowsByPosition's tierRank sort) holds until then, and
+  // is what Bar view always uses regardless of this state.
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(DEFAULT_SORT_DIR[key]);
+    }
+  };
   // Narrows which position sections render, in both bar and table view -
   // useful even in the bar view's already position-grouped layout once a
   // league has many active positions and scrolling past ones you're not
@@ -420,6 +452,72 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
       (pos) => !search.trim() || (rowsByPosition.get(pos)?.length ?? 0) > 0,
     );
 
+  // Value for whichever column is currently sorted in Table view (see
+  // handleSort/tableRows below) - "market" mirrors StandardValueLabel's own
+  // diff formula so the sort always agrees with what the vs. market column
+  // actually displays.
+  const sortValueFor = (
+    row: DraftBoardRow,
+    key: SortKey,
+  ): number | string | undefined => {
+    switch (key) {
+      case "player":
+        return row.name;
+      case "tier":
+        return row.tier;
+      case "dollar":
+        return row.dollarValue;
+      case "market": {
+        const standardValue = standardValueByFpid.get(row.fpid);
+        return standardValue
+          ? Math.round(row.dollarValue) - Math.round(standardValue.auctionValue)
+          : undefined;
+      }
+      case "pts":
+        return row.points;
+    }
+  };
+
+  const renderSortableTh = (label: string, key: SortKey) => (
+    <Table.Th onClick={() => handleSort(key)} style={{ cursor: "pointer" }}>
+      <Group gap={4} wrap="nowrap">
+        <Text size="sm" fw={sortKey === key ? 700 : undefined}>
+          {label}
+        </Text>
+        {sortKey === key && <SortArrow dir={sortDir} />}
+      </Group>
+    </Table.Th>
+  );
+
+  // Mobile counterpart to renderSortableTh above - same click/arrow
+  // behavior, styled to match this compact label strip's 10px/dimmed/
+  // uppercase look instead of a real table header.
+  const renderSortableLabel = (
+    label: string,
+    key: SortKey,
+    style: CSSProperties,
+  ) => {
+    const isActive = sortKey === key;
+    return (
+      <Group
+        gap={2}
+        wrap="nowrap"
+        onClick={() => handleSort(key)}
+        style={{ cursor: "pointer", ...style }}
+      >
+        <Text
+          size="10px"
+          {...(isActive ? {} : { c: "dimmed" as const })}
+          {...(isActive ? { fw: 700 } : {})}
+          tt="uppercase"
+        >
+          {label}
+        </Text>
+        {isActive && <SortArrow dir={sortDir} size={10} />}
+      </Group>
+    );
+  };
+
   if (!board || !settings) return null;
 
   return (
@@ -521,6 +619,19 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
               openSlots,
             );
             const tierGroups = groupByTier(rows);
+            // Table view only - Bar view always renders tierGroups above
+            // untouched by any column sort. Falls back to tierRank on a
+            // tie, same composite order rows already arrive in by default.
+            const tableRows = sortKey
+              ? [...rows].sort((a, b) => {
+                  const primary = compareSortValues(
+                    sortValueFor(a, sortKey),
+                    sortValueFor(b, sortKey),
+                    sortDir,
+                  );
+                  return primary !== 0 ? primary : a.tierRank - b.tierRank;
+                })
+              : rows;
 
             const handleSetTag = (fpid: number, nextTag: PlayerTag) => {
               setActionError(null);
@@ -639,16 +750,16 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                           <Table.Thead>
                             <Table.Tr>
                               <Table.Th></Table.Th>
-                              <Table.Th>Player</Table.Th>
-                              <Table.Th>Tier</Table.Th>
-                              <Table.Th>$</Table.Th>
-                              <Table.Th>vs. market</Table.Th>
-                              <Table.Th>Pts</Table.Th>
+                              {renderSortableTh("Player", "player")}
+                              {renderSortableTh("Tier", "tier")}
+                              {renderSortableTh("$", "dollar")}
+                              {renderSortableTh("vs. market", "market")}
+                              {renderSortableTh("Pts", "pts")}
                               <Table.Th></Table.Th>
                             </Table.Tr>
                           </Table.Thead>
                           <Table.Tbody>
-                            {rows.map((row) => (
+                            {tableRows.map((row) => (
                               <PlayerTableRow
                                 key={row.fpid}
                                 row={row}
@@ -700,30 +811,17 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                               "1px solid var(--mantine-color-default-border)",
                           }}
                         >
-                          <Text
-                            size="10px"
-                            c="dimmed"
-                            tt="uppercase"
-                            style={{ flex: 1 }}
-                          >
-                            Player
-                          </Text>
-                          <Text
-                            size="10px"
-                            c="dimmed"
-                            tt="uppercase"
-                            style={{ width: 36, flexShrink: 0 }}
-                          >
-                            $
-                          </Text>
-                          <Text
-                            size="10px"
-                            c="dimmed"
-                            tt="uppercase"
-                            style={{ width: 36, flexShrink: 0 }}
-                          >
-                            vs Mkt
-                          </Text>
+                          {renderSortableLabel("Player", "player", {
+                            flex: 1,
+                          })}
+                          {renderSortableLabel("$", "dollar", {
+                            width: 36,
+                            flexShrink: 0,
+                          })}
+                          {renderSortableLabel("vs Mkt", "market", {
+                            width: 36,
+                            flexShrink: 0,
+                          })}
                           <Text
                             size="10px"
                             c="dimmed"
@@ -732,20 +830,13 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                           >
                             Pos
                           </Text>
-                          <Text
-                            size="10px"
-                            c="dimmed"
-                            tt="uppercase"
-                            style={{
-                              width: 34,
-                              flexShrink: 0,
-                              textAlign: "right",
-                            }}
-                          >
-                            Pts
-                          </Text>
+                          {renderSortableLabel("Pts", "pts", {
+                            width: 34,
+                            flexShrink: 0,
+                            justifyContent: "flex-end",
+                          })}
                         </Group>
-                        {rows.map((row) => (
+                        {tableRows.map((row) => (
                           <PlayerTableRowMobile
                             key={row.fpid}
                             row={row}
