@@ -10,6 +10,7 @@ import {
   Text,
   Title,
 } from "@mantine/core";
+import { Sparkles } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { ScoringConfig } from "../../../types";
@@ -96,7 +97,10 @@ export function AiInsightsCard({
   return (
     <Card withBorder padding="md">
       <Stack gap="sm">
-        <Title order={4}>AI Insights</Title>
+        <Group gap={6}>
+          <Sparkles size={18} />
+          <Title order={4}>AI Insights</Title>
+        </Group>
         {report.isStale && (
           <Alert variant="light" color="yellow" title="These insights may be outdated">
             <Group justify="space-between" wrap="wrap" gap="xs">
