@@ -46,6 +46,7 @@ import {
 } from "../../lib/consistency";
 import { PlayerRow, type KeeperInfo } from "./components/PlayerRow";
 import { PlayerRowMobile } from "./components/PlayerRowMobile";
+import { AiInsightsCard } from "./components/AiInsightsCard";
 import { useRookieFpids } from "../../hooks/useRookieFpids";
 
 interface PlayersTableProps {
@@ -495,6 +496,11 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
           </Text>
         </Group>
       </Group>
+      <AiInsightsCard
+        seasonId={seasonId}
+        week={week}
+        scoringConfig={scoringConfig}
+      />
       {draftValuesResult?.isGeneric && <GenericValuesNotice />}
 
       {allProjections !== undefined &&

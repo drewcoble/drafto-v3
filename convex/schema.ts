@@ -934,6 +934,30 @@ export default defineSchema({
     generatedAt: v.number(),
   }).index("by_draft_week_scoring", ["draftId", "week", "scoring"]),
 
+  // AI-written pre-draft strategy takeaways (Pro feature) - see convex/
+  // gemini/preDraftInsights.ts's generatePreDraftInsights and convex/draft/
+  // insights.ts's getPreDraftInsights. Keyed on seasonId rather than
+  // draftId (unlike draftReportSummaries above): this runs before a draft
+  // exists to grade, off the season's live pre-draft state instead of a
+  // frozen post-draft snapshot.
+  preDraftInsights: defineTable({
+    seasonId: v.id("seasons"),
+    week: v.string(),
+    scoring: scoringValidator,
+    insights: v.array(v.object({ headline: v.string(), body: v.string() })),
+    // JSON snapshot of the user-controlled inputs (scoring config, roster
+    // shape, keeper rules, which fpids are kept) present at generation time -
+    // deliberately excludes the daily-refreshed projections/ADP/$ data,
+    // which changes constantly and would make every row "stale" within a
+    // day. getPreDraftInsights recomputes this same fingerprint on every
+    // read and flags a mismatch as stale in the UI, without auto-clearing
+    // this cache - same manual-only invalidation convention as
+    // draftReportSummaries.
+    inputsFingerprint: v.string(),
+    model: v.string(),
+    generatedAt: v.number(),
+  }).index("by_season_week_scoring", ["seasonId", "week", "scoring"]),
+
   // Points at the one system-owned league/season/draft used to serve every
   // free-tier user the exact same draftValues - see convex/genericLeague.ts's
   // ensureGenericSeason (idempotent - creates this once) and convex/
