@@ -7,10 +7,10 @@ type Position = (typeof POSITIONS)[number];
 // overall-relevance filter). Duplicated rather than imported: convex/ never
 // depends on src/ (see convex/scoring.ts's pointsForScoring, which mirrors
 // that same file's helper instead of importing it). A real rank ceiling
-// rather than Sleeper's own "no real ADP" 999 sentinel - top 300 overall is
+// rather than Sleeper's own "no real ADP" 999 sentinel - top 350 overall is
 // roughly the depth of even a large/deep redraft league; 999 lets through a
 // long tail of technically-non-999-but-still-noise ADP values.
-const RELEVANT_ADP_CEILING = 300;
+const RELEVANT_ADP_CEILING = 350;
 
 // A player starts a new tier once their composite score drops below this
 // fraction of the *current tier's leader* (not the overall #1, and not just

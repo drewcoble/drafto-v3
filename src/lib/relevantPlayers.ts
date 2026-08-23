@@ -78,11 +78,11 @@ export function scoringConfigFromSeason(season: {
 // sentinel (999) doesn't actually catch these - its community ADP has a
 // long tail of technically-non-999-but-still-noise values (a QB drafted
 // once in some obscure deep dynasty startup still isn't relevant), so this
-// is a real rank ceiling instead: top 300 overall by ADP is roughly the
+// is a real rank ceiling instead: top 350 overall by ADP is roughly the
 // depth of even a large/deep redraft league. DST never gets a real ADP from
 // Sleeper at all, but it's already naturally capped at exactly 32 (one per
 // team), so it needs no filtering.
-const RELEVANT_ADP_CEILING = 300;
+const RELEVANT_ADP_CEILING = 350;
 
 export interface PositionedRow {
   fpid: number;

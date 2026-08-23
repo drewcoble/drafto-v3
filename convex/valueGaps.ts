@@ -25,10 +25,10 @@ const VALUE_GAP_POSITIONS: Position[] = ["QB", "RB", "WR", "TE"];
 // Mirrors src/lib/relevantPlayers.ts's RELEVANT_ADP_CEILING (see
 // convex/draft/tiers.ts for why convex/ duplicates rather than imports it -
 // convex/ never depends on src/). A real rank ceiling rather than Sleeper's
-// own "no real ADP" 999 sentinel - top 300 overall is roughly the depth of
+// own "no real ADP" 999 sentinel - top 350 overall is roughly the depth of
 // even a large/deep redraft league; 999 lets through a long tail of
 // technically-non-999-but-still-noise ADP values.
-const RELEVANT_ADP_CEILING = 300;
+const RELEVANT_ADP_CEILING = 350;
 
 // Below this many recorded weeks, last season's points-per-game is too
 // small a sample (injury-shortened season, late call-up) to trust as a
