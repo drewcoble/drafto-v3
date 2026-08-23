@@ -59,6 +59,17 @@ import { getErrorMessage } from "../../lib/errors";
 
 type BoardView = "bar" | "table";
 
+// Same namespaced-key convention as lib/leagueStorage.ts - not user-scoped
+// like that one, since which layout a person prefers isn't account data,
+// just a device-local display preference.
+const PLAYERS_VIEW_STORAGE_KEY = "infinidraft:playersView";
+
+function getStoredView(): BoardView {
+  return localStorage.getItem(PLAYERS_VIEW_STORAGE_KEY) === "table"
+    ? "table"
+    : "bar";
+}
+
 interface PlayersLeftTabProps {
   seasonId: Id<"seasons">;
   selfTeamId: Id<"seasonTeams">;
@@ -69,7 +80,10 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   const settings = settingsList?.find((s) => s._id === seasonId);
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [view, setView] = useState<BoardView>("bar");
+  // Restored from localStorage (see getStoredView) rather than always
+  // starting on "bar" - reselecting "Bars"/"Table" every time you come back
+  // to this tab (or reload mid-draft) got old fast.
+  const [view, setView] = useState<BoardView>(getStoredView);
   // Which table-view rows' nominate/target/avoid actions are showing -
   // dropped from the main row to fit mobile widths, same click-to-expand
   // pattern PlayersTable.tsx/PlayerRow.tsx uses.
@@ -421,7 +435,11 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
         <SegmentedControl
           size="sm"
           value={view}
-          onChange={(value) => setView(value as BoardView)}
+          onChange={(value) => {
+            const nextView = value as BoardView;
+            setView(nextView);
+            localStorage.setItem(PLAYERS_VIEW_STORAGE_KEY, nextView);
+          }}
           data={[
             {
               value: "bar",
