@@ -235,7 +235,12 @@ export function PlayerTableRowMobile({
             </Anchor>
             {isRookie && <RookieBadge />}
             {injury && (
-              <Badge color={injuryColor(injury.status)} size="xs" circle>
+              <Badge
+                color={injuryColor(injury.status)}
+                variant="light"
+                size="xs"
+                circle
+              >
                 {injury.statusShort}
               </Badge>
             )}
