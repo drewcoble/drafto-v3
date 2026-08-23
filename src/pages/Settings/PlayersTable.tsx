@@ -318,6 +318,18 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
           (draftValueByFpid.get(b.fpid)?.dollarValue ?? 0) -
           (draftValueByFpid.get(a.fpid)?.dollarValue ?? 0);
         if (dollarDiff !== 0) return dollarDiff;
+        // $ ties (every player at or below a position's replacement level
+        // gets the same $1 floor - see computeDraftValuesForSettings) used
+        // to fall straight to ADP, which is an external consensus signal
+        // that can disagree sharply with our own points-based ranking -
+        // positionRank badges (also points-order, see draftValues.ts) would
+        // then show e.g. WR100 sorted above WR76. Points first keeps this
+        // tier in the same order as the positionRank badge; ADP only breaks
+        // a further tie (e.g. two $1 players with identical points).
+        const pointsDiff =
+          pointsForScoringConfig(b, scoringConfig) -
+          pointsForScoringConfig(a, scoringConfig);
+        if (pointsDiff !== 0) return pointsDiff;
         const adpA = adpByFpid.get(a.fpid);
         const adpB = adpByFpid.get(b.fpid);
         return (
