@@ -55,7 +55,13 @@ interface PlayerRowMobileProps {
   injury: { status: string; statusShort: string } | undefined;
   isRookie: boolean;
   draftValue:
-    | { dollarValue: number; usedFallback: boolean; positionRank: number }
+    | {
+        dollarValue: number;
+        usedFallback: boolean;
+        positionRank: number;
+        tier: number;
+        tierLabel: string;
+      }
     | undefined;
   standardValue: StandardValueRow | undefined;
   valueGap: ValueGap | undefined;
@@ -242,7 +248,11 @@ export function PlayerRowMobile({
             )}
           </Group>
           <Text size="xs" c="dimmed" truncate>
-            {row.team ?? "—"}
+            {draftValue
+              ? row.team
+                ? `${row.team} - Tier ${draftValue.tier}`
+                : `Tier ${draftValue.tier}`
+              : (row.team ?? "—")}
           </Text>
         </Stack>
         {showValueColumn && (

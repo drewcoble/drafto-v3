@@ -18,7 +18,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import {
   POSITIONS,
-  type DraftValueRow,
+  type DraftTierRow,
   type PlayerTag,
   type Position,
   type ScoringConfig,
@@ -202,13 +202,17 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   // support is currently broken (the query fires even when disabled; see
   // https://github.com/get-convex/convex-react-query/issues/5), but "skip"
   // is handled correctly.
+  // getDraftBoard (not the narrower getDraftValues) so this table gets the
+  // same tier field the Draft Room's own tables compute - it wraps
+  // getDraftValues with tiers on top of the identical args, so this is a
+  // pure superset, not a second computation to keep in sync.
   const draftValuesQueryOptions = convexQuery(
-    api.draftValues.getDraftValues,
+    api.draft.board.getDraftBoard,
     seasonId ? { seasonId, week, scoringConfig } : "skip",
   );
   interface DraftValuesResult {
     isGeneric: boolean;
-    values: DraftValueRow[];
+    rows: DraftTierRow[];
   }
   const { data: draftValuesResult, isFetching: isRecalculatingValues } =
     useTanStackQuery<DraftValuesResult>({
@@ -217,7 +221,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
         previousData,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
-  const draftValues = draftValuesResult?.values;
+  const draftValues = draftValuesResult?.rows;
   // True only for the very first fetch of $ values for a selected league -
   // sortedRows falls back to raw-points sort until draftValues exists, so
   // rendering the table during this window would show players in points
@@ -267,7 +271,13 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   const draftValueByFpid = useMemo(() => {
     const map = new Map<
       number,
-      { dollarValue: number; usedFallback: boolean; positionRank: number }
+      {
+        dollarValue: number;
+        usedFallback: boolean;
+        positionRank: number;
+        tier: number;
+        tierLabel: string;
+      }
     >();
     for (const value of draftValues ?? []) {
       map.set(value.fpid, value);
@@ -413,6 +423,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                         </Table.Th>
                       )}
                       {draftValues && <Table.Th>vs. market</Table.Th>}
+                      {draftValues && <Table.Th>Tier</Table.Th>}
                       {/* Target/avoid toggle - unlabeled icon column. */}
                       <Table.Th></Table.Th>
                       <Table.Th miw={70}>Pos</Table.Th>

@@ -40,7 +40,14 @@ interface PlayerRowProps {
   scoringConfig: ScoringConfig;
   injury: { status: string; statusShort: string } | undefined;
   isRookie: boolean;
-  draftValue: { dollarValue: number; usedFallback: boolean } | undefined;
+  draftValue:
+    | {
+        dollarValue: number;
+        usedFallback: boolean;
+        tier: number;
+        tierLabel: string;
+      }
+    | undefined;
   standardValue: StandardValueRow | undefined;
   valueGap: ValueGap | undefined;
   showValueColumn: boolean;
@@ -82,11 +89,11 @@ export function PlayerRow({
   // so there's nothing to expand into when no league (and therefore no
   // Keeper data) is selected.
   const showChevron = showKeeperColumn;
-  // Rank, FPTS, $ + vs. market (when shown, 2 columns), Target/Avoid, Pos,
-  // Player, Tags, Team, plus the chevron itself when shown - kept in sync
-  // with the header column count in PlayersTable.tsx so the expanded
+  // Rank, FPTS, $ + vs. market + Tier (when shown, 3 columns), Target/Avoid,
+  // Pos, Player, Tags, Team, plus the chevron itself when shown - kept in
+  // sync with the header column count in PlayersTable.tsx so the expanded
   // Keeper row's colSpan always spans the full table width.
-  const columnCount = 7 + (showValueColumn ? 2 : 0) + (showChevron ? 1 : 0);
+  const columnCount = 7 + (showValueColumn ? 3 : 0) + (showChevron ? 1 : 0);
 
   return (
     <Fragment>
@@ -127,6 +134,17 @@ export function PlayerRow({
               standardValue={standardValue}
               showLabel={false}
             />
+          </Table.Td>
+        )}
+        {showValueColumn && (
+          <Table.Td>
+            {draftValue && (
+              <Tooltip label={draftValue.tierLabel} withArrow>
+                <Badge size="sm" variant="light" color="gray" circle>
+                  {draftValue.tier}
+                </Badge>
+              </Tooltip>
+            )}
           </Table.Td>
         )}
         <Table.Td>
