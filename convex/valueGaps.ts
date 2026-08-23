@@ -95,6 +95,57 @@ function percentile(rank: number, n: number): number {
   return ((n - rank) / (n - 1)) * 100;
 }
 
+// ESPN's own draft-kit rank (see convex/espn/rankings.ts / standardValues
+// table) is a second, independently-sourced market consensus alongside
+// Sleeper ADP - two sources agreeing is a stronger signal than either alone,
+// so this is blended into the ADP percentile below rather than left as the
+// separate "vs. market" $ diff shown in src/components/StandardValueLabel.tsx
+// (that one compares this app's own $ value against ESPN's; this is about
+// ESPN's rank corroborating or contradicting Sleeper's ADP rank).
+// Mirrors src/lib/standardValues.ts's buildStandardValueByFpid (HALF
+// scoring averages standard+ppr, ESPN has no half-PPR format of its own) but
+// reads ctx.db directly since that helper works off an already-fetched
+// query result, not a QueryCtx/MutationCtx. Not superflex-aware -
+// getAllValueGaps takes no superflex flag (its ADP input isn't superflex-
+// aware either), so this always reads ESPN's standard/ppr pools.
+async function buildEspnRankByFpid(
+  ctx: QueryCtx | MutationCtx,
+  season: string,
+  scoring: ScoringConfig["scoring"],
+): Promise<Map<number, number>> {
+  const formats: Array<"standard" | "ppr"> =
+    scoring === "PPR"
+      ? ["ppr"]
+      : scoring === "STD"
+        ? ["standard"]
+        : ["standard", "ppr"];
+
+  const rowsByFormat = await Promise.all(
+    formats.map((format) =>
+      ctx.db
+        .query("standardValues")
+        .withIndex("by_platform_format_season_fpid", (q) =>
+          q.eq("platform", "espn").eq("format", format).eq("season", season),
+        )
+        .collect(),
+    ),
+  );
+
+  if (formats.length === 1) {
+    return new Map(rowsByFormat[0]!.map((row) => [row.fpid, row.rank]));
+  }
+
+  const standardByFpid = new Map(rowsByFormat[0]!.map((row) => [row.fpid, row.rank]));
+  const pprByFpid = new Map(rowsByFormat[1]!.map((row) => [row.fpid, row.rank]));
+  const merged = new Map<number, number>();
+  for (const fpid of new Set([...standardByFpid.keys(), ...pprByFpid.keys()])) {
+    const a = standardByFpid.get(fpid);
+    const b = pprByFpid.get(fpid);
+    merged.set(fpid, a !== undefined && b !== undefined ? (a + b) / 2 : (a ?? b)!);
+  }
+  return merged;
+}
+
 /**
  * Flags four kinds of track-record/current-season mismatches:
  * - "undervalued": genuinely good last season (by points-per-game, not
@@ -142,6 +193,18 @@ async function computeValueGaps(
   args: { week: string; scoringConfig: ScoringConfig; lastSeason: string },
 ): Promise<ValueGapRow[]> {
   const output: ValueGapRow[] = [];
+
+  // Same season this method's own lastSeason+1 resolves to everywhere else
+  // (see convex/fetchAllData.ts's refreshCachedComputations) - computeValueGaps
+  // takes lastSeason rather than the current season directly, so this is
+  // re-derived rather than adding a new arg every caller would need to thread
+  // through.
+  const currentSeason = String(Number(args.lastSeason) + 1);
+  const espnRankByFpid = await buildEspnRankByFpid(
+    ctx,
+    currentSeason,
+    args.scoringConfig.scoring,
+  );
 
   for (const position of VALUE_GAP_POSITIONS) {
     const projections = await ctx.db
@@ -213,39 +276,61 @@ async function computeValueGaps(
     const ppgRank = rankOf([...eligible].sort((a, b) => b.ppg - a.ppg));
     const projRank = rankOf([...eligible].sort((a, b) => b.points - a.points));
     const adpRank = rankOf([...eligible].sort((a, b) => a.adp - b.adp));
+    // Only ranked among eligible players ESPN actually covers - percentile-
+    // ranking against a pool including players ESPN doesn't rank would make
+    // "has no rank" indistinguishable from "ranked dead last".
+    const withEspnRank = eligible.filter((e) => espnRankByFpid.has(e.fpid));
+    const espnRank = rankOf(
+      [...withEspnRank].sort(
+        (a, b) => espnRankByFpid.get(a.fpid)! - espnRankByFpid.get(b.fpid)!,
+      ),
+    );
 
     for (const e of eligible) {
       const ppgPctl = percentile(ppgRank.get(e.fpid)!, n);
       const projPctl = percentile(projRank.get(e.fpid)!, n);
       const adpPctl = percentile(adpRank.get(e.fpid)!, n);
+      // Blends Sleeper ADP with ESPN's own draft-kit rank when ESPN covers
+      // this player (see buildEspnRankByFpid above) - two independently-
+      // sourced market consensuses agreeing is a stronger "market" signal
+      // than ADP alone, so this (not raw adpPctl) drives every gate/gap
+      // below. Falls back to ADP-only when ESPN has no rank for this player
+      // (e.g. its draft kit doesn't reach this deep, or this season's ESPN
+      // fetch hasn't landed yet), which reproduces the pre-blend behavior
+      // exactly - never worse than ADP alone, only ever more informed.
+      const espnRankForFpid = espnRank.get(e.fpid);
+      const marketPctl =
+        espnRankForFpid !== undefined
+          ? (adpPctl + percentile(espnRankForFpid, withEspnRank.length)) / 2
+          : adpPctl;
       const deserved = (ppgPctl + projPctl) / 2;
-      const thisYearOutlook = (projPctl + adpPctl) / 2;
+      const thisYearOutlook = (projPctl + marketPctl) / 2;
 
       let direction:
         "undervalued" | "overvalued" | "breakout" | "falloff" | undefined;
       let gap = 0;
       if (ppgPctl >= GOOD_PCTL_THRESHOLD && projPctl >= GOOD_PCTL_THRESHOLD) {
-        gap = deserved - adpPctl;
+        gap = deserved - marketPctl;
         if (gap > MIN_GAP_PCTL) direction = "undervalued";
       } else if (
         ppgPctl <= BAD_PCTL_THRESHOLD &&
         projPctl <= BAD_PCTL_THRESHOLD
       ) {
-        gap = adpPctl - deserved;
+        gap = marketPctl - deserved;
         if (gap > MIN_GAP_PCTL) direction = "overvalued";
       } else if (
         ppgPctl <= BREAKOUT_BAD_PCTL_THRESHOLD &&
         projPctl >= BREAKOUT_GOOD_PCTL_THRESHOLD &&
-        adpPctl >= BREAKOUT_GOOD_PCTL_THRESHOLD
+        marketPctl >= BREAKOUT_GOOD_PCTL_THRESHOLD
       ) {
         gap = thisYearOutlook - ppgPctl;
         if (gap > BREAKOUT_MIN_GAP_PCTL) direction = "breakout";
       } else if (
         ppgPctl >= FALLOFF_GOOD_PCTL_THRESHOLD &&
         projPctl <= FALLOFF_BAD_PCTL_THRESHOLD &&
-        adpPctl >= FALLOFF_GOOD_PCTL_THRESHOLD
+        marketPctl >= FALLOFF_GOOD_PCTL_THRESHOLD
       ) {
-        gap = adpPctl - projPctl;
+        gap = marketPctl - projPctl;
         if (gap > FALLOFF_MIN_GAP_PCTL) direction = "falloff";
       }
       if (!direction) continue;
