@@ -559,6 +559,13 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                     {recommendation.label}
                   </Badge>
                 </Group>
+                {view === "table" && (
+                  <Box hiddenFrom="sm">
+                    <Text size="xs" c="dimmed">
+                      Swipe a row left for Target/Avoid
+                    </Text>
+                  </Box>
+                )}
                 {view === "bar" ? (
                   <Group gap="lg" align="flex-end" wrap="nowrap">
                     {tierGroups.map((group) => (
@@ -748,9 +755,6 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                           />
                         ))}
                       </Box>
-                      <Text size="xs" c="dimmed" mt={6}>
-                        Swipe a row left for Target/Avoid
-                      </Text>
                     </Box>
                   </>
                 )}
