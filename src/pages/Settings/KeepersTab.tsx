@@ -381,6 +381,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 isSnakeOrLinear={isSnakeOrLinear}
                 availableValues={draftValues ?? []}
                 teamCount={settings.teamCount}
+                draftTeams={draftTeams}
                 onQuickAdd={handleQuickAddKeeper}
                 onSelectPlayer={setSelectedFpid}
                 onOpenManualEntry={() => setManualEntryOpened(true)}

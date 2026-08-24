@@ -1,14 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Anchor,
   Badge,
   Button,
   Card,
   Group,
+  Select,
   Stack,
   Table,
   Text,
 } from "@mantine/core";
+import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { Position } from "../../../types";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { RookieBadge } from "../../../components/RookieBadge";
@@ -55,6 +57,11 @@ interface RecommendedKeepersProps {
   // any round this year, so it shouldn't occupy a rank band.
   availableValues: readonly ValueRankEntry[];
   teamCount: number;
+  // For the team filter below - lets the host scope the list to their own
+  // roster (the default) instead of always seeing a leaguewide top-10
+  // that's mostly other teams' players and rarely useful for deciding
+  // your own keepers.
+  draftTeams: Doc<"seasonTeams">[];
   // Adds the keeper outright at the suggested cost - team is resolved by
   // the caller (KeepersTab.tsx) from `teamName` below when it's set
   // (a confirmed manual-entry roster - see getPlayerPriceHistory), falling
@@ -69,7 +76,12 @@ interface RecommendedKeepersProps {
   onOpenManualEntry: () => void;
 }
 
+// Only applied when scoped to "All Teams" - a leaguewide top-10 is a
+// useful bargain-scouting summary, but a single team's roster is small
+// enough (a season's worth of keeper-eligible players) that capping it
+// the same way would hide legitimate candidates for no reason.
 const MAX_RECOMMENDATIONS = 10;
+const ALL_TEAMS = "all";
 
 // One normalized recommendation row, regardless of format - keeps the JSX
 // below branch-free (just render whatever labels were precomputed) instead
@@ -92,12 +104,16 @@ interface RecommendationRow {
 // Surfaces the league's best keeper bargains (this year's fair value minus
 // what the keeper-cost formula would charge to keep them) so a host doesn't
 // have to manually search every name from last year's draft to find one.
-// Deliberately team-less - getPlayerPriceHistory only tells us the PRICE a
-// player went for last season, not which of THIS season's teams (if any)
-// still has them on a roster, so this can only ever suggest "this would be
-// a great keeper for someone," never "for your team specifically." Clicking
-// a row just drops the name into the search box above so the host can pick
-// it up through the normal add-a-keeper flow (team + confirm cost).
+// Scoped to one team at a time via the picker below (defaulting to the
+// host's own team, the most common reason to open this at all) - a
+// leaguewide top-10 tends to be dominated by other teams' best players,
+// crowding out legitimate keeper decisions for your own roster. Only
+// entries with a confirmed team (getPlayerPriceHistory's
+// teamAssignmentConfirmed - a Sleeper import or manual entry, see
+// convex/leagues.ts's importPreviousSeasonHistory) can be attributed to a
+// team at all; an unconfirmed one only ever shows up under "All Teams".
+// Clicking a row drops the name into the search box above so the host can
+// pick it up through the normal add-a-keeper flow (team + confirm cost).
 export function RecommendedKeepers({
   priceHistory,
   keeperRules,
@@ -107,12 +123,23 @@ export function RecommendedKeepers({
   draftedFpids,
   isSnakeOrLinear,
   availableValues,
+  draftTeams,
   teamCount,
   onQuickAdd,
   onSelectPlayer,
   onOpenManualEntry,
 }: RecommendedKeepersProps) {
   const rookieFpids = useRookieFpids();
+  // Defaults to the host's own team (falling back to "All Teams" if this
+  // season somehow has no self team yet) - see this component's header
+  // comment on why that's the far more common reason to open this at all.
+  const [teamFilter, setTeamFilter] = useState<string>(
+    () => draftTeams.find((t) => t.isSelf)?._id ?? ALL_TEAMS,
+  );
+  const selectedTeamName =
+    teamFilter === ALL_TEAMS
+      ? undefined
+      : draftTeams.find((t) => t._id === teamFilter)?.name;
   const sortedValues = useMemo(
     () => sortValuesDescending(availableValues),
     [availableValues],
@@ -128,6 +155,12 @@ export function RecommendedKeepers({
       .map((entryPair): RecommendationRow | null => {
         const [fpidStr, entry] = entryPair;
         const fpid = Number(fpidStr);
+        if (
+          selectedTeamName !== undefined &&
+          entry.teamName !== selectedTeamName
+        ) {
+          return null;
+        }
         const player = projectionByFpid.get(fpid);
         if (!player || !activeSet.has(player.position)) return null;
         if (draftedFpids.has(fpid)) return null;
@@ -209,10 +242,9 @@ export function RecommendedKeepers({
         };
       })
       .filter((row): row is RecommendationRow => row !== null)
-      .sort((a, b) => b.sortValue - a.sortValue)
-      .slice(0, MAX_RECOMMENDATIONS);
+      .sort((a, b) => b.sortValue - a.sortValue);
 
-    return rows;
+    return teamFilter === ALL_TEAMS ? rows.slice(0, MAX_RECOMMENDATIONS) : rows;
   }, [
     priceHistory,
     keeperRules,
@@ -223,6 +255,8 @@ export function RecommendedKeepers({
     isSnakeOrLinear,
     sortedValues,
     teamCount,
+    teamFilter,
+    selectedTeamName,
   ]);
 
   // No prior-season price data at all (no import, no manual entry) - prompt
@@ -269,13 +303,28 @@ export function RecommendedKeepers({
             Edit last season's results
           </Anchor>
         </Group>
+        <Select
+          size="xs"
+          value={teamFilter}
+          onChange={(value) => setTeamFilter(value ?? ALL_TEAMS)}
+          allowDeselect={false}
+          data={[
+            { value: ALL_TEAMS, label: "All Teams" },
+            ...draftTeams.map((team) => ({
+              value: team._id,
+              label: team.isSelf ? `${team.name} (You)` : team.name,
+            })),
+          ]}
+        />
         {!keeperRules ? (
           <Text size="xs" c="dimmed">
             Configure keeper rules to see recommended keepers.
           </Text>
         ) : recommendations.length === 0 ? (
           <Text size="xs" c="dimmed">
-            No strong keeper values found.
+            {selectedTeamName
+              ? "No strong keeper values found for this team - try All Teams, or double-check last season's results have this team's roster confirmed."
+              : "No strong keeper values found."}
           </Text>
         ) : (
           <>
