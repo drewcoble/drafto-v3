@@ -22,6 +22,7 @@ import {
 } from "../../../constants/leagueSettings";
 import { SettingsForm } from "./SettingsForm";
 import { getErrorMessage } from "../../../lib/errors";
+import { SNAKE_DRAFT_ENABLED } from "../../../lib/featureFlags";
 
 interface LeagueImportWizardProps {
   onImported: (id: Id<"seasons">) => void;
@@ -142,7 +143,13 @@ export function LeagueImportWizard({
       const newId = await createSettings({
         name: form.name,
         teamCount: form.teamCount,
-        draftType: form.draftType,
+        // Clamped at the actual write path, not just wherever form.draftType
+        // gets set - this wizard never lets a user pick anything but
+        // auction today (no Sleeper draft-type detection yet, see the
+        // handleSelectLeague comment above), but this stays correct if
+        // that detection is ever added without whoever adds it having to
+        // remember this flag too.
+        draftType: SNAKE_DRAFT_ENABLED ? form.draftType : "auction",
         salaryCap: form.salaryCap,
         scoring: form.scoring,
         teScoring: form.teScoring,

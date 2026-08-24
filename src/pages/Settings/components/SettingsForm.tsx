@@ -23,6 +23,7 @@ import {
   CountStepper,
   EditableNumberStepper,
 } from "../../../components/NumberStepper";
+import { SNAKE_DRAFT_ENABLED } from "../../../lib/featureFlags";
 import {
   POSITIONS,
   type Position,
@@ -155,7 +156,12 @@ export function SettingsForm({
                 }
               />
             </Grid.Col>
-            {showDraftType && (
+            {/* SNAKE_DRAFT_ENABLED: feature-flagged off by default (see
+                featureFlags.ts) - this is the one control that can ever
+                set draftType away from "auction", so hiding it here alone
+                keeps every snake-specific code path unreachable in prod
+                until this is deliberately turned on. */}
+            {showDraftType && SNAKE_DRAFT_ENABLED && (
               <Grid.Col span={{ base: 12, sm: 6 }}>
                 <Stack gap={4}>
                   <Text size="sm" fw={500}>

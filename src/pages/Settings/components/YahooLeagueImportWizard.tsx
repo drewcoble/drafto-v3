@@ -23,6 +23,7 @@ import {
 } from "../../../constants/leagueSettings";
 import { SettingsForm } from "./SettingsForm";
 import { getErrorMessage } from "../../../lib/errors";
+import { SNAKE_DRAFT_ENABLED } from "../../../lib/featureFlags";
 
 interface YahooLeagueImportWizardProps {
   onImported: (id: Id<"seasons">) => void;
@@ -158,7 +159,9 @@ export function YahooLeagueImportWizard({
       const newId = await createLeague({
         name: form.name,
         teamCount: form.teamCount,
-        draftType: form.draftType,
+        // Clamped at the actual write path - see LeagueImportWizard.tsx's
+        // matching comment (Yahoo draft-type detection isn't built either).
+        draftType: SNAKE_DRAFT_ENABLED ? form.draftType : "auction",
         salaryCap: form.salaryCap,
         scoring: form.scoring,
         teScoring: form.teScoring,

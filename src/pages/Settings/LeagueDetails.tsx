@@ -22,6 +22,7 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { positionColorOrDefault } from "../../lib/positionColors";
+import { SNAKE_DRAFT_ENABLED } from "../../lib/featureFlags";
 import {
   DEFAULT_FORM,
   DRAFT_TYPE_OPTIONS,
@@ -204,7 +205,13 @@ export function LeagueDetails({
       if (isCreatingLeague || !settings) {
         const newId = await createSettings({
           ...payload,
-          draftType: form.draftType,
+          // Clamped here too, not just at the SettingsForm control that
+          // sets form.draftType - defense in depth so this can't create a
+          // non-auction league while the flag is off no matter how
+          // form.draftType ended up set (SettingsForm.tsx's own
+          // showDraftType && SNAKE_DRAFT_ENABLED check is the only thing
+          // stopping a *manual* pick, but this is the actual write path).
+          draftType: SNAKE_DRAFT_ENABLED ? form.draftType : "auction",
           useKeepers: form.useKeepers,
         });
         onLeagueSaved(newId);
