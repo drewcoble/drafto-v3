@@ -149,7 +149,13 @@ export function RecommendedKeepers({
           );
           if (keeperCostRound === null) return null;
 
-          const savingsRounds = marketRound - keeperCostRound;
+          // A bargain means the round you give up to keep them (cost) is
+          // LATER/cheaper than the round their ADP says they're actually
+          // worth (market) - a round-7 cost on a round-2 talent is a great
+          // deal, so savings = cost - market, not market - cost (a bigger
+          // round number is a cheaper cost, the opposite of dollars, where
+          // a bigger number is a more expensive one).
+          const savingsRounds = keeperCostRound - marketRound;
           if (savingsRounds <= 0) return null;
 
           return {
