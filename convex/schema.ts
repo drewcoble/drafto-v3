@@ -76,6 +76,18 @@ const keeperRulesValidator = v.object({
   ),
   maxKeepersPerTeam: v.optional(v.number()),
   maxConsecutiveYears: v.optional(v.number()),
+  // Only meaningful when costMode is "round" (SNAKE_DRAFT.md §8) - two of a
+  // team's keepers can independently compute to the SAME round (e.g. both
+  // drafted round 7 last year, same roundsEarlier). Since a team only has
+  // one slot per round, the second one has to move - this decides which
+  // direction: "earlier" (a round closer to 1, i.e. a more expensive slot)
+  // or "later" (a round further from 1, cheaper). Absent means "earlier" -
+  // see convex/draft/pickSlots.ts's resolveRoundConflict, which walks in
+  // this direction from the computed round until it finds this team's
+  // first open slot.
+  roundConflictResolution: v.optional(
+    v.union(v.literal("earlier"), v.literal("later")),
+  ),
   // No longer independently user-set - convex/draft/keeperRules.ts's
   // setKeeperRules derives and overwrites this on every save from whether
   // maxConsecutiveYears above is defined (an undefined/unlimited max means

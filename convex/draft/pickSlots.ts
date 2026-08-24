@@ -61,7 +61,7 @@ export async function countForfeitedByRound(
 // "round:pickInRound" key shared by the filled/forfeited sets below - a
 // plain string key is simplest for a Set given both fields are just
 // numbers, no risk of collision.
-function slotKey(round: number, pickInRound: number): string {
+export function slotKey(round: number, pickInRound: number): string {
   return `${round}:${pickInRound}`;
 }
 
@@ -131,6 +131,47 @@ export function findNextOpenSlot(
     round += 1;
   }
   throw new Error("Could not find an open draft slot.");
+}
+
+// A team's own slot in `baseRound` may already be spoken for by another
+// keeper/pick (two keepers can independently compute to the same round -
+// SNAKE_DRAFT.md §8's round-conflict setting) - walks from baseRound in
+// `direction` until it finds this specific team's first open round,
+// checking baseRound itself first so the common (non-colliding) case
+// returns it unchanged. Assumes teamId is already known to be part of
+// draftOrder (callers should check that separately for a clearer error
+// message - every round would otherwise "fail" identically, indistinguishable
+// from a genuine no-open-round result). Returns both the resolved round and
+// that round's position, since callers need the position anyway and this
+// already computed it. null if it walks off either end (below round 1, or
+// past maxRound) without finding one - the caller should fall back to
+// manual entry in that case, same as any other "couldn't resolve" signal
+// elsewhere in this file.
+export function resolveRoundConflict(
+  baseRound: number,
+  direction: "earlier" | "later",
+  maxRound: number,
+  teamId: Id<"seasonTeams">,
+  draftOrder: readonly Id<"seasonTeams">[],
+  mode: "linear" | "snake",
+  reversalRounds: readonly number[],
+  filled: ReadonlySet<string>,
+  forfeited: ReadonlySet<string>,
+): { round: number; position: number } | null {
+  const step = direction === "earlier" ? -1 : 1;
+  for (let round = baseRound; round >= 1 && round <= maxRound; round += step) {
+    const position = resolveTeamPositionInRound(
+      draftOrder,
+      mode,
+      reversalRounds,
+      round,
+      teamId,
+    );
+    if (position === null) continue;
+    const key = slotKey(round, position);
+    if (!filled.has(key) && !forfeited.has(key)) return { round, position };
+  }
+  return null;
 }
 
 // Total real (non-forfeited) slots across every round up to and including

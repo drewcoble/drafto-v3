@@ -41,6 +41,9 @@ const keeperRulesValidator = v.object({
   tiers: v.array(keeperTierValidator),
   maxKeepersPerTeam: v.optional(v.number()),
   maxConsecutiveYears: v.optional(v.number()),
+  roundConflictResolution: v.optional(
+    v.union(v.literal("earlier"), v.literal("later")),
+  ),
 });
 
 // Full replace of the season's keeper cost/eligibility config - called by

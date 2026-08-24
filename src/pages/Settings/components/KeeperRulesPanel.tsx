@@ -10,6 +10,7 @@ import {
   Collapse,
   Group,
   NumberInput,
+  SegmentedControl,
   Stack,
   Text,
   TextInput,
@@ -168,6 +169,7 @@ function definitionSignature(rules: {
   defaultRoundFormula: RoundFormulaDraft;
   maxKeepersPerTeam: number | undefined;
   maxConsecutiveYears: number | undefined;
+  roundConflictResolution: "earlier" | "later";
   tiers: TierDraft[];
 }): string {
   return JSON.stringify(rules);
@@ -210,6 +212,9 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
   const [maxConsecutiveYears, setMaxConsecutiveYears] = useState<
     number | undefined
   >(keeperRules.maxConsecutiveYears);
+  const [roundConflictResolution, setRoundConflictResolution] = useState<
+    "earlier" | "later"
+  >(keeperRules.roundConflictResolution ?? "earlier");
   const [tierDrafts, setTierDrafts] = useState<TierDraft[]>(
     toTierDrafts(keeperRules.tiers),
   );
@@ -222,6 +227,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     defaultRoundFormula: toRoundFormulaDraft(keeperRules.defaultRoundFormula),
     maxKeepersPerTeam: keeperRules.maxKeepersPerTeam,
     maxConsecutiveYears: keeperRules.maxConsecutiveYears,
+    roundConflictResolution: keeperRules.roundConflictResolution ?? "earlier",
     tiers: toTierDrafts(keeperRules.tiers),
   });
 
@@ -232,6 +238,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     );
     setMaxKeepersPerTeam(keeperRules.maxKeepersPerTeam);
     setMaxConsecutiveYears(keeperRules.maxConsecutiveYears);
+    setRoundConflictResolution(keeperRules.roundConflictResolution ?? "earlier");
     setTierDrafts(toTierDrafts(keeperRules.tiers));
     // Only the definition signature (not the whole keeperRules object, which
     // also changes on every fpids-only picker click) should trigger a
@@ -244,6 +251,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
     defaultRoundFormula,
     maxKeepersPerTeam,
     maxConsecutiveYears,
+    roundConflictResolution,
     tiers: tierDrafts,
   });
   const isDirty = localSignature !== committedSignature;
@@ -413,6 +421,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
             : {}),
           ...(maxKeepersPerTeam !== undefined ? { maxKeepersPerTeam } : {}),
           ...(maxConsecutiveYears !== undefined ? { maxConsecutiveYears } : {}),
+          ...(isSnakeOrLinear ? { roundConflictResolution } : {}),
           tiers: tierDrafts.map((draft) => ({
             id: draft.id,
             name: draft.name,
@@ -467,6 +476,23 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
               onChange={setMaxConsecutiveYears}
             />
           </Stack>
+          {isSnakeOrLinear && (
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>
+                If two keepers land on the same round
+              </Text>
+              <SegmentedControl
+                value={roundConflictResolution}
+                onChange={(value) =>
+                  setRoundConflictResolution(value as "earlier" | "later")
+                }
+                data={[
+                  { label: "Move earlier (pricier)", value: "earlier" },
+                  { label: "Move later (cheaper)", value: "later" },
+                ]}
+              />
+            </Stack>
+          )}
         </Group>
       </Card>
 
