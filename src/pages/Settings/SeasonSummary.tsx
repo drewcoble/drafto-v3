@@ -10,6 +10,7 @@ import {
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { optimalAssignPicksToSlots } from "../../lib/slotAssignment";
 import { WEEK } from "../../constants/general";
+import { DRAFT_TYPE_OPTIONS } from "../../constants/leagueSettings";
 import { TeamSlotDetail } from "../../components/TeamSlotDetail";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
@@ -99,8 +100,11 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
   return (
     <Stack gap="sm">
       <Text size="sm" c="dimmed">
-        {settings.name} · {settings.year} - ${settings.salaryCap} cap,{" "}
-        {settings.teamCount} teams
+        {settings.name} · {settings.year} -{" "}
+        {DRAFT_TYPE_OPTIONS.find(
+          (option) => option.value === (settings.draftType ?? "auction"),
+        )?.label ?? "Auction"}
+        , {settings.teamCount} teams
       </Text>
       <SimpleGrid cols={3} spacing="md">
         {teamSummaries.map(({ team, stats, teamPicks, slots, bySlot }) => {
