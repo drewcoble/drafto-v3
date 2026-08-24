@@ -10,7 +10,11 @@ export type KeeperTier = KeeperRules["tiers"][number];
 // from the query's return type) since it's a plain Record, same as
 // KeeperSearchForm.tsx already declared inline before this file existed.
 export interface KeeperPriceHistoryEntry {
-  price: number;
+  // Optional since draftPicks.price is (SNAKE_DRAFT.md §3.2) - undefined
+  // for a pick from a non-auction season. computeKeeperCost below already
+  // treats a missing prior price the same way (no prior season at all), so
+  // this needs no further change downstream.
+  price: number | undefined;
   season: string | undefined;
   isKeeper: boolean;
   keeperStreak: number | undefined;

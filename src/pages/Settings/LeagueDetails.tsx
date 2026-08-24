@@ -24,6 +24,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { positionColorOrDefault } from "../../lib/positionColors";
 import {
   DEFAULT_FORM,
+  DRAFT_TYPE_OPTIONS,
   ROSTER_SLOT_KEYS,
   SCORING_OPTIONS,
   TE_SCORING_OPTIONS,
@@ -82,6 +83,10 @@ export function LeagueDetails({
   );
   const nominationConfig = useQuery(
     api.draft.nominationOrder.getNominationConfig,
+    selectedLeagueId ? { seasonId: selectedLeagueId } : "skip",
+  );
+  const draftOrderConfig = useQuery(
+    api.draft.draftOrder.getDraftOrderConfig,
     selectedLeagueId ? { seasonId: selectedLeagueId } : "skip",
   );
 
@@ -158,6 +163,11 @@ export function LeagueDetails({
         ? {
             name: settings.name,
             teamCount: settings.teamCount,
+            // Absent means "auction" (see convex/draftType.ts's
+            // resolveDraftType) - display-only here regardless, since this
+            // field isn't part of handleSave's updateSeason payload at all
+            // (draftType is create-only, locked for good afterward).
+            draftType: settings.draftType ?? "auction",
             salaryCap: settings.salaryCap,
             scoring: settings.scoring,
             teScoring: settings.teScoring ?? "NONE",
@@ -194,6 +204,7 @@ export function LeagueDetails({
       if (isCreatingLeague || !settings) {
         const newId = await createSettings({
           ...payload,
+          draftType: form.draftType,
           useKeepers: form.useKeepers,
         });
         onLeagueSaved(newId);
@@ -394,6 +405,7 @@ export function LeagueDetails({
           onDoneCreating();
         }}
         teamsLocked={!!draftTeams && draftTeams.length > 0}
+        showDraftType={!settings}
         configLocked={isStarted}
         useKeepersControl={
           settings
@@ -554,12 +566,25 @@ export function LeagueDetails({
               </Stack>
               <Stack gap={0}>
                 <Text size="sm" c="dimmed">
-                  Salary Cap
+                  Draft Type
                 </Text>
                 <Text size="xl" fw={700}>
-                  ${settings.salaryCap}
+                  {DRAFT_TYPE_OPTIONS.find(
+                    (option) => option.value === (settings.draftType ?? "auction"),
+                  )?.label ?? "Auction"}
                 </Text>
               </Stack>
+              {/* Not applicable outside auction - see SNAKE_DRAFT.md §2.1. */}
+              {(settings.draftType ?? "auction") === "auction" && (
+                <Stack gap={0}>
+                  <Text size="sm" c="dimmed">
+                    Salary Cap
+                  </Text>
+                  <Text size="xl" fw={700}>
+                    ${settings.salaryCap}
+                  </Text>
+                </Stack>
+              )}
               <Stack gap={0}>
                 <Text size="sm" c="dimmed">
                   Scoring
@@ -687,6 +712,8 @@ export function LeagueDetails({
               renameError={teamsError}
               addLocked={isStarted}
               removeLocked={isStarted}
+              isSnakeOrLinear={(settings.draftType ?? "auction") !== "auction"}
+              draftOrder={draftOrderConfig?.draftOrder}
             />
           )}
         </Card>

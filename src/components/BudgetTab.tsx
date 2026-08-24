@@ -259,7 +259,9 @@ export function BudgetTab({ seasonId, mode }: BudgetTabProps) {
         fpid: pick.fpid,
         name: nameByFpid.get(pick.fpid)?.name ?? `Player ${pick.fpid}`,
         position: pick.position,
-        price: pick.price,
+        // Budget planning is auction-only (SNAKE_DRAFT.md §3.4) - price is
+        // always real here in practice.
+        price: pick.price ?? 0,
       });
     }
     return map;

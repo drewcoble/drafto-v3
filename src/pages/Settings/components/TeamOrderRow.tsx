@@ -16,6 +16,10 @@ interface TeamOrderRowProps {
   onRename: (name: string) => void;
   onSetSalaryCap: (cap: number | null) => void;
   onRequestRemove: () => void;
+  // False for a snake/linear season (SNAKE_DRAFT.md §2.1) - per-team salary
+  // cap overrides aren't applicable outside auction, so the field is hidden
+  // entirely rather than just non-editable.
+  showSalaryCap?: boolean;
 }
 
 // Always sortable (see TeamsPanel's DndContext/SortableContext), but drag
@@ -35,6 +39,7 @@ export function TeamOrderRow({
   onRename,
   onSetSalaryCap,
   onRequestRemove,
+  showSalaryCap = true,
 }: TeamOrderRowProps) {
   const {
     setNodeRef,
@@ -63,12 +68,14 @@ export function TeamOrderRow({
         {index + 1}
       </Text>
       <TeamNameField team={team} onRename={onRename} />
-      <TeamSalaryCapField
-        team={team}
-        leagueSalaryCap={salaryCap}
-        editing={editingCaps}
-        onSetSalaryCap={onSetSalaryCap}
-      />
+      {showSalaryCap && (
+        <TeamSalaryCapField
+          team={team}
+          leagueSalaryCap={salaryCap}
+          editing={editingCaps}
+          onSetSalaryCap={onSetSalaryCap}
+        />
+      )}
       {reordering && (
         <ActionIcon
           variant="subtle"

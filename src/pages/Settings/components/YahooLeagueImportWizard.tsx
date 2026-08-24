@@ -125,6 +125,11 @@ export function YahooLeagueImportWizard({
       setForm({
         name: result.name,
         teamCount: result.teamCount,
+        // previewYahooImport doesn't detect the linked league's own draft
+        // type yet (SNAKE_DRAFT.md §6 - only the previous season's is ever
+        // looked at, and only to seed keeper price history) - defaults to
+        // auction same as every import today, adjustable after import.
+        draftType: DEFAULT_FORM.draftType,
         salaryCap: DEFAULT_FORM.salaryCap,
         scoring: result.scoring,
         // Yahoo's TE-premium/passing-TD settings aren't mapped yet (see
@@ -153,6 +158,7 @@ export function YahooLeagueImportWizard({
       const newId = await createLeague({
         name: form.name,
         teamCount: form.teamCount,
+        draftType: form.draftType,
         salaryCap: form.salaryCap,
         scoring: form.scoring,
         teScoring: form.teScoring,

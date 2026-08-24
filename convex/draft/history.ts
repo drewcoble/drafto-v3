@@ -80,7 +80,12 @@ export const getPlayerPriceHistory = query({
     const priceByFpid: Record<
       number,
       {
-        price: number;
+        // Widened to optional (SNAKE_DRAFT.md §3.2) - undefined for a pick
+        // from a non-auction season, where "price" doesn't apply. Callers
+        // already need to handle "no prior price" (a player who wasn't
+        // drafted/kept last season), so this is the same shape they already
+        // guard for.
+        price: number | undefined;
         season: string | undefined;
         isKeeper: boolean;
         keeperStreak: number | undefined;
@@ -177,6 +182,15 @@ export const createNextSeason = mutation({
         : {}),
       ...(source.sixPointPassTds !== undefined
         ? { sixPointPassTds: source.sixPointPassTds }
+        : {}),
+      // Carries forward same as every other durable config field here -
+      // format doesn't change season-to-season (SNAKE_DRAFT.md §3.4's
+      // assumption). There's no UI to change draftType for an existing
+      // season at all yet (SettingsForm.tsx's showDraftType only applies
+      // to a brand-new league) - a league wanting to switch formats
+      // next season isn't a supported flow yet.
+      ...(source.draftType !== undefined
+        ? { draftType: source.draftType }
         : {}),
       ...(source.useKeepers !== undefined
         ? { useKeepers: source.useKeepers }

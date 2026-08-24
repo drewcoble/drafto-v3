@@ -28,7 +28,10 @@ import { StandardValueLabel } from "../../../components/StandardValueLabel";
 // addKeeper) for this player's current-season keeper pick, not a projected
 // cost. See PlayersTable.tsx's keeperInfoByFpid.
 export interface KeeperInfo {
-  price: number;
+  // Optional since draftPicks.price is (SNAKE_DRAFT.md §3.2) - this dollar
+  // display is auction-only in practice (round-based keeper cost is a
+  // separate, phase-2 concept), so it's always real here today.
+  price: number | undefined;
   // Consecutive seasons kept, including this one - undefined defaults to 1
   // wherever read, same convention as the draftPicks.keeperStreak field.
   streak: number | undefined;
@@ -244,8 +247,8 @@ export function PlayerRow({
               <Text size="xs">
                 {keeperInfo
                   ? showKeeperYear
-                    ? `$${keeperInfo.price} · Yr ${keeperInfo.streak ?? 1}`
-                    : `$${keeperInfo.price}`
+                    ? `$${keeperInfo.price ?? 0} · Yr ${keeperInfo.streak ?? 1}`
+                    : `$${keeperInfo.price ?? 0}`
                   : "—"}
               </Text>
             </Group>

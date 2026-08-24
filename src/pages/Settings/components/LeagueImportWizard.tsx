@@ -109,6 +109,11 @@ export function LeagueImportWizard({
       setForm({
         name: result.name,
         teamCount: result.teamCount,
+        // previewSleeperImport doesn't detect the linked league's own draft
+        // type yet (SNAKE_DRAFT.md §6 - only the previous season's is ever
+        // looked at, and only to seed keeper price history) - defaults to
+        // auction same as every import today, adjustable after import.
+        draftType: DEFAULT_FORM.draftType,
         salaryCap: DEFAULT_FORM.salaryCap,
         scoring: result.scoring,
         // Sleeper's TE-premium/passing-TD settings aren't mapped yet (see
@@ -137,6 +142,7 @@ export function LeagueImportWizard({
       const newId = await createSettings({
         name: form.name,
         teamCount: form.teamCount,
+        draftType: form.draftType,
         salaryCap: form.salaryCap,
         scoring: form.scoring,
         teScoring: form.teScoring,

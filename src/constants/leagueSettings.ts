@@ -1,4 +1,9 @@
-import type { Position, ScoringFormat, TeScoringFormat } from "../types";
+import type {
+  DraftTypeFormat,
+  Position,
+  ScoringFormat,
+  TeScoringFormat,
+} from "../types";
 import type { KeeperRules } from "../lib/keeperCost";
 
 export const ROSTER_SLOT_KEYS = [
@@ -36,9 +41,23 @@ export const PASSING_TD_OPTIONS: Array<{ label: string; value: "4" | "6" }> = [
   { label: "6pt Passing TD", value: "6" },
 ];
 
+export const DRAFT_TYPE_OPTIONS: Array<{
+  label: string;
+  value: DraftTypeFormat;
+}> = [
+  { label: "Auction", value: "auction" },
+  { label: "Snake", value: "snake" },
+  { label: "Linear", value: "linear" },
+];
+
 export interface LeagueSettingsFormValues {
   name: string;
   teamCount: number;
+  // Only meaningful during creation, same as useKeepers below - locked for
+  // good once a league exists (SNAKE_DRAFT.md §2's assumption), so there's
+  // no live "change it later" mutation the way useKeepers has. See
+  // SettingsForm.tsx's showDraftType prop.
+  draftType: DraftTypeFormat;
   salaryCap: number;
   scoring: ScoringFormat;
   teScoring: TeScoringFormat;
@@ -55,6 +74,7 @@ export interface LeagueSettingsFormValues {
 export const DEFAULT_FORM: LeagueSettingsFormValues = {
   name: "Default $200/12-team",
   teamCount: 12,
+  draftType: "auction",
   salaryCap: 200,
   scoring: "PPR",
   teScoring: "NONE",

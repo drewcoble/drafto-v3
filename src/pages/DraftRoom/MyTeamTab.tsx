@@ -105,7 +105,8 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
       const entry = groups.get(key) ?? { plan: 0, actual: 0 };
       entry.plan += plan?.amounts[slot.key] ?? 0;
       const pick = pickBySlotKey.get(slot.key);
-      if (pick) entry.actual += pick.price;
+      // Budget planning is auction-only (SNAKE_DRAFT.md §3.4).
+      if (pick) entry.actual += pick.price ?? 0;
       groups.set(key, entry);
     }
     return Array.from(groups.entries());

@@ -13,6 +13,7 @@ import {
   teScoringValidator,
   scoringConfigFromSeason,
 } from "./scoring";
+import { draftTypeValidator } from "./draftType";
 import {
   invalidateDraftValues,
   refreshDraftValuesForLeague,
@@ -141,6 +142,11 @@ export const createLeague = mutation({
   args: {
     name: v.string(),
     teamCount: v.number(),
+    // Absent means "auction" (see draftType.ts's resolveDraftType) - not yet
+    // sent by any current frontend caller (SettingsForm.tsx still only ever
+    // creates auction leagues), so every existing creation flow keeps
+    // working unchanged. See SNAKE_DRAFT.md §4 for the eventual UI wiring.
+    draftType: v.optional(draftTypeValidator),
     salaryCap: v.number(),
     scoring: scoringValidator,
     teScoring: teScoringValidator,
@@ -183,6 +189,12 @@ export const createLeague = mutation({
     }
     if (args.useKeepers && !isPro) {
       throw new Error("Keepers is a Pro feature. Upgrade to enable it.");
+    }
+    // Keepers is auction-only in phase 1 (SNAKE_DRAFT.md §3.4) - checked
+    // here too (not just setUseKeepers) since both fields are settable in
+    // this same call.
+    if (args.useKeepers && (args.draftType ?? "auction") !== "auction") {
+      throw new Error("Keepers isn't available for snake/linear drafts yet.");
     }
 
     const { name, sleeperLeagueId, yahooLeagueKey, useKeepers, ...seasonFields } =

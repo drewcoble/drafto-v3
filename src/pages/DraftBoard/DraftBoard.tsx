@@ -151,7 +151,9 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
         const teamPicks = picks
           .filter((pick) => pick.teamId === team._id)
           .sort((a, b) => a.sequence - b.sequence);
-        const spent = teamPicks.reduce((sum, pick) => sum + pick.price, 0);
+        // Budget stats are auction-only (SNAKE_DRAFT.md §3.4/§12 - the
+        // board needs its own snake-format column set eventually).
+        const spent = teamPicks.reduce((sum, pick) => sum + (pick.price ?? 0), 0);
         const stats = computeTeamBudgetStats(
           resolveTeamSalaryCap(team, settings.salaryCap),
           settings.rosterSlots,
@@ -238,6 +240,9 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
       </Center>
     );
   }
+
+  // Absent means "auction" (see convex/draftType.ts's resolveDraftType).
+  const isAuction = (settings.draftType ?? "auction") === "auction";
 
   return (
     <Box
@@ -329,13 +334,19 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                             color="saddlebrown.6"
                             style={styles}
                           >
-                            {stickyTurnTeam.name} is nominating
+                            {stickyTurnTeam.name}{" "}
+                            {isAuction ? "is nominating" : "is on the clock"}
                           </Badge>
                         ) : (
                           <></>
                         )
                       }
                     </Transition>
+                    {/* No nomination/bid step exists for a snake/linear
+                        draft (SNAKE_DRAFT.md §3.1/§5.2) - activeNomination
+                        is always undefined there, so this "on the block"
+                        badge (and the "nominated" one above it) simply never
+                        mount, same effect as an explicit isAuction guard. */}
                     <Transition
                       mounted={!!activeNomination}
                       transition="slide-down"
@@ -400,7 +411,16 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                     >
                       {team.name}
                     </Text>
-                    <BudgetStats stats={stats} />
+                    {isAuction ? (
+                      <BudgetStats stats={stats} />
+                    ) : (
+                      // No $ concept for snake/linear (SNAKE_DRAFT.md §3.4)
+                      // - openSlots itself is format-agnostic (roster slots
+                      // minus picks made), so just that much is reused.
+                      <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                        {stats.openSlots} open
+                      </Text>
+                    )}
                   </Group>
 
                   {slots.map((slot, slotIndex) => {
@@ -484,7 +504,15 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
                             fw={700}
                             style={{ flexShrink: 0 }}
                           >
-                            {pick ? `$${pick.price}` : ""}
+                            {/* No $ concept outside auction (SNAKE_DRAFT.md
+                                §3.4) - shows the round.pick instead. */}
+                            {pick && isAuction
+                              ? `$${pick.price ?? 0}`
+                              : pick &&
+                                  pick.round !== undefined &&
+                                  pick.pickInRound !== undefined
+                                ? `${pick.round}.${String(pick.pickInRound).padStart(2, "0")}`
+                                : ""}
                           </Text>
                         </Group>
                       </Fragment>

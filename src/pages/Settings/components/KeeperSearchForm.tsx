@@ -248,7 +248,7 @@ export function KeeperSearchForm({
             </Group>
             <Text size="xs" c="dimmed">
               {fairValue ? `Fair ~$${Math.round(fairValue.dollarValue)}` : null}
-              {lastSeason
+              {lastSeason && lastSeason.price !== undefined
                 ? ` · Last kept $${lastSeason.price}${
                     lastSeason.season ? ` (${lastSeason.season})` : ""
                   }`

@@ -60,6 +60,14 @@ interface TeamsPanelProps {
   // available regardless, only add/remove lock.
   addLocked?: boolean;
   removeLocked?: boolean;
+  // True for a snake/linear season (SNAKE_DRAFT.md §3.1/§5) - swaps the
+  // order this panel edits from drafts.nominationOrder (auction's soft
+  // suggestion) to drafts.draftOrder (the real, authoritative pick order),
+  // hides the Linear/Snake mode toggle (the bounce is already implied by
+  // the league's draftType, not independently choosable here), and hides
+  // salary-cap editing entirely (not applicable outside auction).
+  isSnakeOrLinear?: boolean;
+  draftOrder?: Id<"seasonTeams">[] | undefined;
 }
 
 // One consolidated list for every "teams already exist" concern - renaming
@@ -84,6 +92,8 @@ export function TeamsPanel({
   renameError,
   addLocked = false,
   removeLocked = false,
+  isSnakeOrLinear = false,
+  draftOrder,
 }: TeamsPanelProps) {
   const teamById = useMemo(() => {
     const map = new Map<string, Doc<"seasonTeams">>();
@@ -96,8 +106,13 @@ export function TeamsPanel({
     [teams],
   );
 
+  // Whichever order this season actually uses - drafts.draftOrder for
+  // snake/linear, drafts.nominationOrder for auction (see isSnakeOrLinear's
+  // comment on the props interface).
+  const activeOrder = isSnakeOrLinear ? draftOrder : nominationOrder;
+
   const [localOrder, setLocalOrder] = useState<Id<"seasonTeams">[]>(
-    nominationOrder ?? defaultOrder,
+    activeOrder ?? defaultOrder,
   );
   const [mode, setMode] = useState<"linear" | "snake">(
     nominationOrderMode ?? "linear",
@@ -123,8 +138,12 @@ export function TeamsPanel({
   );
 
   useEffect(() => {
-    setLocalOrder(nominationOrder ?? defaultOrder);
-  }, [nominationOrder, defaultOrder]);
+    setLocalOrder(activeOrder ?? defaultOrder);
+    // activeOrder is derived fresh from draftOrder/nominationOrder each
+    // render (not itself a stable dep) - depend on the two underlying props
+    // instead so this doesn't re-run every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nominationOrder, draftOrder, defaultOrder]);
 
   useEffect(() => {
     setMode(nominationOrderMode ?? "linear");
@@ -136,6 +155,8 @@ export function TeamsPanel({
   const clearNominationOrder = useMutation(
     api.draft.nominationOrder.clearNominationOrder,
   );
+  const setDraftOrder = useMutation(api.draft.draftOrder.setDraftOrder);
+  const clearDraftOrder = useMutation(api.draft.draftOrder.clearDraftOrder);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -165,11 +186,11 @@ export function TeamsPanel({
     setOrderError(null);
     setIsSaving(true);
     try {
-      await setNominationOrder({
-        seasonId,
-        teamIds: localOrder,
-        mode,
-      });
+      if (isSnakeOrLinear) {
+        await setDraftOrder({ seasonId, teamIds: localOrder });
+      } else {
+        await setNominationOrder({ seasonId, teamIds: localOrder, mode });
+      }
     } catch (err) {
       setOrderError(getErrorMessage(err, "Failed to save order."));
     } finally {
@@ -180,7 +201,11 @@ export function TeamsPanel({
   const handleClear = async () => {
     setOrderError(null);
     try {
-      await clearNominationOrder({ seasonId });
+      if (isSnakeOrLinear) {
+        await clearDraftOrder({ seasonId });
+      } else {
+        await clearNominationOrder({ seasonId });
+      }
     } catch (err) {
       setOrderError(getErrorMessage(err, "Failed to clear order."));
     }
@@ -218,27 +243,32 @@ export function TeamsPanel({
   // what team-creation order would produce, since clicking Save is still a
   // real state change (inactive -> active) rather than a no-op. Once an
   // order IS active, only an actual difference from it makes this dirty.
+  // Mode never factors in for snake/linear - the bounce is fixed by the
+  // league's draftType, not independently editable here (see
+  // isSnakeOrLinear's comment on the props interface).
   const isDirty =
-    !nominationOrder ||
-    localOrder.join(",") !== nominationOrder.join(",") ||
-    mode !== (nominationOrderMode ?? "linear");
+    !activeOrder ||
+    localOrder.join(",") !== activeOrder.join(",") ||
+    (!isSnakeOrLinear && mode !== (nominationOrderMode ?? "linear"));
 
   return (
     <Stack gap="sm">
       <Group justify="space-between" align="center">
         <Text size="md" fw={500}>
-          Teams
+          {isSnakeOrLinear ? "Draft Order" : "Teams"}
         </Text>
         <Group gap="xs">
-          <SegmentedControl
-            size="sm"
-            value={mode}
-            onChange={(value) => setMode(value as "linear" | "snake")}
-            data={[
-              { label: "Linear", value: "linear" },
-              { label: "Snake", value: "snake" },
-            ]}
-          />
+          {!isSnakeOrLinear && (
+            <SegmentedControl
+              size="sm"
+              value={mode}
+              onChange={(value) => setMode(value as "linear" | "snake")}
+              data={[
+                { label: "Linear", value: "linear" },
+                { label: "Snake", value: "snake" },
+              ]}
+            />
+          )}
           <Menu shadow="md" width={200} position="bottom-end">
             <Menu.Target>
               <ActionIcon variant="default" size={40} aria-label="Team actions">
@@ -246,13 +276,15 @@ export function TeamsPanel({
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item
-                leftSection={<Pencil size={14} />}
-                rightSection={editingCaps ? <Check size={14} /> : undefined}
-                onClick={() => setEditingCaps((current) => !current)}
-              >
-                Edit Caps
-              </Menu.Item>
+              {!isSnakeOrLinear && (
+                <Menu.Item
+                  leftSection={<Pencil size={14} />}
+                  rightSection={editingCaps ? <Check size={14} /> : undefined}
+                  onClick={() => setEditingCaps((current) => !current)}
+                >
+                  Edit Caps
+                </Menu.Item>
+              )}
               <Menu.Item
                 leftSection={<GripVertical size={14} />}
                 rightSection={reordering ? <Check size={14} /> : undefined}
@@ -323,6 +355,7 @@ export function TeamsPanel({
                     onRename={(name) => onRenameTeam(team._id, name)}
                     onSetSalaryCap={(cap) => onSetTeamSalaryCap(team._id, cap)}
                     onRequestRemove={() => setPendingRemoveId(team._id)}
+                    showSalaryCap={!isSnakeOrLinear}
                   />
                 );
               })}
@@ -344,15 +377,15 @@ export function TeamsPanel({
         >
           Save Order
         </Button>
-        {nominationOrder && (
+        {activeOrder && (
           <Button size="md" variant="default" onClick={handleClear}>
-            Clear (fully manual)
+            {isSnakeOrLinear ? "Clear order" : "Clear (fully manual)"}
           </Button>
         )}
         <Badge variant="light" color={isDirty ? "yellow" : "teal"}>
           {isDirty ? "Unsaved changes" : "All changes saved"}
         </Badge>
-        {nominationOrder && (
+        {activeOrder && (
           <Badge variant="light" color="teal">
             Order active
           </Badge>

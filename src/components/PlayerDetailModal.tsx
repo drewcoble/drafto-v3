@@ -257,7 +257,16 @@ export function PlayerDetailModal({
 
           {detail.pick && (
             <Group gap="xs">
-              <Text size="sm">Drafted for ${detail.pick.price}</Text>
+              {/* Auction picks show price; snake/linear picks (no price -
+                  SNAKE_DRAFT.md §3.2) show round.pick instead. */}
+              <Text size="sm">
+                {detail.pick.price !== undefined
+                  ? `Drafted for $${detail.pick.price}`
+                  : detail.pick.round !== undefined &&
+                      detail.pick.pickInRound !== undefined
+                    ? `Drafted - Round ${detail.pick.round}, Pick ${detail.pick.pickInRound}`
+                    : "Drafted"}
+              </Text>
               {detail.pick.isKeeper && (
                 <Badge variant="light" color="gray" size="sm">
                   {detail.trackConsecutiveYears

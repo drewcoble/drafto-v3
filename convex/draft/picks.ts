@@ -10,11 +10,13 @@ import {
   requireRealDraft,
 } from "./auth";
 import { nextNominator } from "./nominationOrder";
+import { stepPickOrder } from "./pickOrder";
 import { expandRosterSlots } from "./slots";
 import { getPreviousSeason } from "./history";
 import { invalidateDraftValues } from "../draftValues";
 import { syncDraftStatus } from "./status";
 import { autoAdjustLiveBudgetForPick } from "./budgetAutoAdjust";
+import { resolveDraftType } from "../draftType";
 
 export const listDraftPicks = query({
   args: { seasonId: v.id("seasons") },
@@ -307,6 +309,129 @@ export const resolvePick = mutation({
       );
     }
 
+    return pickId;
+  },
+});
+
+// Snake/linear counterpart to resolvePick - one direct action instead of
+// nominate->bid->resolve, since there's no bidding to do (SNAKE_DRAFT.md
+// §3.1/§5.2). Takes teamId directly rather than reading it off an active
+// nomination (there isn't one) - trusts whatever team the host (the single
+// signed-in operator entering results for every team, same model the
+// auction flow already assumes) says is picking, same as resolvePick trusts
+// args.teamId over independently re-deriving "whose turn" itself.
+export const draftPick = mutation({
+  args: {
+    seasonId: v.id("seasons"),
+    fpid: v.number(),
+    teamId: v.id("seasonTeams"),
+  },
+  handler: async (ctx, args) => {
+    const { season, draft } = await requireDraftStarted(ctx, args.seasonId);
+
+    const draftType = resolveDraftType(season, draft);
+    if (draftType === "auction") {
+      throw new Error(
+        "This is an auction draft - nominate a player and resolve the bid instead.",
+      );
+    }
+    if (!draft.draftOrder || draft.draftOrder.length === 0) {
+      throw new Error("Set the draft order before picking.");
+    }
+
+    const alreadyPicked = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft_fpid", (q) =>
+        q.eq("draftId", draft._id).eq("fpid", args.fpid),
+      )
+      .first();
+    if (alreadyPicked) {
+      throw new Error("This player has already been drafted.");
+    }
+
+    const team = await ctx.db.get(args.teamId);
+    if (!team || team.seasonId !== args.seasonId) {
+      throw new Error("Team not found in this draft.");
+    }
+
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_fpid", (q) => q.eq("fpid", args.fpid))
+      .first();
+    if (!player) {
+      throw new Error("Player not found.");
+    }
+
+    const lastPick = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft_sequence", (q) => q.eq("draftId", draft._id))
+      .order("desc")
+      .first();
+    const sequence = (lastPick?.sequence ?? 0) + 1;
+
+    // overallPick === sequence in phase 1 - picks always happen one at a
+    // time, in order, with no trading/forfeiting a slot (SNAKE_DRAFT.md §9,
+    // phase 2) to make the two diverge. round/pickInRound are purely
+    // positional (which slot within the round) regardless of "snake" vs.
+    // "linear" - only *which team* occupies that slot in an even round
+    // differs between the two, and that's already decided by whatever
+    // teamId the host passed in, not derived here.
+    const teamCount = draft.draftOrder.length;
+    const overallPick = sequence;
+    const round = Math.ceil(overallPick / teamCount);
+    const pickInRound = ((overallPick - 1) % teamCount) + 1;
+
+    const pickId = await ctx.db.insert("draftPicks", {
+      draftId: draft._id,
+      sequence,
+      fpid: args.fpid,
+      position: player.position,
+      teamId: args.teamId,
+      round,
+      pickInRound,
+      overallPick,
+      createdAt: Date.now(),
+    });
+
+    // Advance "whose turn" for next time - unlike nominate() (which always
+    // steps from the existing suggestion, since that suggestion is barely
+    // related to who actually won the bid), this steps from args.teamId
+    // itself: in a snake/linear draft "on the clock" is meant to track who
+    // actually just picked, so an out-of-order correction still leaves the
+    // rotation pointed at the right next team instead of continuing from a
+    // now-stale suggestion.
+    const turn = await ctx.db
+      .query("draftNominationTurns")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .first();
+    if (turn) {
+      const allPicks = await ctx.db
+        .query("draftPicks")
+        .withIndex("by_draft_sequence", (q) => q.eq("draftId", draft._id))
+        .collect();
+      const picksCountByTeam = new Map<string, number>();
+      for (const pick of allPicks) {
+        picksCountByTeam.set(
+          pick.teamId,
+          (picksCountByTeam.get(pick.teamId) ?? 0) + 1,
+        );
+      }
+      const totalSlots = expandRosterSlots(season.rosterSlots).length;
+      const next = stepPickOrder(
+        draft.draftOrder,
+        draftType,
+        args.teamId,
+        turn.direction,
+        (teamId) => (picksCountByTeam.get(teamId) ?? 0) >= totalSlots,
+      );
+      await ctx.db.patch(turn._id, {
+        currentTeamId: next.teamId,
+        direction: next.direction,
+        updatedAt: Date.now(),
+      });
+    }
+
+    await syncDraftStatus(ctx, draft._id);
     return pickId;
   },
 });

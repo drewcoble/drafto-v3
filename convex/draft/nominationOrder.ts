@@ -1,77 +1,15 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
 import { requireDraftOwner, requireRealDraft } from "./auth";
+import { stepPickOrder } from "./pickOrder";
 
-// Single, unchecked step - given the configured order/mode and who's
-// currently up, computes who's up next with no regard for roster capacity.
-// Kept separate from nextNominator so the capacity-skipping loop below can
-// call it repeatedly without re-deriving the linear/snake math each time.
-//
-// Linear is a plain round-robin. Snake bounces at each end of the order
-// instead of wrapping - when the next step would go out of range, the same
-// team is returned again (unchanged) with direction flipped, so that team
-// gets two consecutive turns before the order reverses. That's what makes a
-// classic snake draft "snake"-shaped: e.g. with 4 teams the sequence is
-// A,B,C,D,D,C,B,A,A,B,C,D,... - team D and team A each nominate twice in a
-// row at the turns where the direction reverses.
-function rawStep(
-  order: readonly Id<"seasonTeams">[],
-  mode: "linear" | "snake",
-  currentTeamId: Id<"seasonTeams">,
-  direction: 1 | -1,
-): { teamId: Id<"seasonTeams">; direction: 1 | -1 } {
-  const index = order.indexOf(currentTeamId);
-  if (index === -1) {
-    // Current team fell out of the order (e.g. order was reconfigured) -
-    // simplest safe recovery is to restart at the top.
-    return { teamId: order[0]!, direction: 1 };
-  }
-  if (mode === "linear") {
-    return { teamId: order[(index + 1) % order.length]!, direction: 1 };
-  }
-  const nextIndex = index + direction;
-  if (nextIndex < 0 || nextIndex >= order.length) {
-    return { teamId: order[index]!, direction: direction === 1 ? -1 : 1 };
-  }
-  return { teamId: order[nextIndex]!, direction };
-}
-
-// Given the configured order/mode and who's currently up, computes who's up
-// next - skipping any team isTeamFull reports as having no open roster
-// slots left, since a team with a full roster (bench included) has nothing
-// left to nominate for. Exported (not just used internally by nominate())
-// so it stays trivially testable/reasoned-about in isolation from the
-// mutation's DB plumbing.
-//
-// Repeatedly applies rawStep rather than jumping straight to "the next
-// non-full team in list order" so snake's bounce-at-the-boundary behavior
-// (see rawStep) is preserved exactly - a full team sitting at the boundary
-// just gets its would-be repeat turn skipped, without disturbing anyone
-// else's place in the sequence.
-export function nextNominator(
-  order: readonly Id<"seasonTeams">[],
-  mode: "linear" | "snake",
-  currentTeamId: Id<"seasonTeams">,
-  direction: 1 | -1,
-  isTeamFull: (teamId: Id<"seasonTeams">) => boolean,
-): { teamId: Id<"seasonTeams"> | null; direction: 1 | -1 } {
-  if (order.length === 0) {
-    throw new Error("Nomination order is empty.");
-  }
-  let candidate = rawStep(order, mode, currentTeamId, direction);
-  // (teamId, direction) is a finite state space of order.length * 2 - if we
-  // haven't found an open team within that many steps, every team is full
-  // and we're just cycling, so stop and report "nobody left."
-  const maxSteps = order.length * 2;
-  for (let step = 0; step < maxSteps; step++) {
-    if (!isTeamFull(candidate.teamId)) {
-      return candidate;
-    }
-    candidate = rawStep(order, mode, candidate.teamId, candidate.direction);
-  }
-  return { teamId: null, direction: candidate.direction };
-}
+// Thin, name-preserving alias - the actual rotation math moved to
+// pickOrder.ts's stepPickOrder (SNAKE_DRAFT.md §3.1) so a real snake
+// draft's turn tracking can share it instead of duplicating it. Kept under
+// this name here since every existing call site (picks.ts's nominate())
+// still reasons about it as "who nominates next," not the more general
+// "who picks next" - no behavior change either way.
+export const nextNominator = stepPickOrder;
 
 export const getCurrentNominator = query({
   args: { seasonId: v.id("seasons") },

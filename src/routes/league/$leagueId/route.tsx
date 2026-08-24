@@ -170,18 +170,32 @@ function LeagueLayout() {
     );
   }
 
+  // Absent means "auction" (see convex/draftType.ts's resolveDraftType,
+  // duplicated inline here rather than imported - src/ never imports
+  // runtime convex/ modules directly, only _generated types/api).
+  const draftType = settings?.draftType ?? "auction";
+  const isAuction = draftType === "auction";
+
   // Absent means true (see schema.ts's useKeepers comment) - don't hide the
   // tab while settings is still loading, only once positively known off.
   // Only applies to Pro leagues though - a free-tier league always shows
   // the tab (regardless of the setting) so clicking it lands on the
   // non-dismissible upgrade prompt (see keepers.tsx's Pro gate) instead of
   // the tab just vanishing, which read as the feature not existing at all.
+  // Keepers is also auction-only in phase 1 (SNAKE_DRAFT.md §3.4) - hidden
+  // for a snake/linear league regardless of Pro access, same as Budget.
   const hasProAccess = entitlement?.hasProAccess ?? false;
-  const keepersEnabled = !hasProAccess || settings?.useKeepers !== false;
+  const keepersEnabled =
+    isAuction && (!hasProAccess || settings?.useKeepers !== false);
+  // Budget planning is auction-only too (SNAKE_DRAFT.md §3.4) - no
+  // $-plan-vs-actual concept exists for a snake/linear draft.
+  const budgetEnabled = isAuction;
   const order = isStarted ? STARTED_ORDER : PRE_DRAFT_ORDER;
   const directCount = isStarted ? STARTED_DIRECT_COUNT : PRE_DRAFT_DIRECT_COUNT;
   const visibleValues = order.filter(
-    (value) => value !== "keepers" || keepersEnabled,
+    (value) =>
+      (value !== "keepers" || keepersEnabled) &&
+      (value !== "budget" || budgetEnabled),
   );
   const visibleTabs = visibleValues.map((value) => ({
     value,
@@ -198,14 +212,20 @@ function LeagueLayout() {
     <PageContainer
       pt={{
         base:
-          (isStarted ? MOBILE_STATS_ROW_HEIGHT : 0) + MOBILE_HEADER_HEIGHT + 16,
+          (isStarted && isAuction ? MOBILE_STATS_ROW_HEIGHT : 0) +
+          MOBILE_HEADER_HEIGHT +
+          16,
         sm: "xl",
       }}
       pb={{ base: isStarted ? 230 : 116, sm: "xl" }}
     >
       <Stack gap="md">
         <AppHeader />
-        {isStarted && selfTeamResult?.selfTeam && seasonId && (
+        {/* Auction-only (SNAKE_DRAFT.md §3.4/§5.2) - nominate/bid/budget
+            stats have no snake/linear equivalent. The snake Draft tab
+            (SnakeDraftTab) is self-contained instead of leaning on this
+            persistent top bar the way auction's DraftTab does. */}
+        {isStarted && isAuction && selfTeamResult?.selfTeam && seasonId && (
           <DraftTopBar
             seasonId={seasonId}
             selfTeamId={selfTeamResult.selfTeam._id}

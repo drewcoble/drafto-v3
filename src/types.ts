@@ -13,6 +13,11 @@ export type ScoringFormat = "STD" | "HALF" | "PPR";
 
 export type TeScoringFormat = "NONE" | "HALF" | "FULL";
 
+// Mirrors convex/draftType.ts's DraftType - duplicated rather than imported,
+// same convention as ScoringFormat/TeScoringFormat above (both plain literal
+// unions kept in sync by hand rather than type-imported from convex/).
+export type DraftTypeFormat = "auction" | "snake" | "linear";
+
 export interface ScoringConfig {
   scoring: ScoringFormat;
   teScoring: TeScoringFormat;

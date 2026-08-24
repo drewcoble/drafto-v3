@@ -20,7 +20,14 @@ export interface TeamLike {
 export interface PickLike {
   teamId: string;
   fpid: number;
-  price: number;
+  // Optional (matching Convex's own `?` field semantics, not just
+  // `| undefined` - exactOptionalPropertyTypes distinguishes an absent key
+  // from a present-but-undefined one) since convex/schema.ts's
+  // draftPicks.price is now optional (SNAKE_DRAFT.md §3.2) - this whole
+  // module is auction-only (nomination/bid strategy suggestions), so it's
+  // always real for the picks passed in here in practice; see
+  // computeTeamRosterFits' ?? 0 below.
+  price?: number;
   position: Position;
   planSlotKey?: string;
 }
@@ -61,7 +68,7 @@ export function computeTeamRosterFits(
 ): TeamRosterFit[] {
   return teams.map((team) => {
     const teamPicks = picks.filter((pick) => pick.teamId === team._id);
-    const spent = teamPicks.reduce((sum, pick) => sum + pick.price, 0);
+    const spent = teamPicks.reduce((sum, pick) => sum + (pick.price ?? 0), 0);
     const budget = computeTeamBudgetStats(
       resolveTeamSalaryCap(team, settings.salaryCap),
       settings.rosterSlots,

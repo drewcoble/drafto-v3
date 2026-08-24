@@ -74,14 +74,17 @@ export function KeeperCardList({
         const teamKeepers = keepersByTeamId.get(team._id);
         if (!teamKeepers || teamKeepers.length === 0) return null;
 
+        // Dollar keeper cost is auction-only (SNAKE_DRAFT.md §3.4/§8 -
+        // round-based keeper cost is a separate, phase-2 concept).
         const totalCost = teamKeepers.reduce(
-          (sum, pick) => sum + pick.price,
+          (sum, pick) => sum + (pick.price ?? 0),
           0,
         );
         const totalValue = teamKeepers.reduce(
           (sum, pick) =>
             sum +
-            ((draftValueByFpid.get(pick.fpid)?.dollarValue ?? 0) - pick.price),
+            ((draftValueByFpid.get(pick.fpid)?.dollarValue ?? 0) -
+              (pick.price ?? 0)),
           0,
         );
 
@@ -106,7 +109,7 @@ export function KeeperCardList({
                 const streak = pick.keeperStreak ?? 1;
                 const value =
                   (draftValueByFpid.get(pick.fpid)?.dollarValue ?? 0) -
-                  pick.price;
+                  (pick.price ?? 0);
                 return (
                   <Stack key={pick._id} gap={0}>
                     {index > 0 && <Divider mb={6} />}
@@ -153,7 +156,7 @@ export function KeeperCardList({
                     </Group>
                     <Group gap={6} wrap="wrap" mt={4}>
                       <Text size="sm" c="dimmed">
-                        ${pick.price}
+                        ${pick.price ?? 0}
                         {showStreakInput
                           ? ` · ${streak} yr${streak === 1 ? "" : "s"} kept`
                           : ""}

@@ -52,7 +52,8 @@ export function SlotTable({
             const pick = pickBySlotKey.get(slot.key);
             const player = pick ? nameByFpid.get(pick.fpid) : undefined;
             const planAmount = planAmounts[slot.key] ?? 0;
-            const diff = pick ? planAmount - pick.price : 0;
+            // Budget planning is auction-only (SNAKE_DRAFT.md §3.4).
+            const diff = pick ? planAmount - (pick.price ?? 0) : 0;
             return (
               <Table.Tr key={slot.key}>
                 {/* Slot badge + player name + keeper badge all in one cell
@@ -112,7 +113,7 @@ export function SlotTable({
                 <Table.Td>
                   <Stack gap={0}>
                     <Text size="sm" fw={600}>
-                      {pick ? `$${pick.price}` : "—"}
+                      {pick && pick.price !== undefined ? `$${pick.price}` : "—"}
                     </Text>
                     <Text
                       size="xs"

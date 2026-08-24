@@ -3,6 +3,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { positionValidator } from "./positions";
 import { scoringValidator, teScoringValidator } from "./scoring";
+import { draftTypeValidator } from "./draftType";
 
 // Shared by seasons/drafts below.
 const rosterSlotsValidator = v.object({
@@ -474,6 +475,11 @@ export default defineSchema({
     leagueId: v.id("leagues"),
     year: v.string(),
     teamCount: v.number(),
+    // Absent means "auction" - see draftType.ts's resolveDraftType. Drives
+    // which of the app's format-specific builds/subsystems apply to this
+    // season (SNAKE_DRAFT.md §2/§5); locked once teams/picks exist, same as
+    // scoring/rosterSlots below.
+    draftType: v.optional(draftTypeValidator),
     salaryCap: v.number(),
     scoring: scoringValidator,
     // TE-only reception bonus / 6pt-passing-TD toggle - both v.optional since
@@ -508,6 +514,13 @@ export default defineSchema({
     seasonId: v.id("seasons"),
     kind: v.union(v.literal("mock"), v.literal("real")),
     name: v.string(),
+    // Overrides seasons.draftType for this draft only - same
+    // override-the-season-default pattern as salaryCap/rosterSlots below.
+    // Only useful for a mock draft testing a different format than the
+    // season's real one; today's UI never creates a second draft, so in
+    // practice this is always absent and resolveDraftType falls through to
+    // the season's own draftType.
+    draftType: v.optional(draftTypeValidator),
     salaryCap: v.optional(v.number()),
     rosterSlots: v.optional(rosterSlotsValidator),
     flexPositions: v.optional(v.array(positionValidator)),
@@ -517,6 +530,20 @@ export default defineSchema({
     nominationOrderMode: v.optional(
       v.union(v.literal("linear"), v.literal("snake")),
     ),
+    // A real snake/linear draft's round-1 pick order (SNAKE_DRAFT.md §3.1) -
+    // the counterpart to nominationOrder above, kept as its own field rather
+    // than reusing that one even though the underlying rotation math is
+    // shared (convex/draft/pickOrder.ts's stepPickOrder): nominationOrder is
+    // documented (see nominate() in picks.ts) as only ever a suggestion the
+    // host can override anytime, whereas a snake draft's order is meant to
+    // be closer to authoritative. "linear" here means a straight round-robin
+    // with no direction bounce (see draftType.ts's DraftType) - distinct
+    // from nominationOrderMode's own "linear", which is the same concept
+    // applied to auction's nomination suggestion instead of a real pick
+    // order. Seeded once, pre-draft (randomized or manually set - see
+    // SNAKE_DRAFT.md §3.1's open question on a "randomize" action);
+    // meaningless for an auction-type draft.
+    draftOrder: v.optional(v.array(v.id("seasonTeams"))),
     status: v.union(
       v.literal("pre_draft"),
       v.literal("in_progress"),
@@ -652,7 +679,24 @@ export default defineSchema({
     fpid: v.number(),
     position: positionValidator,
     teamId: v.id("seasonTeams"),
-    price: v.number(),
+    // WIDENED from required (see SNAKE_DRAFT.md §3.2) - meaningless for a
+    // snake/linear pick. Existing (auction) rows already have a real
+    // number here, so this widening needs no backfill; every reader that
+    // used to treat this as a definite number needs a null-check or an
+    // upstream draftType branch instead.
+    price: v.optional(v.number()),
+    // Round/pick-in-round/overall-pick metadata - only ever set for a
+    // snake/linear-format draft's picks (see resolveDraftType in
+    // convex/draftType.ts). Stored explicitly rather than derived from
+    // `sequence` + team count at read time: `sequence` is purely insertion/
+    // display order (tolerates manual corrections, undo, out-of-order
+    // entry) and isn't necessarily the canonical draft slot once traded/
+    // forfeited picks (phase 2, SNAKE_DRAFT.md §9) mean "which slot is pick
+    // #47" stops being a pure function of team count - a later trade
+    // shouldn't retroactively rewrite an earlier pick's own round/slot.
+    round: v.optional(v.number()),
+    pickInRound: v.optional(v.number()),
+    overallPick: v.optional(v.number()),
     // Which budget-plan slot this fills, e.g. "RB2" - only ever set (and only
     // ever read) for the self team, at pick time, to reconcile the live
     // auction price against that slot's pre-draft $ plan (see
@@ -768,18 +812,21 @@ export default defineSchema({
     .index("by_draft", ["draftId"])
     .index("by_draft_fpid", ["draftId", "fpid"]),
 
-  // Live "whose turn is it to nominate" pointer - only meaningful when the
-  // draft's nominationOrder is configured. At most one row per draft.
-  // currentTeamId is null when the host has explicitly cleared "whose turn"
-  // (e.g. running a pre-cycle top-X auction with no fixed nominator before
-  // the regular rotation begins) - distinct from no row existing yet, which
-  // just means the order was configured but the cycle hasn't been started.
-  // direction only matters in "snake" mode (see
-  // convex/draft/nominationOrder.ts's nextNominator) - it's what lets the
-  // team at each end of the order take two consecutive turns before
-  // reversing, matching a standard snake draft's round-boundary behavior.
-  // Always overridable by the host (see setCurrentNominator) - this is a
-  // suggestion the nominate UI defaults to, never an enforced restriction.
+  // Live "whose turn is it" pointer - only meaningful when the draft's
+  // nominationOrder (auction) or draftOrder (snake/linear, see drafts.
+  // draftOrder below) is configured. At most one row per draft. Serves both
+  // formats (SNAKE_DRAFT.md §3.1): for auction this is only ever a
+  // suggestion the nominate UI defaults to (see setCurrentNominator -
+  // always overridable, never enforced); for a real snake/linear draft
+  // it's closer to authoritative, since there really is a single team "on
+  // the clock." currentTeamId is null when the host has explicitly cleared
+  // "whose turn" (e.g. running a pre-cycle top-X auction with no fixed
+  // nominator before the regular rotation begins) - distinct from no row
+  // existing yet, which just means the order was configured but the cycle
+  // hasn't been started. direction only matters in "snake" mode (see
+  // convex/draft/pickOrder.ts's stepPickOrder) - it's what lets the team at
+  // each end of the order take two consecutive turns before reversing,
+  // matching a standard snake draft's round-boundary behavior.
   draftNominationTurns: defineTable({
     draftId: v.id("drafts"),
     currentTeamId: v.union(v.id("seasonTeams"), v.null()),

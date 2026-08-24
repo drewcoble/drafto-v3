@@ -74,7 +74,10 @@ export function TeamSlotDetail({
                   (player?.name ?? "—")
                 )}
                 {pick && rookieFpids.has(pick.fpid) && <RookieBadge />}
-                {pick ? ` · $${pick.price}` : ""}
+                {/* Auction-only display (SNAKE_DRAFT.md §3.4) - price is
+                    undefined for a snake/linear pick, so this is omitted
+                    rather than showing "$undefined". */}
+                {pick && pick.price !== undefined ? ` · $${pick.price}` : ""}
               </Text>
               {pick?.isKeeper && (
                 <Badge variant="light" color="gray" size="sm">

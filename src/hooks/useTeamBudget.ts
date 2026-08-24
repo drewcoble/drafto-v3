@@ -59,7 +59,9 @@ export function useTeamBudget(
 
   const team = teams.find((t) => t._id === teamId);
   const teamPicks = picks.filter((pick) => pick.teamId === teamId);
-  const spent = teamPicks.reduce((sum, pick) => sum + pick.price, 0);
+  // Budget tracking is auction-only (SNAKE_DRAFT.md §3.4) - price is
+  // always real for the picks this hook runs against.
+  const spent = teamPicks.reduce((sum, pick) => sum + (pick.price ?? 0), 0);
 
   let unfilledPlanTotal: number | undefined;
   if (team?.isSelf && plan) {

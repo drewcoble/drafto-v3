@@ -242,14 +242,18 @@ async function computeReportCardData(
         team: value.team,
         position: pick.position,
         teamId: pick.teamId,
-        price: pick.price,
+        // Report Card is auction-only (SNAKE_DRAFT.md §3.3/§12) - price is
+        // always real for the picks this function actually runs against;
+        // ?? 0 is just satisfying the now-optional schema type, not a
+        // meaningful fallback for a case this ever hits in practice.
+        price: pick.price ?? 0,
         sequence: pick.sequence,
         planSlotKey: pick.planSlotKey,
         isKeeper: pick.isKeeper ?? false,
         points: value.points,
         vor: value.valueOverReplacement,
         dollarValue: value.dollarValue,
-        surplus: value.dollarValue - pick.price,
+        surplus: value.dollarValue - (pick.price ?? 0),
         keeperEstimatedValue: null,
         keeperSurplus: null,
         consistencyLabel: consistencyByFpid.get(pick.fpid) ?? null,
@@ -285,7 +289,8 @@ async function computeReportCardData(
       team: projection?.team ?? null,
       position: pick.position,
       teamId: pick.teamId,
-      price: pick.price,
+      // Same auction-only reasoning as the branch above.
+      price: pick.price ?? 0,
       sequence: pick.sequence,
       planSlotKey: pick.planSlotKey,
       isKeeper,
@@ -296,7 +301,7 @@ async function computeReportCardData(
       keeperEstimatedValue,
       keeperSurplus:
         keeperEstimatedValue !== null
-          ? keeperEstimatedValue - pick.price
+          ? keeperEstimatedValue - (pick.price ?? 0)
           : null,
       consistencyLabel: consistencyByFpid.get(pick.fpid) ?? null,
     });

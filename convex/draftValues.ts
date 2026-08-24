@@ -404,7 +404,10 @@ async function computeDraftValues(
   for (const keeper of keepers) {
     keptCountByPos[keeper.position] =
       (keptCountByPos[keeper.position] ?? 0) + 1;
-    keptDollars += keeper.price;
+    // This $ VBD engine is auction-only (SNAKE_DRAFT.md §3.3) - a snake/
+    // linear keeper has no price, and would just contribute 0 here if one
+    // ever reached this path.
+    keptDollars += keeper.price ?? 0;
   }
 
   // Sum each team's actual cap (its override, or the league default) rather

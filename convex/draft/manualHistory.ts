@@ -75,7 +75,12 @@ export const getManualPreviousSeasonEntry = query({
           isSelf: team.isSelf,
           players: (picksByTeamId.get(team._id) ?? []).map((pick) => ({
             fpid: pick.fpid,
-            price: pick.price,
+            // This whole flow only ever creates picks through
+            // setManualPreviousSeasonResults below, whose own args require
+            // a real price - ?? 0 is just satisfying draftPicks.price's
+            // now-optional schema type (SNAKE_DRAFT.md §3.2), not a
+            // meaningful fallback for a case this ever hits in practice.
+            price: pick.price ?? 0,
           })),
         })),
     };

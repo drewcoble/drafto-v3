@@ -10,6 +10,7 @@ import { ConvexReactClient } from "convex/react";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import { authCookieStorage } from "./lib/authStorage";
 import { routeTree } from "./routeTree.gen";
 import { cssVariablesResolver, theme } from "./theme";
 
@@ -66,7 +67,17 @@ ReactDOM.createRoot(rootElement).render(
         with no credentials ever entered - this is what was actually
         causing the "must be signed in" crash loop on develop.infinidraft.com,
         not anything about stale stored tokens. */}
-    <ConvexAuthProvider client={convex} shouldHandleCode={false}>
+    {/* storage={authCookieStorage}: undefined today (falls back to the
+        library's own localStorage default) everywhere until the
+        www/auction/snake subdomain split ships and sets
+        VITE_AUTH_COOKIE_DOMAIN - see src/lib/authStorage.ts and
+        SNAKE_DRAFT.md §5.4 for why a session needs to be readable across
+        subdomains rather than trapped on whichever one signed in. */}
+    <ConvexAuthProvider
+      client={convex}
+      shouldHandleCode={false}
+      {...(authCookieStorage ? { storage: authCookieStorage } : {})}
+    >
       <QueryClientProvider client={queryClient}>
         <MantineProvider
           theme={theme}

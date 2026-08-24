@@ -34,12 +34,14 @@ import {
   positionColorOrDefault,
 } from "../../../lib/positionColors";
 import {
+  DRAFT_TYPE_OPTIONS,
   PASSING_TD_OPTIONS,
   ROSTER_SLOT_KEYS,
   SCORING_OPTIONS,
   TE_SCORING_OPTIONS,
   type LeagueSettingsFormValues,
 } from "../../../constants/leagueSettings";
+import type { DraftTypeFormat } from "../../../types";
 
 interface SettingsFormProps {
   form: LeagueSettingsFormValues;
@@ -93,6 +95,12 @@ interface SettingsFormProps {
   // squeezing two columns (and the Roster card's own 3-up slot grid inside
   // one of them) into ~260px.
   compact?: boolean;
+  // True only for the plain "create a new league" flow (LeagueDetails.tsx,
+  // when there's no existing settings row yet) - draftType has no live
+  // "change it later" mutation the way useKeepers does (see
+  // LeagueSettingsFormValues' comment), so once a league exists this
+  // control simply isn't shown rather than rendered disabled.
+  showDraftType?: boolean;
 }
 
 export function SettingsForm({
@@ -107,6 +115,7 @@ export function SettingsForm({
   configLocked = false,
   useKeepersControl,
   compact = false,
+  showDraftType = false,
 }: SettingsFormProps) {
   // SettingsForm is freshly mounted at the start of every edit session (see
   // LeagueDetails.tsx's isEditing early-return, and the import wizards'
@@ -146,6 +155,28 @@ export function SettingsForm({
                 }
               />
             </Grid.Col>
+            {showDraftType && (
+              <Grid.Col span={{ base: 12, sm: 6 }}>
+                <Stack gap={4}>
+                  <Text size="sm" fw={500}>
+                    Draft Type
+                  </Text>
+                  <SegmentedControl
+                    value={form.draftType}
+                    onChange={(value) =>
+                      handleChange({
+                        ...form,
+                        draftType: value as DraftTypeFormat,
+                      })
+                    }
+                    data={DRAFT_TYPE_OPTIONS.map(({ label, value }) => ({
+                      label,
+                      value,
+                    }))}
+                  />
+                </Stack>
+              </Grid.Col>
+            )}
             <Grid.Col span={{ base: 6, sm: 3 }}>
               <Stack gap={4}>
                 <Text size="sm" fw={500}>
@@ -170,26 +201,32 @@ export function SettingsForm({
                 />
               </Stack>
             </Grid.Col>
-            <Grid.Col span={{ base: 6, sm: 3 }}>
-              <Stack gap={4}>
-                <Text size="sm" fw={500}>
-                  Salary Cap
-                </Text>
-                <EditableNumberStepper
-                  label="Salary Cap"
-                  min={1}
-                  prefix="$"
-                  value={form.salaryCap}
-                  onChange={(value) =>
-                    handleChange({
-                      ...form,
-                      salaryCap: value ?? form.salaryCap,
-                    })
-                  }
-                  disabled={configLocked}
-                />
-              </Stack>
-            </Grid.Col>
+            {/* Not applicable outside auction - see SNAKE_DRAFT.md §2.1.
+                Editing an existing (today, always auction) league always
+                shows this regardless of showDraftType, since form.draftType
+                is populated from settings.draftType there too. */}
+            {form.draftType === "auction" && (
+              <Grid.Col span={{ base: 6, sm: 3 }}>
+                <Stack gap={4}>
+                  <Text size="sm" fw={500}>
+                    Salary Cap
+                  </Text>
+                  <EditableNumberStepper
+                    label="Salary Cap"
+                    min={1}
+                    prefix="$"
+                    value={form.salaryCap}
+                    onChange={(value) =>
+                      handleChange({
+                        ...form,
+                        salaryCap: value ?? form.salaryCap,
+                      })
+                    }
+                    disabled={configLocked}
+                  />
+                </Stack>
+              </Grid.Col>
+            )}
           </Grid>
         </Stack>
       </Card>

@@ -65,7 +65,8 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
       const teamPicks = picks
         .filter((pick) => pick.teamId === team._id)
         .sort((a, b) => a.sequence - b.sequence);
-      const spent = teamPicks.reduce((sum, pick) => sum + pick.price, 0);
+      // Budget stats are auction-only (SNAKE_DRAFT.md §3.4).
+      const spent = teamPicks.reduce((sum, pick) => sum + (pick.price ?? 0), 0);
       const stats = computeTeamBudgetStats(
         resolveTeamSalaryCap(team, settings.salaryCap),
         settings.rosterSlots,
