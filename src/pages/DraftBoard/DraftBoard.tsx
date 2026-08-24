@@ -35,6 +35,7 @@ import {
   resolveTeamSalaryCap,
 } from "../../lib/teamBudget";
 import BudgetStats from "./BudgetStats";
+import { SnakeDraftBoard } from "./SnakeDraftBoard";
 
 interface DraftBoardProps {
   seasonId: Id<"seasons">;
@@ -241,8 +242,14 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
     );
   }
 
-  // Absent means "auction" (see convex/draftType.ts's resolveDraftType).
+  // Absent means "auction" (see convex/draftType.ts's resolveDraftType). A
+  // snake/linear draft's own shape (one slot per team per round, in a fixed
+  // order) reads far better as a round-by-round grid than this team-roster
+  // layout - see SnakeDraftBoard.tsx.
   const isAuction = (settings.draftType ?? "auction") === "auction";
+  if (!isAuction) {
+    return <SnakeDraftBoard seasonId={seasonId} />;
+  }
 
   return (
     <Box

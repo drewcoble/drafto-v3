@@ -6,8 +6,14 @@ import {
   type QueryCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { requireDraftNotStarted, requireDraftOwner } from "./auth";
+import {
+  requireDraftNotStarted,
+  requireDraftOwner,
+  requireRealDraft,
+} from "./auth";
 import { resolveTeamPositionInRound } from "./pickOrder";
+import { resolveDraftType } from "../draftType";
+import { expandRosterSlots } from "./slots";
 
 // Traded/forfeited draft-slot ownership (SNAKE_DRAFT.md §9) - see
 // schema.ts's draftPickSlots comment for the full data-model reasoning.
@@ -227,6 +233,184 @@ export const listPickSlots = query({
   handler: async (ctx, args) => {
     const { draft } = await requireDraftOwner(ctx, args.seasonId);
     return await listTouchedSlots(ctx, draft._id);
+  },
+});
+
+// Fully-resolved round x team grid for the snake/linear TV board
+// (src/pages/DraftBoard/SnakeDraftBoard.tsx) - unlike the auction TV board
+// (which assembles its team-roster view client-side from several small
+// public queries), this one resolves round/position/trade/forfeit/on-the-
+// clock state entirely server-side, matching how every other consumer of
+// resolveTeamPositionInRound in this codebase already works (nothing
+// duplicates that math client-side - see this file's other functions).
+// No owner check (requireRealDraft, not requireDraftOwner) - this powers a
+// public, unauthenticated TV link, same convention as
+// convex/draft/picks.ts's listDraftPicksPublic and friends.
+export const getSnakeBoardPublic = query({
+  args: { seasonId: v.id("seasons") },
+  handler: async (ctx, args) => {
+    const draft = await requireRealDraft(ctx, args.seasonId);
+    const season = await ctx.db.get(args.seasonId);
+    if (!season) return null;
+    if (!draft.draftOrder || draft.draftOrder.length === 0) return null;
+
+    const mode = resolveDraftType(season, draft);
+    if (mode === "auction") return null;
+
+    const draftOrder = draft.draftOrder;
+    const teamCount = draftOrder.length;
+    const reversalRounds = draft.reversalRounds ?? [];
+    const totalRounds = expandRosterSlots(season.rosterSlots).length;
+
+    const teams = await ctx.db
+      .query("seasonTeams")
+      .withIndex("by_season", (q) => q.eq("seasonId", args.seasonId))
+      .collect();
+    const teamById = new Map(teams.map((t) => [t._id, t]));
+
+    const picks = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .collect();
+    const pickByPositionKey = new Map<string, Doc<"draftPicks">>();
+    for (const pick of picks) {
+      if (pick.round !== undefined && pick.pickInRound !== undefined) {
+        pickByPositionKey.set(slotKey(pick.round, pick.pickInRound), pick);
+      }
+    }
+
+    const touchedSlots = await listTouchedSlots(ctx, draft._id);
+    const overrideByRoundTeamKey = new Map<string, Doc<"draftPickSlots">>();
+    for (const slot of touchedSlots) {
+      overrideByRoundTeamKey.set(`${slot.round}:${slot.originalTeamId}`, slot);
+    }
+
+    const filled = filledPositions(picks);
+    const forfeited = await forfeitedPositions(
+      ctx,
+      draft._id,
+      draftOrder,
+      mode,
+      reversalRounds,
+    );
+    const forfeitedByRound = await countForfeitedByRound(ctx, draft._id);
+
+    // The next structurally-open slot - the SAME resolution draftPick's
+    // mutation uses, so the board's highlighted cell can never disagree
+    // with what a real pick would actually claim. Computed regardless of
+    // whether the draft has actually started: pre-draft, with some
+    // keepers already locked in, this is still meaningful ("round 1 pick 4
+    // is next, after your 3 keepers") - callers decide whether to show it
+    // as a live glow vs. a "draft not started" label using
+    // drafts.startedAt/status separately. null once every in-bounds round
+    // is filled/forfeited (draft complete).
+    let onClock: { round: number; position: number } | null = null;
+    const next = findNextOpenSlot(teamCount, filled, forfeited);
+    if (next.round <= totalRounds) {
+      onClock = { round: next.round, position: next.pickInRound };
+    }
+
+    let onClockTeamId: Id<"seasonTeams"> | null = null;
+
+    const rounds = Array.from({ length: totalRounds }, (_, i) => i + 1).map(
+      (round) => {
+        // Any team's resolved position tells us this round's direction -
+        // position 1 means forward (left-to-right), teamCount means
+        // backward - since resolveTeamPositionInRound already walks
+        // round-by-round to account for reversalRounds, this is cheaper
+        // than re-deriving the same walk separately here.
+        const forward =
+          resolveTeamPositionInRound(
+            draftOrder,
+            mode,
+            reversalRounds,
+            round,
+            draftOrder[0]!,
+          ) === 1;
+
+        const cells = draftOrder.map((originalTeamId) => {
+          const position = resolveTeamPositionInRound(
+            draftOrder,
+            mode,
+            reversalRounds,
+            round,
+            originalTeamId,
+          )!;
+          const override = overrideByRoundTeamKey.get(
+            `${round}:${originalTeamId}`,
+          );
+          const currentTeamId = override
+            ? override.currentTeamId
+            : originalTeamId;
+          const isForfeited = currentTeamId === null;
+          const traded =
+            !!override &&
+            override.currentTeamId !== null &&
+            override.currentTeamId !== originalTeamId;
+          const pick = pickByPositionKey.get(slotKey(round, position));
+          const isOnClock =
+            !isForfeited &&
+            !pick &&
+            onClock !== null &&
+            onClock.round === round &&
+            onClock.position === position;
+          if (isOnClock) onClockTeamId = currentTeamId;
+
+          return {
+            originalTeamId,
+            originalTeamName: teamById.get(originalTeamId)?.name ?? "",
+            currentTeamId,
+            currentTeamName: currentTeamId
+              ? (teamById.get(currentTeamId)?.name ?? "")
+              : null,
+            position,
+            overallPick:
+              countRealSlotsThroughRound(round - 1, teamCount, forfeitedByRound) +
+              position,
+            traded,
+            tradeNote: override?.note,
+            isForfeited,
+            isOnClock,
+            pick: pick
+              ? {
+                  fpid: pick.fpid,
+                  position: pick.position,
+                  isKeeper: pick.isKeeper ?? false,
+                  teamId: pick.teamId,
+                }
+              : null,
+          };
+        });
+
+        return { round, forward, cells };
+      },
+    );
+
+    const totalPicks = countRealSlotsThroughRound(
+      totalRounds,
+      teamCount,
+      forfeitedByRound,
+    );
+    const currentOverallPick = onClock
+      ? countRealSlotsThroughRound(onClock.round - 1, teamCount, forfeitedByRound) +
+        onClock.position
+      : Math.min(picks.length, totalPicks);
+
+    return {
+      teamCount,
+      totalRounds,
+      totalPicks,
+      teamOrder: draftOrder,
+      rounds,
+      onClockRound: onClock?.round ?? null,
+      onClockTeamId,
+      onClockTeamName: onClockTeamId
+        ? (teamById.get(onClockTeamId)?.name ?? "")
+        : null,
+      currentOverallPick,
+      draftComplete: draft.status === "complete",
+      draftStarted: draft.startedAt !== undefined,
+    };
   },
 });
 
