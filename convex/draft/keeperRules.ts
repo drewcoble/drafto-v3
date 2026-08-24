@@ -16,6 +16,7 @@ const keeperFormulaValidator = v.object({
 const keeperRoundFormulaValidator = v.object({
   roundsEarlier: v.number(),
   minimumRound: v.optional(v.number()),
+  undraftedRound: v.optional(v.number()),
 });
 
 const keeperTierValidator = v.object({

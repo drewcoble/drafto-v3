@@ -61,6 +61,7 @@ interface DefaultFormulaDraft extends FormulaDraft {
 interface RoundFormulaDraft {
   roundsEarlier: number;
   minimumRound: number | undefined;
+  undraftedRound: number | undefined;
 }
 
 interface TierDraft {
@@ -103,6 +104,7 @@ function toTierDrafts(tiers: KeeperRules["tiers"]): TierDraft[] {
     roundFormula: {
       roundsEarlier: t.roundFormula?.roundsEarlier ?? 1,
       minimumRound: t.roundFormula?.minimumRound,
+      undraftedRound: t.roundFormula?.undraftedRound,
     },
     positions: t.positions ?? [],
   }));
@@ -137,6 +139,7 @@ function toRoundFormulaDraft(
   return {
     roundsEarlier: formula?.roundsEarlier ?? 1,
     minimumRound: formula?.minimumRound,
+    undraftedRound: formula?.undraftedRound,
   };
 }
 
@@ -147,6 +150,9 @@ function buildRoundFormula(
     roundsEarlier: draft.roundsEarlier,
     ...(draft.minimumRound !== undefined
       ? { minimumRound: draft.minimumRound }
+      : {}),
+    ...(draft.undraftedRound !== undefined
+      ? { undraftedRound: draft.undraftedRound }
       : {}),
   };
 }
@@ -369,7 +375,11 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
         name: `Rule ${current.length + 1}`,
         maxSize: undefined,
         formula: { multiplier: 1, flatAdd: 0, minimumCost: undefined },
-        roundFormula: { roundsEarlier: 1, minimumRound: undefined },
+        roundFormula: {
+          roundsEarlier: 1,
+          minimumRound: undefined,
+          undraftedRound: undefined,
+        },
         positions: [],
       },
     ]);
@@ -504,6 +514,26 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
                       setDefaultRoundFormula((f) => ({
                         ...f,
                         minimumRound: v,
+                      }))
+                    }
+                  />
+                </Stack>
+                <Stack gap={4}>
+                  <Text size="sm" fw={500}>
+                    Undrafted player round
+                  </Text>
+                  <EditableNumberStepper
+                    label="Undrafted player round"
+                    size="sm"
+                    width={140}
+                    min={1}
+                    placeholder="Manual entry"
+                    nullable
+                    value={defaultRoundFormula.undraftedRound}
+                    onChange={(v) =>
+                      setDefaultRoundFormula((f) => ({
+                        ...f,
+                        undraftedRound: v,
                       }))
                     }
                   />
@@ -681,6 +711,28 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
                                 roundFormula: {
                                   ...tier.roundFormula,
                                   minimumRound: v,
+                                },
+                              })
+                            }
+                          />
+                        </Stack>
+                        <Stack gap={4}>
+                          <Text size="sm" fw={500}>
+                            Undrafted round
+                          </Text>
+                          <EditableNumberStepper
+                            label="Undrafted player round"
+                            size="sm"
+                            width={110}
+                            min={1}
+                            placeholder="Manual"
+                            nullable
+                            value={tier.roundFormula.undraftedRound}
+                            onChange={(v) =>
+                              updateTier(tier.id, {
+                                roundFormula: {
+                                  ...tier.roundFormula,
+                                  undraftedRound: v,
                                 },
                               })
                             }

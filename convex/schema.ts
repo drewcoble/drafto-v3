@@ -23,9 +23,16 @@ const rosterSlotsValidator = v.object({
 // kept player up this many rounds per consecutive year kept (e.g. drafted/
 // kept in round 8 last year, roundsEarlier: 2 -> costs round 6 this year),
 // floored at minimumRound (typically 1 - can't draft earlier than round 1).
+// undraftedRound is the round-mode counterpart to the dollar formula's
+// undraftedCost - the round a player who wasn't drafted/kept last season
+// (no prior round on record at all) costs to keep, since roundsEarlier has
+// nothing to subtract from in that case. Leagues commonly have their own
+// rule for this (last round, last round minus one, a fixed round, etc.) -
+// same "explicitly configurable, not hardcoded" reasoning as undraftedCost.
 const keeperRoundFormulaValidator = v.object({
   roundsEarlier: v.number(),
   minimumRound: v.optional(v.number()),
+  undraftedRound: v.optional(v.number()),
 });
 
 // Shared by leagues/seasons below.

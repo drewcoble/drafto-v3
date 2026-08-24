@@ -41,8 +41,13 @@ interface PlayerDraft {
   position: Position;
   // A dollar price or a round number depending on isSnakeOrLinear - see
   // that prop's comment. Generic name since this same draft shape is used
-  // for both formats.
-  cost: number;
+  // for both formats. Undefined in round mode means "wasn't drafted/kept
+  // last season, no known round" (SNAKE_DRAFT.md §8's undraftedRound
+  // fallback handles this at cost-computation time) - NOT round 1, which
+  // would misleadingly claim they were a premium pick. Dollar mode has no
+  // such gap (0 already means "undrafted" there - see keeperCost.ts's
+  // computeKeeperCost), so it always keeps a real number.
+  cost: number | undefined;
 }
 
 interface TeamDraft {
@@ -214,11 +219,15 @@ export function ManualPreviousSeasonModal({
         fpid: row.fpid,
         name: row.name,
         position: row.position,
-        cost: 1,
+        // A newly-added player's round starts blank ("not drafted") rather
+        // than guessed at round 1 - the host fills it in only if they
+        // actually remember/know it. Dollar mode keeps its existing "$1"
+        // starting point.
+        cost: isSnakeOrLinear ? undefined : 1,
       });
     }
     return map;
-  }, [allProjections]);
+  }, [allProjections, isSnakeOrLinear]);
 
   // Re-derive the form's rows whenever the modal opens. Always start from
   // today's current-season teams plus the fixed Unassigned bucket, then
@@ -249,12 +258,13 @@ export function ManualPreviousSeasonModal({
         const known = nameByFpid.get(p.fpid);
         return {
           fpid: p.fpid,
-          // Read whichever field matches the CURRENT season's format - a
-          // history recorded/imported under the other format (e.g. a
-          // pre-fix Sleeper import, or a manual entry from before a
-          // draftType change) has nothing there, so falls back to a plain
-          // "1" starting point same as a freshly-added player gets.
-          cost: (isSnakeOrLinear ? p.round : p.price) ?? 1,
+          // Read whichever field matches the CURRENT season's format. In
+          // round mode a genuinely missing round (undrafted/waiver pickup,
+          // or history recorded under a different format) stays undefined
+          // ("not drafted") rather than guessing round 1 - see PlayerDraft's
+          // comment. Dollar mode keeps its existing "$0 means undrafted"
+          // convention.
+          cost: isSnakeOrLinear ? p.round : (p.price ?? 0),
           name: known?.name ?? `#${p.fpid}`,
           position: known?.position ?? "RB",
         };
@@ -326,7 +336,11 @@ export function ManualPreviousSeasonModal({
     );
   };
 
-  const setCost = (teamKey: string, fpid: number, cost: number) => {
+  const setCost = (
+    teamKey: string,
+    fpid: number,
+    cost: number | undefined,
+  ) => {
     setTeams((current) =>
       current.map((t) =>
         t.key === teamKey
@@ -359,7 +373,15 @@ export function ManualPreviousSeasonModal({
           isSelf: t.isSelf,
           players: t.players.map((p) => ({
             fpid: p.fpid,
-            ...(isSnakeOrLinear ? { round: p.cost } : { price: p.cost }),
+            // Undefined round (round mode only - see PlayerDraft's
+            // comment) is sent as "not present" rather than coerced to a
+            // number, so computeKeeperCostRound's undraftedRound fallback
+            // applies instead of a made-up round.
+            ...(isSnakeOrLinear
+              ? p.cost !== undefined
+                ? { round: p.cost }
+                : {}
+              : { price: p.cost ?? 0 }),
           })),
         })),
       });
@@ -412,13 +434,15 @@ export function ManualPreviousSeasonModal({
                         min={isSnakeOrLinear ? 1 : 0}
                         width={80}
                         size="xs"
-                        {...(isSnakeOrLinear ? {} : { prefix: "$" })}
+                        {...(isSnakeOrLinear
+                          ? { nullable: true, placeholder: "Not drafted" }
+                          : { prefix: "$" })}
                         value={player.cost}
                         onChange={(value) =>
                           setCost(
                             team.key,
                             player.fpid,
-                            value ?? (isSnakeOrLinear ? 1 : 0),
+                            isSnakeOrLinear ? value : (value ?? 0),
                           )
                         }
                       />

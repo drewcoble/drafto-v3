@@ -93,16 +93,22 @@ export function computeKeeperCost(
 // Round-formula counterpart to computeKeeperCost above: the suggested round
 // a kept player costs, given their resolved round formula and the round
 // they were drafted/kept in last season (undefined for a player with no
-// prior-season round on record - a rookie, or a prior pick from before
-// round tracking existed). Unlike the dollar formula there's no
-// undraftedCost-style fallback (SNAKE_DRAFT.md §8 doesn't define one for
-// round mode) - a player with nothing to base a suggestion on just returns
-// null, same "fall back to manual entry" signal as the dollar version.
+// prior-season round on record - a rookie, or an undrafted/waiver pickup -
+// see ManualPreviousSeasonModal.tsx, which leaves round blank for exactly
+// this case rather than guessing one). Routes through undraftedRound
+// rather than roundsEarlier - there's no prior round to subtract from, and
+// leagues commonly have their own explicit rule for this case, same
+// reasoning as the dollar formula's undraftedCost. Returns null when
+// there's nothing to suggest - no prior round and no undraftedRound rule
+// configured - so callers fall back to manual entry instead of showing a
+// made-up round.
 export function computeKeeperCostRound(
   formula: KeeperRoundFormula,
   priorRound: number | undefined,
 ): number | null {
-  if (priorRound === undefined) return null;
+  if (priorRound === undefined) {
+    return formula.undraftedRound ?? null;
+  }
   const raw = priorRound - formula.roundsEarlier;
   const minimum = formula.minimumRound ?? 1;
   return Math.max(raw, minimum);
