@@ -21,6 +21,7 @@ import { AppHeader } from "../components/AppHeader";
 import { PageContainer } from "../components/PageContainer";
 import { DRAFT_STATUS_META, type DraftStatus } from "../lib/draftStatus";
 import { groupSeasonsByLeague } from "../lib/leagueGroups";
+import { DRAFT_TYPE_OPTIONS } from "../constants/leagueSettings";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -154,8 +155,12 @@ function Dashboard() {
                             </Badge>
                           </Group>
                           <Text size="sm" c="dimmed">
-                            {latest.year} · {latest.teamCount} teams · $
-                            {latest.salaryCap} cap · {latest.scoring}
+                            {latest.year} · {latest.teamCount} teams ·{" "}
+                            {DRAFT_TYPE_OPTIONS.find(
+                              (option) =>
+                                option.value === (latest.draftType ?? "auction"),
+                            )?.label ?? "Auction"}{" "}
+                            · {latest.scoring}
                           </Text>
                         </Stack>
                         <Button component="span" variant="light" fullWidth>
