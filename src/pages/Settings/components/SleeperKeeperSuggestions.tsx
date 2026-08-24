@@ -20,8 +20,10 @@ import { RookieBadge } from "../../../components/RookieBadge";
 import { EditableNumberStepper } from "../../../components/NumberStepper";
 import {
   computeKeeperCost,
+  computeKeeperCostRound,
   formulaForFpid,
   keeperPairKey,
+  roundFormulaForFpid,
   type KeeperPriceHistoryEntry,
   type KeeperRules,
 } from "../../../lib/keeperCost";
@@ -47,10 +49,14 @@ interface SleeperKeeperSuggestionsProps {
   // never changes; only the filter over it does, on every keepers update).
   existingKeeperKeys: Set<string>;
   rookieFpids: Set<number>;
+  // A snake/linear league's keeper cost is a draft-slot round, not a
+  // dollar price (SNAKE_DRAFT.md §8) - branches the suggested-cost formula
+  // and the Cost column's label/input below.
+  isSnakeOrLinear: boolean;
   onAddKeeper: (
     fpid: number,
     position: Position,
-    price: number,
+    cost: number,
     teamId: Id<"seasonTeams">,
   ) => void;
   onSelectPlayer: (fpid: number) => void;
@@ -72,6 +78,7 @@ export function SleeperKeeperSuggestions({
   keeperRules,
   existingKeeperKeys,
   rookieFpids,
+  isSnakeOrLinear,
   onAddKeeper,
   onSelectPlayer,
 }: SleeperKeeperSuggestionsProps) {
@@ -81,7 +88,7 @@ export function SleeperKeeperSuggestions({
   const [suggestions, setSuggestions] = useState<
     Array<{ teamId: Id<"seasonTeams">; fpid: number }> | null
   >(null);
-  const [priceOverrides, setPriceOverrides] = useState<Record<number, number>>(
+  const [costOverrides, setCostOverrides] = useState<Record<number, number>>(
     {},
   );
   const [isLoading, setIsLoading] = useState(false);
@@ -120,12 +127,28 @@ export function SleeperKeeperSuggestions({
         const player = projectionByFpid.get(s.fpid);
         if (!team || !player) return null;
 
-        const formula = keeperRules
-          ? formulaForFpid(keeperRules, s.fpid, player.position)
-          : undefined;
-        const suggestedCost = formula
-          ? computeKeeperCost(formula, priceHistory?.[s.fpid]?.price)
-          : null;
+        let suggestedCost: number | null = null;
+        if (keeperRules) {
+          if (isSnakeOrLinear) {
+            const roundFormula = roundFormulaForFpid(
+              keeperRules,
+              s.fpid,
+              player.position,
+            );
+            suggestedCost = roundFormula
+              ? computeKeeperCostRound(
+                  roundFormula,
+                  priceHistory?.[s.fpid]?.round,
+                )
+              : null;
+          } else {
+            const formula = formulaForFpid(keeperRules, s.fpid, player.position);
+            suggestedCost = computeKeeperCost(
+              formula,
+              priceHistory?.[s.fpid]?.price,
+            );
+          }
+        }
 
         return { teamId: s.teamId, teamName: team.name, player, suggestedCost };
       })
@@ -137,6 +160,7 @@ export function SleeperKeeperSuggestions({
     projectionByFpid,
     keeperRules,
     priceHistory,
+    isSnakeOrLinear,
   ]);
 
   if (!sleeperLeagueId) return null;
@@ -172,8 +196,9 @@ export function SleeperKeeperSuggestions({
         {pendingRows.length > 0 && (
           <>
             <Text size="xs" c="dimmed">
-              Sleeper only tells us who's kept, not the price - confirm a
-              cost for each before adding.
+              Sleeper only tells us who's kept, not the{" "}
+              {isSnakeOrLinear ? "round" : "price"} - confirm a cost for each
+              before adding.
             </Text>
             <Table.ScrollContainer minWidth={360}>
               <Table verticalSpacing={4}>
@@ -181,13 +206,15 @@ export function SleeperKeeperSuggestions({
                   <Table.Tr>
                     <Table.Th>Team</Table.Th>
                     <Table.Th>Player</Table.Th>
-                    <Table.Th ta="right">Cost</Table.Th>
+                    <Table.Th ta="right">
+                      {isSnakeOrLinear ? "Round" : "Cost"}
+                    </Table.Th>
                     <Table.Th></Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                   {pendingRows.map(({ teamId, teamName, player, suggestedCost }) => {
-                    const price = priceOverrides[player.fpid] ?? suggestedCost ?? 1;
+                    const cost = costOverrides[player.fpid] ?? suggestedCost ?? 1;
                     return (
                       <Table.Tr key={keeperPairKey(teamId, player.fpid)}>
                         <Table.Td>
@@ -215,14 +242,14 @@ export function SleeperKeeperSuggestions({
                         </Table.Td>
                         <Table.Td ta="right">
                           <EditableNumberStepper
-                            label="Cost"
+                            label={isSnakeOrLinear ? "Round" : "Cost"}
                             min={1}
-                            prefix="$"
+                            {...(isSnakeOrLinear ? {} : { prefix: "$" })}
                             width={80}
                             size="xs"
-                            value={price}
+                            value={cost}
                             onChange={(value) =>
-                              setPriceOverrides((current) => ({
+                              setCostOverrides((current) => ({
                                 ...current,
                                 [player.fpid]: value ?? 1,
                               }))
@@ -235,7 +262,7 @@ export function SleeperKeeperSuggestions({
                             type="button"
                             size="xs"
                             onClick={() =>
-                              onAddKeeper(player.fpid, player.position, price, teamId)
+                              onAddKeeper(player.fpid, player.position, cost, teamId)
                             }
                           >
                             Add

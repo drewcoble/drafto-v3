@@ -358,40 +358,34 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 Add a Keeper
               </Text>
               {usingGenericValues && <GenericValuesNotice />}
-              {/* Both quick-add surfaces below suggest a cost via a $
-                  savings-vs-fair-value heuristic (dollar formula, dollar
-                  fair value) that doesn't translate to a round-based
-                  keeper cost yet (SNAKE_DRAFT.md §8) - hidden for a snake/
-                  linear league rather than risk suggesting a dollar-shaped
-                  number as if it were a round. The manual KeeperSearchForm
-                  flow below is round-aware and stays available either way. */}
-              {!isSnakeOrLinear && (
-                <>
-                  <SleeperKeeperSuggestions
-                    seasonId={seasonId}
-                    sleeperLeagueId={settings.sleeperLeagueId}
-                    draftTeams={draftTeams}
-                    allProjections={allProjections}
-                    priceHistory={priceHistory}
-                    keeperRules={settings.keeperRules}
-                    existingKeeperKeys={existingKeeperKeys}
-                    rookieFpids={rookieFpids}
-                    onAddKeeper={handleAddKeeper}
-                    onSelectPlayer={setSelectedFpid}
-                  />
-                  <RecommendedKeepers
-                    priceHistory={priceHistory}
-                    keeperRules={settings.keeperRules}
-                    draftValueByFpid={draftValueByFpid}
-                    allProjections={allProjections}
-                    activePositions={activePositions}
-                    draftedFpids={draftedFpids}
-                    onQuickAdd={handleQuickAddKeeper}
-                    onSelectPlayer={setSelectedFpid}
-                    onOpenManualEntry={() => setManualEntryOpened(true)}
-                  />
-                </>
-              )}
+              <SleeperKeeperSuggestions
+                seasonId={seasonId}
+                sleeperLeagueId={settings.sleeperLeagueId}
+                draftTeams={draftTeams}
+                allProjections={allProjections}
+                priceHistory={priceHistory}
+                keeperRules={settings.keeperRules}
+                existingKeeperKeys={existingKeeperKeys}
+                rookieFpids={rookieFpids}
+                isSnakeOrLinear={isSnakeOrLinear}
+                onAddKeeper={handleAddKeeper}
+                onSelectPlayer={setSelectedFpid}
+              />
+              <RecommendedKeepers
+                priceHistory={priceHistory}
+                keeperRules={settings.keeperRules}
+                draftValueByFpid={draftValueByFpid}
+                allProjections={allProjections}
+                activePositions={activePositions}
+                draftedFpids={draftedFpids}
+                isSnakeOrLinear={isSnakeOrLinear}
+                adpByFpid={adpByFpid}
+                scoring={settings.scoring}
+                teamCount={settings.teamCount}
+                onQuickAdd={handleQuickAddKeeper}
+                onSelectPlayer={setSelectedFpid}
+                onOpenManualEntry={() => setManualEntryOpened(true)}
+              />
               {/* No outer Card here - KeeperSearchForm already boxes the
                   selected-candidate summary in its own Card once a player is
                   picked, so wrapping this whole section would nest one Card
