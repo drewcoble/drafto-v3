@@ -82,6 +82,9 @@ interface RecommendedKeepersProps {
 // the same way would hide legitimate candidates for no reason.
 const MAX_RECOMMENDATIONS = 10;
 const ALL_TEAMS = "all";
+// Distinguishes a historical-only team-name filter option from a real
+// current seasonTeams._id in the same Select - see orphanedTeamNames below.
+const HISTORY_PREFIX = "history:";
 
 // One normalized recommendation row, regardless of format - keeps the JSX
 // below branch-free (just render whatever labels were precomputed) instead
@@ -136,9 +139,29 @@ export function RecommendedKeepers({
   const [teamFilter, setTeamFilter] = useState<string>(
     () => draftTeams.find((t) => t.isSelf)?._id ?? ALL_TEAMS,
   );
-  const selectedTeamName =
-    teamFilter === ALL_TEAMS
-      ? undefined
+  // Last season's team names that don't match any CURRENT team - e.g. a
+  // franchise changed hands and the new owner's team got a fresh name/row
+  // instead of reusing the old one, so name-matching (the only join key
+  // priceHistory has - see ManualPreviousSeasonModal.tsx's comment on the
+  // same limitation) can't line them up automatically. Surfaced as their
+  // own filter options (prefixed HISTORY_PREFIX) so a host in that
+  // situation can still pick "the roster I actually took over" instead of
+  // "My Team" silently coming up empty.
+  const orphanedTeamNames = useMemo(() => {
+    if (!priceHistory) return [];
+    const currentNames = new Set(draftTeams.map((t) => t.name));
+    const names = new Set<string>();
+    for (const entry of Object.values(priceHistory)) {
+      if (entry.teamName && !currentNames.has(entry.teamName)) {
+        names.add(entry.teamName);
+      }
+    }
+    return [...names].sort();
+  }, [priceHistory, draftTeams]);
+  const selectedTeamName = teamFilter === ALL_TEAMS
+    ? undefined
+    : teamFilter.startsWith(HISTORY_PREFIX)
+      ? teamFilter.slice(HISTORY_PREFIX.length)
       : draftTeams.find((t) => t._id === teamFilter)?.name;
   const sortedValues = useMemo(
     () => sortValuesDescending(availableValues),
@@ -314,6 +337,17 @@ export function RecommendedKeepers({
               value: team._id,
               label: team.isSelf ? `${team.name} (You)` : team.name,
             })),
+            ...(orphanedTeamNames.length > 0
+              ? [
+                  {
+                    group: "Last season (unmatched team name)",
+                    items: orphanedTeamNames.map((name) => ({
+                      value: `${HISTORY_PREFIX}${name}`,
+                      label: name,
+                    })),
+                  },
+                ]
+              : []),
           ]}
         />
         {!keeperRules ? (
