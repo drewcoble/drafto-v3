@@ -27,13 +27,22 @@ interface ManualPreviousSeasonModalProps {
   currentYear: string;
   opened: boolean;
   onClose: () => void;
+  // A snake/linear league needs each player's prior ROUND for keeper cost
+  // (SNAKE_DRAFT.md §8), not a dollar price - branches the stepper's
+  // label/prefix below and which field handleSave sends. Decided by the
+  // CURRENT season's format, not whatever format the history being edited
+  // originally came from.
+  isSnakeOrLinear: boolean;
 }
 
 interface PlayerDraft {
   fpid: number;
   name: string;
   position: Position;
-  price: number;
+  // A dollar price or a round number depending on isSnakeOrLinear - see
+  // that prop's comment. Generic name since this same draft shape is used
+  // for both formats.
+  cost: number;
 }
 
 interface TeamDraft {
@@ -170,6 +179,7 @@ export function ManualPreviousSeasonModal({
   currentYear,
   opened,
   onClose,
+  isSnakeOrLinear,
 }: ManualPreviousSeasonModalProps) {
   // Always the season immediately before the one being set up - there's no
   // scenario where a host would want to backfill any other year here.
@@ -204,7 +214,7 @@ export function ManualPreviousSeasonModal({
         fpid: row.fpid,
         name: row.name,
         position: row.position,
-        price: 1,
+        cost: 1,
       });
     }
     return map;
@@ -228,12 +238,23 @@ export function ManualPreviousSeasonModal({
       return;
     }
 
-    const toPlayerDrafts = (players: { fpid: number; price: number }[]) =>
+    const toPlayerDrafts = (
+      players: {
+        fpid: number;
+        price: number | undefined;
+        round: number | undefined;
+      }[],
+    ) =>
       players.map((p) => {
         const known = nameByFpid.get(p.fpid);
         return {
           fpid: p.fpid,
-          price: p.price,
+          // Read whichever field matches the CURRENT season's format - a
+          // history recorded/imported under the other format (e.g. a
+          // pre-fix Sleeper import, or a manual entry from before a
+          // draftType change) has nothing there, so falls back to a plain
+          // "1" starting point same as a freshly-added player gets.
+          cost: (isSnakeOrLinear ? p.round : p.price) ?? 1,
           name: known?.name ?? `#${p.fpid}`,
           position: known?.position ?? "RB",
         };
@@ -305,14 +326,14 @@ export function ManualPreviousSeasonModal({
     );
   };
 
-  const setPrice = (teamKey: string, fpid: number, price: number) => {
+  const setCost = (teamKey: string, fpid: number, cost: number) => {
     setTeams((current) =>
       current.map((t) =>
         t.key === teamKey
           ? {
               ...t,
               players: t.players.map((p) =>
-                p.fpid === fpid ? { ...p, price } : p,
+                p.fpid === fpid ? { ...p, cost } : p,
               ),
             }
           : t,
@@ -336,7 +357,10 @@ export function ManualPreviousSeasonModal({
         teams: teams.map((t) => ({
           name: t.name,
           isSelf: t.isSelf,
-          players: t.players.map((p) => ({ fpid: p.fpid, price: p.price })),
+          players: t.players.map((p) => ({
+            fpid: p.fpid,
+            ...(isSnakeOrLinear ? { round: p.cost } : { price: p.cost }),
+          })),
         })),
       });
       onClose();
@@ -384,14 +408,18 @@ export function ManualPreviousSeasonModal({
                         {player.name}
                       </Text>
                       <EditableNumberStepper
-                        label={`${player.name} price`}
-                        min={0}
+                        label={`${player.name} ${isSnakeOrLinear ? "round" : "price"}`}
+                        min={isSnakeOrLinear ? 1 : 0}
                         width={80}
                         size="xs"
-                        prefix="$"
-                        value={player.price}
+                        {...(isSnakeOrLinear ? {} : { prefix: "$" })}
+                        value={player.cost}
                         onChange={(value) =>
-                          setPrice(team.key, player.fpid, value ?? 0)
+                          setCost(
+                            team.key,
+                            player.fpid,
+                            value ?? (isSnakeOrLinear ? 1 : 0),
+                          )
                         }
                       />
                       <Button

@@ -456,6 +456,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
         currentYear={settings.year}
         opened={manualEntryOpened}
         onClose={() => setManualEntryOpened(false)}
+        isSnakeOrLinear={isSnakeOrLinear}
       />
 
       <KeeperEditModal

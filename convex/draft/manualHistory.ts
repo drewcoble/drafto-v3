@@ -28,7 +28,13 @@ const teamInputValidator = v.object({
   players: v.array(
     v.object({
       fpid: v.number(),
-      price: v.number(),
+      // Exactly one of these two is expected, matching the CURRENT
+      // season's format (SNAKE_DRAFT.md §8) - a snake/linear league needs
+      // round to feed computeKeeperCostRound, an auction league needs
+      // price for computeKeeperCost. See
+      // ManualPreviousSeasonModal.tsx's isSnakeOrLinear prop.
+      price: v.optional(v.number()),
+      round: v.optional(v.number()),
     }),
   ),
 });
@@ -82,12 +88,13 @@ export const getManualPreviousSeasonEntry = query({
           isSelf: team.isSelf,
           players: (picksByTeamId.get(team._id) ?? []).map((pick) => ({
             fpid: pick.fpid,
-            // This whole flow only ever creates picks through
-            // setManualPreviousSeasonResults below, whose own args require
-            // a real price - ?? 0 is just satisfying draftPicks.price's
-            // now-optional schema type (SNAKE_DRAFT.md §3.2), not a
-            // meaningful fallback for a case this ever hits in practice.
-            price: pick.price ?? 0,
+            // Whichever of these is actually populated depends on what
+            // format this history was recorded/imported under - could be
+            // neither (SNAKE_DRAFT.md §9's forfeited-slot precedent) but
+            // never both. The edit form picks whichever one matches the
+            // CURRENT season's format (isSnakeOrLinear).
+            price: pick.price,
+            round: pick.round,
           })),
         })),
     };
@@ -213,9 +220,10 @@ export const setManualPreviousSeasonResults = mutation({
           fpid: player.fpid,
           position: playerDoc.position,
           teamId,
-          price: player.price,
           teamAssignmentConfirmed: true,
           createdAt: now,
+          ...(player.round !== undefined ? { round: player.round } : {}),
+          ...(player.price !== undefined ? { price: player.price } : {}),
         });
       }
     }
