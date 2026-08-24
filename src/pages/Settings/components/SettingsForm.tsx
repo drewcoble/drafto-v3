@@ -96,12 +96,28 @@ interface SettingsFormProps {
   // squeezing two columns (and the Roster card's own 3-up slot grid inside
   // one of them) into ~260px.
   compact?: boolean;
-  // True only for the plain "create a new league" flow (LeagueDetails.tsx,
-  // when there's no existing settings row yet) - draftType has no live
-  // "change it later" mutation the way useKeepers does (see
-  // LeagueSettingsFormValues' comment), so once a league exists this
-  // control simply isn't shown rather than rendered disabled.
+  // Whether the Draft Type control renders at all (still further gated by
+  // SNAKE_DRAFT_ENABLED below) - true for a brand-new league, or an
+  // existing pre-draft one (see draftTypeControl below for how those two
+  // cases differ). Once the draft has started, LeagueDetails.tsx stops
+  // passing this at all - draftType is permanently locked in from that
+  // point on, same as everything else configLocked covers.
   showDraftType?: boolean;
+  // Only supplied by LeagueDetails.tsx for an EXISTING league - saves
+  // immediately via a live setDraftType mutation (convex/leagues.ts),
+  // independent of this form's own Save/Cancel, same pattern as
+  // useKeepersControl above. A brand-new league has no id yet for that
+  // live mutation, so LeagueDetails.tsx leaves this undefined and lets
+  // form.draftType/onSave's payload handle it instead (see the plain
+  // SegmentedControl branch below). setDraftType itself rejects the
+  // change server-side once any draftPicks (including keepers) exist for
+  // this draft - `error` surfaces that rejection, there's no client-side
+  // `disabled` for it beyond the draft having started.
+  draftTypeControl?: {
+    checked: DraftTypeFormat;
+    onChange: (value: DraftTypeFormat) => void;
+    error?: string | null;
+  };
 }
 
 export function SettingsForm({
@@ -117,6 +133,7 @@ export function SettingsForm({
   useKeepersControl,
   compact = false,
   showDraftType = false,
+  draftTypeControl,
 }: SettingsFormProps) {
   // SettingsForm is freshly mounted at the start of every edit session (see
   // LeagueDetails.tsx's isEditing early-return, and the import wizards'
@@ -168,18 +185,25 @@ export function SettingsForm({
                     Draft Type
                   </Text>
                   <SegmentedControl
-                    value={form.draftType}
+                    value={draftTypeControl ? draftTypeControl.checked : form.draftType}
                     onChange={(value) =>
-                      handleChange({
-                        ...form,
-                        draftType: value as DraftTypeFormat,
-                      })
+                      draftTypeControl
+                        ? draftTypeControl.onChange(value as DraftTypeFormat)
+                        : handleChange({
+                            ...form,
+                            draftType: value as DraftTypeFormat,
+                          })
                     }
                     data={DRAFT_TYPE_OPTIONS.map(({ label, value }) => ({
                       label,
                       value,
                     }))}
                   />
+                  {draftTypeControl?.error && (
+                    <Text c="red" size="xs">
+                      {draftTypeControl.error}
+                    </Text>
+                  )}
                 </Stack>
               </Grid.Col>
             )}
@@ -208,10 +232,14 @@ export function SettingsForm({
               </Stack>
             </Grid.Col>
             {/* Not applicable outside auction - see SNAKE_DRAFT.md §2.1.
-                Editing an existing (today, always auction) league always
-                shows this regardless of showDraftType, since form.draftType
-                is populated from settings.draftType there too. */}
-            {form.draftType === "auction" && (
+                Reads draftTypeControl.checked (live, when present) rather
+                than form.draftType - an existing league's draftType now
+                changes via that live control, not this form's own batched
+                state, so form.draftType alone would stay stale (whatever
+                it was when the edit session opened) if a host flips it and
+                keeps editing. */}
+            {(draftTypeControl ? draftTypeControl.checked : form.draftType) ===
+              "auction" && (
               <Grid.Col span={{ base: 6, sm: 3 }}>
                 <Stack gap={4}>
                   <Text size="sm" fw={500}>

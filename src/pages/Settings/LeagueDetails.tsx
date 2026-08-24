@@ -21,6 +21,7 @@ import {
 } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import type { DraftTypeFormat } from "../../types";
 import { positionColorOrDefault } from "../../lib/positionColors";
 import { SNAKE_DRAFT_ENABLED } from "../../lib/featureFlags";
 import {
@@ -74,6 +75,7 @@ export function LeagueDetails({
   const addDraftTeam = useMutation(api.draft.teams.addSeasonTeam);
   const removeDraftTeam = useMutation(api.draft.teams.removeSeasonTeam);
   const setUseKeepers = useMutation(api.leagues.setUseKeepers);
+  const setDraftType = useMutation(api.leagues.setDraftType);
   const deleteDraftSettings = useMutation(api.leagues.deleteLeague);
   const phase = useDraftPhase(selectedLeagueId);
   const isStarted = phase?.isStarted ?? false;
@@ -113,6 +115,7 @@ export function LeagueDetails({
     null,
   );
   const [useKeepersError, setUseKeepersError] = useState<string | null>(null);
+  const [draftTypeError, setDraftTypeError] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -167,8 +170,10 @@ export function LeagueDetails({
             teamCount: settings.teamCount,
             // Absent means "auction" (see convex/draftType.ts's
             // resolveDraftType) - display-only here regardless, since this
-            // field isn't part of handleSave's updateSeason payload at all
-            // (draftType is create-only, locked for good afterward).
+            // field isn't part of handleSave's updateSeason payload at all.
+            // An existing league's draftType changes via the live
+            // draftTypeControl below (setDraftType) instead, not this
+            // form's own batched Save.
             draftType: settings.draftType ?? "auction",
             salaryCap: settings.salaryCap,
             scoring: settings.scoring,
@@ -298,6 +303,16 @@ export function LeagueDetails({
     }
   };
 
+  const handleSetDraftType = async (draftType: DraftTypeFormat) => {
+    if (!settings) return;
+    setDraftTypeError(null);
+    try {
+      await setDraftType({ id: settings._id, draftType });
+    } catch (err) {
+      setDraftTypeError(getErrorMessage(err, "Failed to update draft type."));
+    }
+  };
+
   const handleStartDraft = async () => {
     if (!settings) return;
     setIsStarting(true);
@@ -413,8 +428,22 @@ export function LeagueDetails({
           onDoneCreating();
         }}
         teamsLocked={!!draftTeams && draftTeams.length > 0}
-        showDraftType={!settings}
+        // Shown for a brand-new league (draftTypeControl left undefined,
+        // rides along with the rest of the form on Save) or an existing
+        // pre-draft one (draftTypeControl below, live setDraftType) - once
+        // the draft has started, draftType is permanently locked in.
+        showDraftType={!settings || !isStarted}
         configLocked={isStarted}
+        {...(settings && !isStarted
+          ? {
+              draftTypeControl: {
+                checked: settings.draftType ?? "auction",
+                onChange: (draftType: DraftTypeFormat) =>
+                  void handleSetDraftType(draftType),
+                error: draftTypeError,
+              },
+            }
+          : {})}
         useKeepersControl={
           settings
             ? {

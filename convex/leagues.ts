@@ -478,6 +478,41 @@ export const setUseKeepers = mutation({
   },
 });
 
+// Corrects a season's draft format after creation - draftType is otherwise
+// create-only/locked-in (see updateSeason below, which never accepts it),
+// since switching formats mid-season would retroactively make already-
+// recorded picks' round/price fields meaningless. This exists specifically
+// for the case where the initial pick was simply wrong (e.g. a Sleeper
+// import that couldn't detect the linked league's draft type, or guessed
+// before the league's own draft settings existed) and nothing has actually
+// happened yet - guarded on requireDraftNotStarted AND zero existing
+// draftPicks (a pre-draft keeper is still a draftPicks row), not just the
+// former, since a keeper added under the old format would otherwise be left
+// with a price but no round (or vice versa).
+export const setDraftType = mutation({
+  args: {
+    id: v.id("seasons"),
+    draftType: draftTypeValidator,
+  },
+  handler: async (ctx, args) => {
+    const { season, draft } = await requireDraftNotStarted(ctx, args.id);
+    if (args.draftType === (season.draftType ?? "auction")) {
+      return await ctx.db.get(args.id);
+    }
+    const existingPick = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .first();
+    if (existingPick) {
+      throw new Error(
+        "This league already has keepers or picks recorded - draft type can't be changed anymore.",
+      );
+    }
+    await ctx.db.patch(args.id, { draftType: args.draftType });
+    return await ctx.db.get(args.id);
+  },
+});
+
 // Links (or unlinks, passing null) this season to a real Sleeper league for
 // in-season roster/FAAB syncing - see convex/sleeper/league.ts. Separate from
 // updateSeason so linking doesn't require resubmitting the whole league

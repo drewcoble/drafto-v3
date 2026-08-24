@@ -5,6 +5,7 @@ import { Doc, Id } from "../_generated/dataModel";
 import { DEF_TEAM_FPIDS, currentSeason } from "./client";
 import { mapRosterPositions, mapScoringSettings } from "./leagueSettingsMapping";
 import type { Scoring } from "../scoring";
+import type { DraftType } from "../draftType";
 
 // Sleeper's real, documented consumer API - same base fetchCurrentNflWeek
 // uses (see ./state.ts), as opposed to the undocumented api.sleeper.com
@@ -312,6 +313,22 @@ interface SleeperDraftPick {
   metadata?: { amount?: string };
 }
 
+// Best-effort: the current league's own draft type (SNAKE_DRAFT.md §6) -
+// Sleeper's three draft.type values already match our DraftType union
+// exactly, so no remapping is needed once fetched. Returns undefined for a
+// league with no draft set up yet, or any fetch hiccup - the import wizard
+// falls back to "auction" in that case, same as before this existed.
+async function fetchSleeperDraftType(
+  draftId: string,
+): Promise<DraftType | undefined> {
+  try {
+    const draft = await fetchSleeperJson<SleeperDraft>(`/draft/${draftId}`);
+    return draft.type;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface PreviousSeasonTeamPreview {
   rosterId: string;
   ownerId: string;
@@ -387,6 +404,10 @@ export interface SleeperImportPreview {
   name: string;
   season: string;
   teamCount: number;
+  // Undefined when this league has no draft set up on Sleeper yet, or the
+  // lookup otherwise failed (see fetchSleeperDraftType) - the wizard falls
+  // back to "auction" in that case, same as before this was detected at all.
+  draftType: DraftType | undefined;
   scoring: Scoring;
   rosterSlots: ReturnType<typeof mapRosterPositions>["rosterSlots"];
   flexPositions: ReturnType<typeof mapRosterPositions>["flexPositions"];
@@ -410,6 +431,10 @@ export const previewSleeperImport = action({
     const scoring = mapScoringSettings(settings.scoring_settings);
     const { rows: teams } = await fetchLeagueTeamRows(args.sleeperLeagueId);
 
+    const draftType = settings.draft_id
+      ? await fetchSleeperDraftType(settings.draft_id)
+      : undefined;
+
     const previousSeason = settings.previous_league_id
       ? await fetchPreviousSeasonPreview(settings.previous_league_id)
       : undefined;
@@ -418,6 +443,7 @@ export const previewSleeperImport = action({
       name: settings.name,
       season: settings.season,
       teamCount: settings.total_rosters,
+      draftType,
       scoring,
       rosterSlots: mapped.rosterSlots,
       flexPositions: mapped.flexPositions,

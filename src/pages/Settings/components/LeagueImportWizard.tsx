@@ -110,11 +110,12 @@ export function LeagueImportWizard({
       setForm({
         name: result.name,
         teamCount: result.teamCount,
-        // previewSleeperImport doesn't detect the linked league's own draft
-        // type yet (SNAKE_DRAFT.md §6 - only the previous season's is ever
-        // looked at, and only to seed keeper price history) - defaults to
-        // auction same as every import today, adjustable after import.
-        draftType: DEFAULT_FORM.draftType,
+        // Detected from the linked league's own Sleeper draft (SNAKE_DRAFT.md
+        // §6) - falls back to auction if Sleeper has no draft set up yet or
+        // the lookup failed (see convex/sleeper/league.ts's
+        // fetchSleeperDraftType). Still adjustable on this review step below,
+        // gated the same as a from-scratch league (SNAKE_DRAFT_ENABLED).
+        draftType: result.draftType ?? DEFAULT_FORM.draftType,
         salaryCap: DEFAULT_FORM.salaryCap,
         scoring: result.scoring,
         // Sleeper's TE-premium/passing-TD settings aren't mapped yet (see
@@ -144,11 +145,10 @@ export function LeagueImportWizard({
         name: form.name,
         teamCount: form.teamCount,
         // Clamped at the actual write path, not just wherever form.draftType
-        // gets set - this wizard never lets a user pick anything but
-        // auction today (no Sleeper draft-type detection yet, see the
-        // handleSelectLeague comment above), but this stays correct if
-        // that detection is ever added without whoever adds it having to
-        // remember this flag too.
+        // gets set (defense in depth, same as LeagueDetails.tsx's own
+        // handleSave) - detected/reviewed above, but still forced back to
+        // auction if the flag is off no matter what form.draftType ended
+        // up as.
         draftType: SNAKE_DRAFT_ENABLED ? form.draftType : "auction",
         salaryCap: form.salaryCap,
         scoring: form.scoring,
@@ -305,6 +305,11 @@ export function LeagueImportWizard({
         onCancel={onCancel}
         saveLabel="Create League"
         compact
+        // Detection above is best-effort - let the host correct it here
+        // before creating, same as a from-scratch league (SettingsForm
+        // itself still checks SNAKE_DRAFT_ENABLED before actually showing
+        // it).
+        showDraftType
       />
     </Stack>
   );

@@ -53,10 +53,12 @@ export const DRAFT_TYPE_OPTIONS: Array<{
 export interface LeagueSettingsFormValues {
   name: string;
   teamCount: number;
-  // Only meaningful during creation, same as useKeepers below - locked for
-  // good once a league exists (SNAKE_DRAFT.md §2's assumption), so there's
-  // no live "change it later" mutation the way useKeepers has. See
-  // SettingsForm.tsx's showDraftType prop.
+  // Only rides along with this form's own batched Save during creation -
+  // an existing league's draftType instead changes via a live setDraftType
+  // mutation (convex/leagues.ts, rejected once any picks/keepers exist),
+  // same "live control, not batched with the rest of the form" shape
+  // useKeepers below has. See SettingsForm.tsx's showDraftType/
+  // draftTypeControl props.
   draftType: DraftTypeFormat;
   salaryCap: number;
   scoring: ScoringFormat;

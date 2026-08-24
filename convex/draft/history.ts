@@ -189,10 +189,11 @@ export const createNextSeason = mutation({
         : {}),
       // Carries forward same as every other durable config field here -
       // format doesn't change season-to-season (SNAKE_DRAFT.md §3.4's
-      // assumption). There's no UI to change draftType for an existing
-      // season at all yet (SettingsForm.tsx's showDraftType only applies
-      // to a brand-new league) - a league wanting to switch formats
-      // next season isn't a supported flow yet.
+      // assumption). convex/leagues.ts's setDraftType can correct a wrong
+      // initial pick, but only pre-draft with zero picks recorded - a new
+      // season here always starts with picks-so-far at zero, so it stays
+      // eligible for that same correction window right after creation, not
+      // meaningfully more "changeable" than any other league.
       ...(source.draftType !== undefined
         ? { draftType: source.draftType }
         : {}),
