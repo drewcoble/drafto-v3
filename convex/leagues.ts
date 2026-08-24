@@ -415,12 +415,18 @@ export const importPreviousSeasonHistory = mutation({
       kind: "real",
       name: `${league.name} (Imported ${args.season})`,
       status: "complete",
-      // Draft-day snapshot, not a confirmed end-of-season roster - see
-      // schema.ts's historySource/teamAssignmentConfirmed comments and
-      // convex/draft/manualHistory.ts.
       historySource: args.sleeperLeagueId ? "sleeper" : "yahoo",
       createdAt: now,
     });
+    // Sleeper's team-assignment data here comes from /rosters (each team's
+    // CURRENT roster, see convex/sleeper/league.ts's fetchLeagueTeamRows) -
+    // already reflects any in-season trades/waivers, so it's a confirmed
+    // end-of-season assignment, not a draft-day snapshot (schema.ts's
+    // teamAssignmentConfirmed comment). Yahoo's equivalent instead comes
+    // from actual draft results (convex/yahoo/league.ts's
+    // fetchYahooDraftResults), which CAN go stale after a trade, so it
+    // stays unconfirmed.
+    const teamAssignmentConfirmed = args.sleeperLeagueId !== undefined;
 
     // Round-based history (SNAKE_DRAFT.md §8) never falls back to a $1
     // placeholder the way the auction/unknown-format path does below - a
@@ -458,6 +464,7 @@ export const importPreviousSeasonHistory = mutation({
           position: playerDoc.position,
           teamId,
           createdAt: now,
+          ...(teamAssignmentConfirmed ? { teamAssignmentConfirmed } : {}),
           ...(isRoundBased
             ? player.round !== undefined
               ? { round: player.round }

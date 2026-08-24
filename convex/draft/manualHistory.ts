@@ -3,17 +3,24 @@ import { mutation, query } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { requireSeasonOwner } from "./auth";
 
-// Lets a host backfill keeper-cost history for a season this app never ran
-// a draft for (or ran outside a Sleeper/Yahoo-linked league) - see
-// src/pages/Settings/components/ManualPreviousSeasonModal.tsx. Creates a
-// synthetic prior season/draft the exact same way convex/leagues.ts's
-// importPreviousSeasonHistory does for provider imports, except every pick
-// is tagged teamAssignmentConfirmed: true (the user is directly asserting
-// "this team had this player," not just reporting draft-day results that
-// may be stale from trades/waivers - see schema.ts's comment on that field)
-// and historySource: "manual" (so setManualPreviousSeasonResults below
-// knows it's allowed to overwrite this season again later, unlike a real
-// in-app draft's history or an unconfirmed provider import).
+// Lets a host backfill or correct keeper-cost history for a prior season -
+// either one this app never ran a draft for at all, or one already
+// imported from Sleeper/Yahoo but missing/wrong in some way (a player this
+// app couldn't match, a bad price, etc.) - see
+// src/pages/Settings/components/ManualPreviousSeasonModal.tsx. Creates (or,
+// for an already-synthetic season, fully replaces) a prior season/draft the
+// exact same way convex/leagues.ts's importPreviousSeasonHistory does for
+// provider imports, except every pick is tagged teamAssignmentConfirmed:
+// true (the user is directly asserting "this team had this player," not
+// just reporting draft-day/roster-snapshot results - see schema.ts's
+// comment on that field) and historySource: "manual" going forward,
+// regardless of what it was before.
+//
+// The one season this must never touch is a REAL in-app-played draft's own
+// history (historySource left undefined - see schema.ts's comment) -
+// overwriting that would silently destroy actual draft results. Anything
+// with a historySource at all (sleeper/yahoo/manual) is synthetic/imported
+// and fair game to prefill from and replace.
 
 const teamInputValidator = v.object({
   name: v.string(),
@@ -26,12 +33,12 @@ const teamInputValidator = v.object({
   ),
 });
 
-// Existing manually-entered data for `year`, if any - used to pre-fill the
-// edit form. Returns null both when no season exists for that year yet AND
-// when one exists but wasn't manually entered (a real draft, or an
-// unconfirmed provider import) - either way there's nothing for the manual
-// edit UI to pre-fill from, and the mutation below would refuse to touch it
-// anyway.
+// Existing history data for `year`, if any - used to pre-fill the edit
+// form, whether it was entered here before or imported from a provider.
+// Returns null both when no season exists for that year yet AND when one
+// exists but is a real in-app-played draft's own history (historySource
+// undefined) - there's nothing safe for the manual edit UI to prefill from
+// or replace in that case (see this file's header comment).
 export const getManualPreviousSeasonEntry = query({
   args: { seasonId: v.id("seasons"), year: v.string() },
   handler: async (ctx, args) => {
@@ -50,7 +57,7 @@ export const getManualPreviousSeasonEntry = query({
         q.eq("seasonId", historySeason._id).eq("kind", "real"),
       )
       .first();
-    if (!historyDraft || historyDraft.historySource !== "manual") return null;
+    if (!historyDraft || historyDraft.historySource === undefined) return null;
 
     const teams = await ctx.db
       .query("seasonTeams")
@@ -87,11 +94,14 @@ export const getManualPreviousSeasonEntry = query({
   },
 });
 
-// Creates (or, if `year` already has a manually-entered season, fully
-// replaces) this league's synthetic history for that year. Full-replace
-// rather than a diff - the edit form always resubmits its whole current
-// state, same as e.g. TeamsPanel's nomination-order Save - so a typo fix or
-// a team reassignment is just "change the row, submit again."
+// Creates (or, if `year` already has a synthetic season - imported or
+// manually-entered - fully replaces) this league's history for that year.
+// Full-replace rather than a diff - the edit form always resubmits its
+// whole current state, same as e.g. TeamsPanel's nomination-order Save - so
+// a typo fix or a team reassignment is just "change the row, submit
+// again." Re-tags the draft historySource: "manual" regardless of what it
+// was before - once a host has directly edited/confirmed it here, it's
+// manual data going forward, not "whatever Sleeper/Yahoo happened to send."
 export const setManualPreviousSeasonResults = mutation({
   args: {
     seasonId: v.id("seasons"),
@@ -122,13 +132,19 @@ export const setManualPreviousSeasonResults = mutation({
           q.eq("seasonId", existingSeason._id).eq("kind", "real"),
         )
         .first();
-      if (!existingDraft || existingDraft.historySource !== "manual") {
+      if (!existingDraft || existingDraft.historySource === undefined) {
         throw new Error(
-          `This league already has a ${args.year} season that wasn't entered here, so it can't be overwritten this way.`,
+          `This league already has a real ${args.year} season, so it can't be overwritten this way.`,
         );
       }
       historySeasonId = existingSeason._id;
       historyDraftId = existingDraft._id;
+      if (existingDraft.historySource !== "manual") {
+        await ctx.db.patch(existingDraft._id, {
+          historySource: "manual",
+          name: `${league.name} (Manually entered ${args.year})`,
+        });
+      }
 
       const oldTeams = await ctx.db
         .query("seasonTeams")

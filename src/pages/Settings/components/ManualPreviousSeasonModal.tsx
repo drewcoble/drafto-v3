@@ -157,11 +157,14 @@ function PlayerSearchAdd({
 // Lets a host backfill last season's results by hand - team by team,
 // searching for whoever they remember each team keeping/drafting - so
 // Recommended Keepers (KeepersTab.tsx) has something to work from without
-// needing a Sleeper/Yahoo-linked league. Doubles as the edit flow: opening
-// this for a year that already has manually-entered data (see
-// getManualPreviousSeasonEntry) pre-fills every row, and Save fully
-// replaces whatever was there before - same "resubmit the whole form"
-// pattern as e.g. TeamsPanel's nomination order.
+// needing a Sleeper/Yahoo-linked league. Doubles as the edit/correction
+// flow for a season that's already got history data: opening this for a
+// year that already has manually-entered OR provider-imported data (see
+// getManualPreviousSeasonEntry - anything with a historySource at all)
+// pre-fills every row, and Save fully replaces whatever was there before -
+// same "resubmit the whole form" pattern as e.g. TeamsPanel's nomination
+// order. Saving here always re-tags the season as manually-entered
+// afterward, regardless of how it originally got there.
 export function ManualPreviousSeasonModal({
   seasonId,
   currentYear,
