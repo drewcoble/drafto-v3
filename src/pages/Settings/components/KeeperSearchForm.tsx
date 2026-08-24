@@ -224,7 +224,7 @@ export function KeeperSearchForm({
                         </Text>
                       )}
                     </Group>
-                    {draftValueByFpid.get(row.fpid) && (
+                    {!isSnakeOrLinear && draftValueByFpid.get(row.fpid) && (
                       <Text
                         size="xs"
                         c="dimmed"
