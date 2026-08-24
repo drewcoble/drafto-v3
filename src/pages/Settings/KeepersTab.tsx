@@ -379,8 +379,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 activePositions={activePositions}
                 draftedFpids={draftedFpids}
                 isSnakeOrLinear={isSnakeOrLinear}
-                adpByFpid={adpByFpid}
-                scoring={settings.scoring}
+                availableValues={draftValues ?? []}
                 teamCount={settings.teamCount}
                 onQuickAdd={handleQuickAddKeeper}
                 onSelectPlayer={setSelectedFpid}

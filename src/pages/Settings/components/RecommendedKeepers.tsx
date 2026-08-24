@@ -9,19 +9,22 @@ import {
   Table,
   Text,
 } from "@mantine/core";
-import type { Position, ScoringFormat } from "../../../types";
+import type { Position } from "../../../types";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import { RookieBadge } from "../../../components/RookieBadge";
 import { useRookieFpids } from "../../../hooks/useRookieFpids";
-import { adpForScoring } from "../../../lib/relevantPlayers";
 import {
   computeKeeperCost,
   computeKeeperCostRound,
+  expectedValueAtRound,
   formulaForFpid,
   prospectiveKeeperStreak,
   roundFormulaForFpid,
+  sortValuesDescending,
+  valueImpliedRound,
   type KeeperPriceHistoryEntry,
   type KeeperRules,
+  type ValueRankEntry,
 } from "../../../lib/keeperCost";
 
 interface ProjectionRow {
@@ -39,14 +42,18 @@ interface RecommendedKeepersProps {
   activePositions: readonly Position[];
   draftedFpids: Set<number>;
   // A snake/linear league's keeper cost/value is round-denominated instead
-  // of dollar-denominated (SNAKE_DRAFT.md §8) - adpByFpid/scoring/teamCount
-  // are only needed in that mode, to convert each player's ADP into the
-  // round they'd realistically go in this year (the "market rate" a round-
-  // based keeper cost is compared against, same role draftValueByFpid's
-  // dollarValue plays for the $ mode below).
+  // of dollar-denominated (SNAKE_DRAFT.md §8) - availableValues/teamCount
+  // are only needed in that mode, to rank each candidate's own dollarValue
+  // against a pooled, rank-based "expected value at this round" curve
+  // (see keeperCost.ts's valueImpliedRound/expectedValueAtRound for why
+  // that's used instead of comparing round numbers or real ADP directly).
   isSnakeOrLinear: boolean;
-  adpByFpid: Map<number, { adpStd: number; adpHalf: number; adpPpr: number }>;
-  scoring: ScoringFormat;
+  // Every currently-undrafted/unkept player's own dollarValue - the pool
+  // valueImpliedRound/expectedValueAtRound rank against. Deliberately NOT
+  // draftValueByFpid (which also carries interpolated values for players
+  // already kept elsewhere) - a kept player isn't actually available at
+  // any round this year, so it shouldn't occupy a rank band.
+  availableValues: readonly ValueRankEntry[];
   teamCount: number;
   // Adds the keeper outright at the suggested cost - team is resolved by
   // the caller (KeepersTab.tsx) from `teamName` below when it's set
@@ -99,14 +106,17 @@ export function RecommendedKeepers({
   activePositions,
   draftedFpids,
   isSnakeOrLinear,
-  adpByFpid,
-  scoring,
+  availableValues,
   teamCount,
   onQuickAdd,
   onSelectPlayer,
   onOpenManualEntry,
 }: RecommendedKeepersProps) {
   const rookieFpids = useRookieFpids();
+  const sortedValues = useMemo(
+    () => sortValuesDescending(availableValues),
+    [availableValues],
+  );
   const recommendations = useMemo((): RecommendationRow[] => {
     if (!priceHistory || !keeperRules || !allProjections) return [];
     const projectionByFpid = new Map(
@@ -128,15 +138,6 @@ export function RecommendedKeepers({
         }
 
         if (isSnakeOrLinear) {
-          // "Market round" - this year's ADP converted into the round
-          // it'd land in for this league's team count, the round-mode
-          // counterpart to draftValueByFpid's dollarValue below.
-          const adp = adpByFpid.get(fpid);
-          if (!adp) return null;
-          const marketRound = Math.ceil(
-            adpForScoring(adp, scoring) / teamCount,
-          );
-
           const roundFormula = roundFormulaForFpid(
             keeperRules,
             fpid,
@@ -149,13 +150,31 @@ export function RecommendedKeepers({
           );
           if (keeperCostRound === null) return null;
 
-          // A bargain means the round you give up to keep them (cost) is
-          // LATER/cheaper than the round their ADP says they're actually
-          // worth (market) - a round-7 cost on a round-2 talent is a great
-          // deal, so savings = cost - market, not market - cost (a bigger
-          // round number is a cheaper cost, the opposite of dollars, where
-          // a bigger number is a more expensive one).
-          const savingsRounds = keeperCostRound - marketRound;
+          // Ranked by projected dollarValue (the VOR-derived currency the
+          // $ engine already computes), not by comparing round numbers or
+          // real ADP directly - see keeperCost.ts's valueImpliedRound/
+          // expectedValueAtRound for why (rounds aren't a linear value
+          // unit, and real ADP can be skewed by position runs). dollarValue
+          // is what actually decides which players qualify/how they rank;
+          // the displayed "+N rounds" is a rounds-flavored readout of the
+          // same comparison, not an independent number.
+          const playerValue = draftValueByFpid.get(fpid)?.dollarValue;
+          if (playerValue === undefined) return null;
+          const expectedValue = expectedValueAtRound(
+            keeperCostRound,
+            sortedValues,
+            teamCount,
+          );
+          if (expectedValue === null) return null;
+          const dollarSurplus = playerValue - expectedValue;
+          if (dollarSurplus <= 0) return null;
+
+          const impliedRound = valueImpliedRound(
+            playerValue,
+            sortedValues,
+            teamCount,
+          );
+          const savingsRounds = keeperCostRound - impliedRound;
           if (savingsRounds <= 0) return null;
 
           return {
@@ -163,9 +182,9 @@ export function RecommendedKeepers({
             teamName: entry.teamName,
             costValue: keeperCostRound,
             costLabel: `Round ${keeperCostRound}`,
-            marketLabel: `ADP round ${marketRound}`,
+            marketLabel: `Fair round ${impliedRound}`,
             savingsLabel: `+${savingsRounds} rd${savingsRounds === 1 ? "" : "s"}`,
-            sortValue: savingsRounds,
+            sortValue: dollarSurplus,
           };
         }
 
@@ -202,8 +221,7 @@ export function RecommendedKeepers({
     draftedFpids,
     draftValueByFpid,
     isSnakeOrLinear,
-    adpByFpid,
-    scoring,
+    sortedValues,
     teamCount,
   ]);
 
@@ -263,7 +281,7 @@ export function RecommendedKeepers({
           <>
             <Text size="xs" c="dimmed">
               {isSnakeOrLinear
-                ? "Best value vs. this year's ADP-implied round."
+                ? "Best value vs. this year's projected fair round."
                 : "Best value vs. this year's fair price."}
             </Text>
             <Table.ScrollContainer minWidth={320}>

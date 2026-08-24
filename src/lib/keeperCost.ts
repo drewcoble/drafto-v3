@@ -114,6 +114,65 @@ export function computeKeeperCostRound(
   return Math.max(raw, minimum);
 }
 
+// A player's projected dollarValue (the same VOR-derived currency the $
+// engine already computes - convex/draftValues.ts) - used below to rank
+// round-mode keeper bargains by actual projected value instead of by round
+// number. Comparing round numbers directly is misleading two ways: rounds
+// aren't a linear unit of value (a 1st-rounder kept in round 3 is a much
+// bigger deal than a "same round gap" late in the draft, where value
+// per round is nearly flat), and a round's real-world ADP can be skewed by
+// position runs (e.g. a QB glut making an early round's *average* value
+// look worse than a later one). Ranking by dollarValue against a rank
+// (not ADP) baseline sidesteps both.
+export interface ValueRankEntry {
+  fpid: number;
+  dollarValue: number;
+}
+
+// Sorted once by the caller (RecommendedKeepers.tsx, via useMemo) and
+// reused by both functions below - the "if every position drafted by pure
+// value" board for this year, pooling every position together rather than
+// bucketing by real ADP. Should be built from only the currently
+// available/undrafted pool - a kept player isn't actually available at any
+// round this year, so including them would skew the rank bands.
+export function sortValuesDescending(
+  values: readonly ValueRankEntry[],
+): ValueRankEntry[] {
+  return [...values].sort((a, b) => b.dollarValue - a.dollarValue);
+}
+
+// The round a player's OWN dollarValue implies, ranked against the pooled
+// (not per-position, not ADP) value curve - "this player's actual
+// projected production is as good as a typical round-N pick this year."
+// Immune to a real-world position run distorting some round's average,
+// since it only ever looks at projected value, never at what actually
+// gets drafted where.
+export function valueImpliedRound(
+  playerValue: number,
+  sortedDescending: readonly ValueRankEntry[],
+  teamCount: number,
+): number {
+  const index = sortedDescending.findIndex((v) => v.dollarValue <= playerValue);
+  const rank = index === -1 ? sortedDescending.length + 1 : index + 1;
+  return Math.ceil(rank / teamCount);
+}
+
+// The inverse direction - the average dollarValue across `round`'s
+// teamCount-sized rank band in the same curve ("what a typical pick in
+// this round would actually get you"). null past the end of the pool
+// (asking about a round deeper than there's ranked data for).
+export function expectedValueAtRound(
+  round: number,
+  sortedDescending: readonly ValueRankEntry[],
+  teamCount: number,
+): number | null {
+  const startIndex = (round - 1) * teamCount;
+  if (startIndex >= sortedDescending.length) return null;
+  const band = sortedDescending.slice(startIndex, startIndex + teamCount);
+  if (band.length === 0) return null;
+  return band.reduce((sum, v) => sum + v.dollarValue, 0) / band.length;
+}
+
 // Mirrors convex/draft/picks.ts's computeKeeperStreak exactly: only the
 // immediately-prior season counts (a gap resets to 1), regardless of how far
 // back getPlayerPriceHistory's entry for this fpid actually came from. Keep
