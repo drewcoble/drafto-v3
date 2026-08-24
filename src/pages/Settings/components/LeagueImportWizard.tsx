@@ -42,16 +42,22 @@ export function LeagueImportWizard({
   const listSleeperLeaguesForUsername = useAction(
     api.sleeper.league.listSleeperLeaguesForUsername,
   );
-  const previewSleeperImport = useAction(api.sleeper.league.previewSleeperImport);
+  const previewSleeperImport = useAction(
+    api.sleeper.league.previewSleeperImport,
+  );
   const createSettings = useMutation(api.leagues.createLeague);
-  const initializeDraftTeams = useMutation(api.draft.teams.initializeSeasonTeams);
+  const initializeDraftTeams = useMutation(
+    api.draft.teams.initializeSeasonTeams,
+  );
   const importHistory = useMutation(api.leagues.importPreviousSeasonHistory);
 
   const [usernameInput, setUsernameInput] = useState("");
   const [sleeperUserId, setSleeperUserId] = useState<string | null>(null);
-  const [leagueOptions, setLeagueOptions] = useState<
-    Array<{ leagueId: string; name: string; season: string }> | null
-  >(null);
+  const [leagueOptions, setLeagueOptions] = useState<Array<{
+    leagueId: string;
+    name: string;
+    season: string;
+  }> | null>(null);
   const [loadingLeagues, setLoadingLeagues] = useState(false);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -78,9 +84,7 @@ export function LeagueImportWizard({
       setSleeperUserId(result.sleeperUserId);
       setLeagueOptions(result.leagues);
     } catch (err) {
-      setLoadError(
-        getErrorMessage(err, "Failed to find leagues."),
-      );
+      setLoadError(getErrorMessage(err, "Failed to find leagues."));
     } finally {
       setLoadingLeagues(false);
     }
@@ -119,9 +123,7 @@ export function LeagueImportWizard({
         useKeepers: DEFAULT_FORM.useKeepers,
       });
     } catch (err) {
-      setLoadError(
-        getErrorMessage(err, "Failed to load league."),
-      );
+      setLoadError(getErrorMessage(err, "Failed to load league."));
     } finally {
       setLoadingPreview(false);
     }
@@ -149,8 +151,7 @@ export function LeagueImportWizard({
       const opponents = preview.teams.filter((t) => t.ownerId !== selfOwnerId);
       await initializeDraftTeams({
         seasonId: newId,
-        selfName:
-          (selfTeam ? teamNames[selfTeam.rosterId] : undefined) ?? "Me",
+        selfName: (selfTeam ? teamNames[selfTeam.rosterId] : undefined) ?? "Me",
         opponentNames: opponents.map(
           (t) => teamNames[t.rosterId] ?? t.teamName,
         ),
@@ -187,9 +188,7 @@ export function LeagueImportWizard({
 
       onImported(newId);
     } catch (err) {
-      setSaveError(
-        getErrorMessage(err, "Failed to import league."),
-      );
+      setSaveError(getErrorMessage(err, "Failed to import league."));
     } finally {
       setSaving(false);
     }
@@ -292,6 +291,7 @@ export function LeagueImportWizard({
         onSave={() => void handleCreate()}
         onCancel={onCancel}
         saveLabel="Create League"
+        compact
       />
     </Stack>
   );

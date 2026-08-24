@@ -47,17 +47,22 @@ export function YahooLeagueImportWizard({
   const listMyYahooLeagues = useAction(api.yahoo.league.listMyYahooLeagues);
   const previewYahooImport = useAction(api.yahoo.league.previewYahooImport);
   const createLeague = useMutation(api.leagues.createLeague);
-  const initializeSeasonTeams = useMutation(api.draft.teams.initializeSeasonTeams);
+  const initializeSeasonTeams = useMutation(
+    api.draft.teams.initializeSeasonTeams,
+  );
   const importHistory = useMutation(api.leagues.importPreviousSeasonHistory);
 
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
 
-  const [leagueOptions, setLeagueOptions] = useState<
-    Array<{ leagueKey: string; name: string }> | null
-  >(null);
+  const [leagueOptions, setLeagueOptions] = useState<Array<{
+    leagueKey: string;
+    name: string;
+  }> | null>(null);
   const [loadingLeagues, setLoadingLeagues] = useState(false);
-  const [selectedLeagueKey, setSelectedLeagueKey] = useState<string | null>(null);
+  const [selectedLeagueKey, setSelectedLeagueKey] = useState<string | null>(
+    null,
+  );
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Awaited<
@@ -84,9 +89,7 @@ export function YahooLeagueImportWizard({
       const { authorizeUrl } = await startYahooAuth({});
       window.location.href = authorizeUrl;
     } catch (err) {
-      setConnectError(
-        getErrorMessage(err, "Failed to start Yahoo connect."),
-      );
+      setConnectError(getErrorMessage(err, "Failed to start Yahoo connect."));
       setConnecting(false);
     }
   };
@@ -98,9 +101,7 @@ export function YahooLeagueImportWizard({
       const result = await listMyYahooLeagues({});
       setLeagueOptions(result);
     } catch (err) {
-      setLoadError(
-        getErrorMessage(err, "Failed to load leagues."),
-      );
+      setLoadError(getErrorMessage(err, "Failed to load leagues."));
     } finally {
       setLoadingLeagues(false);
     }
@@ -118,7 +119,9 @@ export function YahooLeagueImportWizard({
         Object.fromEntries(result.teams.map((t) => [t.teamKey, t.teamName])),
       );
       const currentUserTeam = result.teams.find((t) => t.isCurrentUser);
-      setSelfTeamKey(currentUserTeam?.teamKey ?? result.teams[0]?.teamKey ?? "");
+      setSelfTeamKey(
+        currentUserTeam?.teamKey ?? result.teams[0]?.teamKey ?? "",
+      );
       setForm({
         name: result.name,
         teamCount: result.teamCount,
@@ -136,9 +139,7 @@ export function YahooLeagueImportWizard({
         useKeepers: DEFAULT_FORM.useKeepers,
       });
     } catch (err) {
-      setLoadError(
-        getErrorMessage(err, "Failed to load league."),
-      );
+      setLoadError(getErrorMessage(err, "Failed to load league."));
     } finally {
       setLoadingPreview(false);
     }
@@ -191,9 +192,7 @@ export function YahooLeagueImportWizard({
 
       onImported(newId);
     } catch (err) {
-      setSaveError(
-        getErrorMessage(err, "Failed to import league."),
-      );
+      setSaveError(getErrorMessage(err, "Failed to import league."));
     } finally {
       setSaving(false);
     }
@@ -314,6 +313,7 @@ export function YahooLeagueImportWizard({
         onSave={() => void handleCreate()}
         onCancel={onCancel}
         saveLabel="Create League"
+        compact
       />
       <Badge variant="light" color="yellow" w="fit-content">
         Yahoo import is unverified against a real league - see YAHOO.md
