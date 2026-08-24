@@ -188,12 +188,16 @@ export function LeagueImportWizard({
           season: preview.previousSeason.season,
           sleeperLeagueId: selectedLeagueId,
           ...(selfOwnerId ? { selfOwnerId } : {}),
+          ...(preview.previousSeason.draftType !== undefined
+            ? { previousDraftType: preview.previousSeason.draftType }
+            : {}),
           teams: preview.previousSeason.teams.map((t) => ({
             ownerId: t.ownerId,
             teamName: t.teamName,
             players: t.players.map((p) => ({
               fpid: p.fpid,
               ...(p.price !== undefined ? { price: p.price } : {}),
+              ...(p.round !== undefined ? { round: p.round } : {}),
             })),
           })),
         });
@@ -287,9 +291,12 @@ export function LeagueImportWizard({
       {preview.previousSeason && (
         <Checkbox
           label={`Also import ${preview.previousSeason.season}'s roster for keeper suggestions${
-            preview.previousSeason.isAuction
+            preview.previousSeason.draftType === "auction"
               ? ""
-              : " (no auction prices found - eligibility only)"
+              : preview.previousSeason.draftType === "snake" ||
+                  preview.previousSeason.draftType === "linear"
+                ? " (round-based)"
+                : " (no draft data found - eligibility only)"
           }`}
           checked={importKeeperHistory}
           onChange={(e) => setImportKeeperHistory(e.currentTarget.checked)}

@@ -310,7 +310,12 @@ interface SleeperDraft {
 
 interface SleeperDraftPick {
   player_id: string;
+  // Only meaningful for an auction draft.
   metadata?: { amount?: string };
+  // Only meaningful for a snake/linear draft (SNAKE_DRAFT.md §6/§8) - a
+  // top-level field on every pick regardless of format, just unused by
+  // Sleeper's own UI for an auction draft.
+  round?: number;
 }
 
 // Best-effort: the current league's own draft type (SNAKE_DRAFT.md §6) -
@@ -333,19 +338,30 @@ export interface PreviousSeasonTeamPreview {
   rosterId: string;
   ownerId: string;
   teamName: string;
-  players: Array<{ fpid: number; price: number | undefined }>;
+  players: Array<{
+    fpid: number;
+    price: number | undefined;
+    // Round counterpart to price above (SNAKE_DRAFT.md §6/§8) - only ever
+    // set when draftType (below) was "snake"/"linear"; price is only ever
+    // set when it was "auction". Never both.
+    round: number | undefined;
+  }>;
 }
 
 export interface PreviousSeasonPreview {
   season: string;
-  isAuction: boolean;
+  // Undefined when the previous league had no draft on Sleeper, or the
+  // lookup failed - the wizard falls back to "eligibility only" (no
+  // price/round on any player) in that case, same as before draftType was
+  // detected at all.
+  draftType: DraftType | undefined;
   teams: PreviousSeasonTeamPreview[];
 }
 
-// Best-effort: a missing/unreachable previous league, a non-auction draft, or
-// any other hiccup just means "no price data" rather than failing the whole
-// import - see Part 4's plan doc on why keeper-price seeding degrades
-// gracefully instead of requiring exact auction history.
+// Best-effort: a missing/unreachable previous league, or any other hiccup,
+// just means "no price/round data" rather than failing the whole import -
+// see Part 4's plan doc on why keeper-history seeding degrades gracefully
+// instead of requiring exact prior-draft history.
 async function fetchPreviousSeasonPreview(
   previousLeagueId: string,
 ): Promise<PreviousSeasonPreview | undefined> {
@@ -356,17 +372,18 @@ async function fetchPreviousSeasonPreview(
     ]);
 
     let priceByPlayerId = new Map<string, number>();
-    let isAuction = false;
+    let roundByPlayerId = new Map<string, number>();
+    let draftType: DraftType | undefined;
     if (prevSettings.draft_id) {
       try {
         const draft = await fetchSleeperJson<SleeperDraft>(
           `/draft/${prevSettings.draft_id}`,
         );
-        isAuction = draft.type === "auction";
-        if (isAuction) {
-          const picks = await fetchSleeperJson<SleeperDraftPick[]>(
-            `/draft/${prevSettings.draft_id}/picks`,
-          );
+        draftType = draft.type;
+        const picks = await fetchSleeperJson<SleeperDraftPick[]>(
+          `/draft/${prevSettings.draft_id}/picks`,
+        );
+        if (draftType === "auction") {
           priceByPlayerId = new Map(
             picks
               .map((pick): [string, number] => [
@@ -375,9 +392,19 @@ async function fetchPreviousSeasonPreview(
               ])
               .filter(([, amount]) => Number.isFinite(amount)),
           );
+        } else {
+          roundByPlayerId = new Map(
+            picks
+              .map((pick): [string, number] => [
+                pick.player_id,
+                Number(pick.round),
+              ])
+              .filter(([, round]) => Number.isFinite(round)),
+          );
         }
       } catch {
-        // No draft history available - proceed with rosters only, no prices.
+        // No draft history available - proceed with rosters only, no
+        // prices/rounds.
       }
     }
 
@@ -388,13 +415,25 @@ async function fetchPreviousSeasonPreview(
         .map((playerId) => {
           const fpid = sleeperPlayerIdToFpid(playerId);
           if (fpid === null) return null;
-          return { fpid, price: priceByPlayerId.get(playerId) };
+          return {
+            fpid,
+            price: priceByPlayerId.get(playerId),
+            round: roundByPlayerId.get(playerId),
+          };
         })
-        .filter((p): p is { fpid: number; price: number | undefined } => p !== null);
+        .filter(
+          (
+            p,
+          ): p is {
+            fpid: number;
+            price: number | undefined;
+            round: number | undefined;
+          } => p !== null,
+        );
       return { ...row, players };
     });
 
-    return { season: prevSettings.season, isAuction, teams };
+    return { season: prevSettings.season, draftType, teams };
   } catch {
     return undefined;
   }

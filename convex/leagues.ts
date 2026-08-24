@@ -349,6 +349,13 @@ export const importPreviousSeasonHistory = mutation({
     // prices for every fpid league-wide regardless of which team held them,
     // so this doesn't affect keeper suggestions themselves).
     selfOwnerId: v.optional(v.string()),
+    // The linked provider league's OWN previous-season draft format
+    // (SNAKE_DRAFT.md §6/§8) - only Sleeper detects this today (see
+    // convex/sleeper/league.ts's fetchPreviousSeasonPreview); absent for
+    // Yahoo, or when Sleeper couldn't find a prior draft at all, in which
+    // case every inserted pick falls back to the existing $-placeholder
+    // behavior (see the round/price branch below).
+    previousDraftType: v.optional(draftTypeValidator),
     teams: v.array(
       v.object({
         ownerId: v.string(),
@@ -357,6 +364,9 @@ export const importPreviousSeasonHistory = mutation({
           v.object({
             fpid: v.number(),
             price: v.optional(v.number()),
+            // Round counterpart to price (SNAKE_DRAFT.md §8) - only ever
+            // sent when previousDraftType is "snake"/"linear".
+            round: v.optional(v.number()),
           }),
         ),
       }),
@@ -412,6 +422,15 @@ export const importPreviousSeasonHistory = mutation({
       createdAt: now,
     });
 
+    // Round-based history (SNAKE_DRAFT.md §8) never falls back to a $1
+    // placeholder the way the auction/unknown-format path does below - a
+    // stray dollar figure has no business showing up in an otherwise
+    // round-denominated import. A player with no round found (e.g. added
+    // via waiver after that season's draft) just gets a plain roster-
+    // membership row with neither price nor round set.
+    const isRoundBased =
+      args.previousDraftType === "snake" || args.previousDraftType === "linear";
+
     let sequence = 0;
     for (const [index, team] of args.teams.entries()) {
       const teamId = await ctx.db.insert("seasonTeams", {
@@ -438,8 +457,12 @@ export const importPreviousSeasonHistory = mutation({
           fpid: player.fpid,
           position: playerDoc.position,
           teamId,
-          price: player.price ?? 1,
           createdAt: now,
+          ...(isRoundBased
+            ? player.round !== undefined
+              ? { round: player.round }
+              : {}
+            : { price: player.price ?? 1 }),
         });
       }
     }
