@@ -27,7 +27,7 @@ export const getDraftOrderConfig = query({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
     const { draft } = await requireDraftOwner(ctx, args.seasonId);
-    return { draftOrder: draft.draftOrder };
+    return { draftOrder: draft.draftOrder, reversalRounds: draft.reversalRounds };
   },
 });
 
@@ -37,7 +37,32 @@ export const getDraftOrderConfigPublic = query({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
     const draft = await requireRealDraft(ctx, args.seasonId);
-    return { draftOrder: draft.draftOrder };
+    return { draftOrder: draft.draftOrder, reversalRounds: draft.reversalRounds };
+  },
+});
+
+// Host-supplied set of "reversal" round boundaries (SNAKE_DRAFT.md §10,
+// e.g. 3rd-round reversal: reversalRounds: [3]) - a listed round repeats the
+// PREVIOUS round's direction instead of alternating, rather than the usual
+// bounce-and-flip (see pickOrder.ts's rawStep/resolveTeamPositionInRound for
+// the actual mechanics). Locked to pre-draft same as setDraftOrder -
+// changing this after picks exist would retroactively change which
+// direction an already-recorded round "should" have gone. Round 1 can't be
+// a reversal (there's no previous direction to repeat), so it's rejected
+// same as a non-positive round.
+export const setReversalRounds = mutation({
+  args: {
+    seasonId: v.id("seasons"),
+    reversalRounds: v.array(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const { draft } = await requireDraftNotStarted(ctx, args.seasonId);
+    if (args.reversalRounds.some((round) => !Number.isInteger(round) || round < 2)) {
+      throw new Error("Reversal rounds must be whole numbers, round 2 or later.");
+    }
+    const deduped = [...new Set(args.reversalRounds)].sort((a, b) => a - b);
+    await ctx.db.patch(draft._id, { reversalRounds: deduped });
+    return null;
   },
 });
 

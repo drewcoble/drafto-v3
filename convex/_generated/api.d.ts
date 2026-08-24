@@ -33,6 +33,7 @@ import type * as draft_lineupOptimizer from "../draft/lineupOptimizer.js";
 import type * as draft_manualHistory from "../draft/manualHistory.js";
 import type * as draft_nominationOrder from "../draft/nominationOrder.js";
 import type * as draft_pickOrder from "../draft/pickOrder.js";
+import type * as draft_pickSlots from "../draft/pickSlots.js";
 import type * as draft_picks from "../draft/picks.js";
 import type * as draft_plan from "../draft/plan.js";
 import type * as draft_playerDetail from "../draft/playerDetail.js";
@@ -116,6 +117,7 @@ declare const fullApi: ApiFromModules<{
   "draft/manualHistory": typeof draft_manualHistory;
   "draft/nominationOrder": typeof draft_nominationOrder;
   "draft/pickOrder": typeof draft_pickOrder;
+  "draft/pickSlots": typeof draft_pickSlots;
   "draft/picks": typeof draft_picks;
   "draft/plan": typeof draft_plan;
   "draft/playerDetail": typeof draft_playerDetail;

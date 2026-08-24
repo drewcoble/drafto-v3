@@ -31,6 +31,10 @@ interface KeepersTabProps {
 export function KeepersTab({ seasonId }: KeepersTabProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((league) => league._id === seasonId);
+  // A snake/linear league's keeper cost is a draft-slot round, not a dollar
+  // price (SNAKE_DRAFT.md §8) - same "derive from draftType" convention as
+  // LeagueDetails.tsx's isSnakeOrLinear and KeeperRulesPanel's copy of it.
+  const isSnakeOrLinear = (settings?.draftType ?? "auction") !== "auction";
   const draftTeams = useQuery(api.draft.teams.listSeasonTeams, {
     seasonId,
   });
@@ -59,6 +63,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   const removeKeeper = useMutation(api.draft.picks.removeKeeper);
   const setKeeperStreak = useMutation(api.draft.picks.setKeeperStreak);
   const setKeeperPriceMutation = useMutation(api.draft.picks.setKeeperPrice);
+  const setKeeperRoundMutation = useMutation(api.draft.picks.setKeeperRound);
   const setKeeperTeamMutation = useMutation(api.draft.picks.setKeeperTeam);
 
   const [keeperSearch, setKeeperSearch] = useState("");
@@ -197,7 +202,10 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
   const handleAddKeeper = async (
     fpid: number,
     position: Position,
-    price: number,
+    // Dollar price for an auction league, draft-slot round for a snake/
+    // linear one (SNAKE_DRAFT.md §8) - isSnakeOrLinear below decides which
+    // addKeeper arg this actually becomes.
+    cost: number,
     // Overrides the search form's currently-selected team - used by
     // RecommendedKeepers' quick-add (handleQuickAddKeeper below), which
     // resolves its own team from a confirmed manual-entry roster and
@@ -229,7 +237,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
         seasonId,
         teamId,
         fpid,
-        price,
+        ...(isSnakeOrLinear ? { round: cost } : { price: cost }),
         ...(planSlotKey ? { planSlotKey } : {}),
       });
       setKeeperSearch("");
@@ -283,6 +291,15 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
       await setKeeperPriceMutation({ pickId, price });
     } catch (err) {
       setKeeperError(getErrorMessage(err, "Failed to update keeper price."));
+    }
+  };
+
+  const handleSetRound = async (pickId: Id<"draftPicks">, round: number) => {
+    setKeeperError(null);
+    try {
+      await setKeeperRoundMutation({ pickId, round });
+    } catch (err) {
+      setKeeperError(getErrorMessage(err, "Failed to update keeper round."));
     }
   };
 
@@ -341,29 +358,40 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 Add a Keeper
               </Text>
               {usingGenericValues && <GenericValuesNotice />}
-              <SleeperKeeperSuggestions
-                seasonId={seasonId}
-                sleeperLeagueId={settings.sleeperLeagueId}
-                draftTeams={draftTeams}
-                allProjections={allProjections}
-                priceHistory={priceHistory}
-                keeperRules={settings.keeperRules}
-                existingKeeperKeys={existingKeeperKeys}
-                rookieFpids={rookieFpids}
-                onAddKeeper={handleAddKeeper}
-                onSelectPlayer={setSelectedFpid}
-              />
-              <RecommendedKeepers
-                priceHistory={priceHistory}
-                keeperRules={settings.keeperRules}
-                draftValueByFpid={draftValueByFpid}
-                allProjections={allProjections}
-                activePositions={activePositions}
-                draftedFpids={draftedFpids}
-                onQuickAdd={handleQuickAddKeeper}
-                onSelectPlayer={setSelectedFpid}
-                onOpenManualEntry={() => setManualEntryOpened(true)}
-              />
+              {/* Both quick-add surfaces below suggest a cost via a $
+                  savings-vs-fair-value heuristic (dollar formula, dollar
+                  fair value) that doesn't translate to a round-based
+                  keeper cost yet (SNAKE_DRAFT.md §8) - hidden for a snake/
+                  linear league rather than risk suggesting a dollar-shaped
+                  number as if it were a round. The manual KeeperSearchForm
+                  flow below is round-aware and stays available either way. */}
+              {!isSnakeOrLinear && (
+                <>
+                  <SleeperKeeperSuggestions
+                    seasonId={seasonId}
+                    sleeperLeagueId={settings.sleeperLeagueId}
+                    draftTeams={draftTeams}
+                    allProjections={allProjections}
+                    priceHistory={priceHistory}
+                    keeperRules={settings.keeperRules}
+                    existingKeeperKeys={existingKeeperKeys}
+                    rookieFpids={rookieFpids}
+                    onAddKeeper={handleAddKeeper}
+                    onSelectPlayer={setSelectedFpid}
+                  />
+                  <RecommendedKeepers
+                    priceHistory={priceHistory}
+                    keeperRules={settings.keeperRules}
+                    draftValueByFpid={draftValueByFpid}
+                    allProjections={allProjections}
+                    activePositions={activePositions}
+                    draftedFpids={draftedFpids}
+                    onQuickAdd={handleQuickAddKeeper}
+                    onSelectPlayer={setSelectedFpid}
+                    onOpenManualEntry={() => setManualEntryOpened(true)}
+                  />
+                </>
+              )}
               {/* No outer Card here - KeeperSearchForm already boxes the
                   selected-candidate summary in its own Card once a player is
                   picked, so wrapping this whole section would nest one Card
@@ -382,6 +410,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                 draftValueByFpid={draftValueByFpid}
                 priceHistory={priceHistory}
                 keeperRules={settings.keeperRules}
+                isSnakeOrLinear={isSnakeOrLinear}
                 atTeamKeeperCap={atTeamKeeperCap}
                 onAddKeeper={handleAddKeeper}
                 onSelectPlayer={setSelectedFpid}
@@ -411,6 +440,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
                   showStreakInput={
                     settings.keeperRules?.maxConsecutiveYears !== undefined
                   }
+                  isSnakeOrLinear={isSnakeOrLinear}
                 />
               )}
             </Stack>
@@ -447,6 +477,7 @@ export function KeepersTab({ seasonId }: KeepersTabProps) {
         }
         onClose={() => setEditingPickId(null)}
         onSetPrice={handleSetPrice}
+        onSetRound={handleSetRound}
         onSetTeam={handleSetTeam}
         onSetStreak={handleSetStreak}
         onRemove={handleRemoveKeeper}

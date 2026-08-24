@@ -4,6 +4,7 @@ import type { Position } from "../types";
 export type KeeperRules = NonNullable<Doc<"seasons">["keeperRules"]>;
 export type KeeperFormula = KeeperRules["defaultFormula"];
 export type KeeperTier = KeeperRules["tiers"][number];
+export type KeeperRoundFormula = NonNullable<KeeperRules["defaultRoundFormula"]>;
 
 // Mirrors the shape returned by convex/draft/history.ts's
 // getPlayerPriceHistory - kept as its own type here (rather than derived
@@ -15,6 +16,10 @@ export interface KeeperPriceHistoryEntry {
   // treats a missing prior price the same way (no prior season at all), so
   // this needs no further change downstream.
   price: number | undefined;
+  // Round counterpart to price above (SNAKE_DRAFT.md §8) - undefined for an
+  // auction-season pick, or one from before round tracking existed.
+  // computeKeeperCostRound treats a missing prior round the same way.
+  round: number | undefined;
   season: string | undefined;
   isKeeper: boolean;
   keeperStreak: number | undefined;
@@ -43,6 +48,22 @@ export function formulaForFpid(
   return tier ? tier.formula : keeperRules.defaultFormula;
 }
 
+// Round-formula counterpart to formulaForFpid above, same tier-lookup rule
+// (SNAKE_DRAFT.md §8) - null when this league has never configured a round
+// formula at all (every league predating costMode: "round", or a snake/
+// linear league that hasn't set one up yet), same "nothing to suggest"
+// signal computeKeeperCostRound below passes through to its caller.
+export function roundFormulaForFpid(
+  keeperRules: KeeperRules,
+  fpid: number,
+  position: Position,
+): KeeperRoundFormula | null {
+  const tier = keeperRules.tiers.find(
+    (t) => t.fpids.includes(fpid) || t.positions?.includes(position),
+  );
+  return (tier?.roundFormula ?? keeperRules.defaultRoundFormula) ?? null;
+}
+
 // The suggested keeper cost for a player given their resolved formula and
 // their most recent prior-season price (undefined for a player who wasn't
 // drafted/kept last season, e.g. a rookie; 0 for a player manually entered
@@ -67,6 +88,24 @@ export function computeKeeperCost(
       ? Math.max(raw, formula.minimumCost)
       : raw;
   return Math.round(floored);
+}
+
+// Round-formula counterpart to computeKeeperCost above: the suggested round
+// a kept player costs, given their resolved round formula and the round
+// they were drafted/kept in last season (undefined for a player with no
+// prior-season round on record - a rookie, or a prior pick from before
+// round tracking existed). Unlike the dollar formula there's no
+// undraftedCost-style fallback (SNAKE_DRAFT.md §8 doesn't define one for
+// round mode) - a player with nothing to base a suggestion on just returns
+// null, same "fall back to manual entry" signal as the dollar version.
+export function computeKeeperCostRound(
+  formula: KeeperRoundFormula,
+  priorRound: number | undefined,
+): number | null {
+  if (priorRound === undefined) return null;
+  const raw = priorRound - formula.roundsEarlier;
+  const minimum = formula.minimumRound ?? 1;
+  return Math.max(raw, minimum);
 }
 
 // Mirrors convex/draft/picks.ts's computeKeeperStreak exactly: only the

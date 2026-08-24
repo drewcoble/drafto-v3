@@ -55,11 +55,20 @@ interface DefaultFormulaDraft extends FormulaDraft {
   undraftedCost: number | undefined;
 }
 
+// Round-denominated counterpart to FormulaDraft, edited instead of the
+// dollar fields for a snake/linear league (SNAKE_DRAFT.md §8) - see
+// isSnakeOrLinear below.
+interface RoundFormulaDraft {
+  roundsEarlier: number;
+  minimumRound: number | undefined;
+}
+
 interface TierDraft {
   id: string;
   name: string;
   maxSize: number | undefined;
   formula: FormulaDraft;
+  roundFormula: RoundFormulaDraft;
   // Whole positions this rule also applies to, on top of the explicit
   // fpids list edited via KeeperTierPlayerPicker - see formulaForFpid.
   positions: Position[];
@@ -91,6 +100,10 @@ function toTierDrafts(tiers: KeeperRules["tiers"]): TierDraft[] {
       flatAdd: t.formula.flatAdd,
       minimumCost: t.formula.minimumCost,
     },
+    roundFormula: {
+      roundsEarlier: t.roundFormula?.roundsEarlier ?? 1,
+      minimumRound: t.roundFormula?.minimumRound,
+    },
     positions: t.positions ?? [],
   }));
 }
@@ -118,6 +131,26 @@ function buildDefaultFormula(
   };
 }
 
+function toRoundFormulaDraft(
+  formula: KeeperRules["defaultRoundFormula"],
+): RoundFormulaDraft {
+  return {
+    roundsEarlier: formula?.roundsEarlier ?? 1,
+    minimumRound: formula?.minimumRound,
+  };
+}
+
+function buildRoundFormula(
+  draft: RoundFormulaDraft,
+): NonNullable<KeeperRules["defaultRoundFormula"]> {
+  return {
+    roundsEarlier: draft.roundsEarlier,
+    ...(draft.minimumRound !== undefined
+      ? { minimumRound: draft.minimumRound }
+      : {}),
+  };
+}
+
 // Comparable signature for "is the config dirty" / "should the local draft
 // resync" that deliberately excludes each tier's `fpids` - those commit
 // immediately via the per-tier player picker (its own mutation,
@@ -126,6 +159,7 @@ function buildDefaultFormula(
 // resync that discards it.
 function definitionSignature(rules: {
   defaultFormula: DefaultFormulaDraft;
+  defaultRoundFormula: RoundFormulaDraft;
   maxKeepersPerTeam: number | undefined;
   maxConsecutiveYears: number | undefined;
   tiers: TierDraft[];
@@ -150,10 +184,20 @@ function toDefaultFormulaDraft(
 
 export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
   const keeperRules = settings.keeperRules ?? DEFAULT_KEEPER_RULES;
+  // Round-based cost isn't a separate user-facing toggle - it follows the
+  // league's draft type directly (SNAKE_DRAFT.md §8's assumption that a
+  // snake/linear league always wants slot-denominated keeper cost, never a
+  // $ formula, and vice versa for auction), same "derive from draftType"
+  // pattern LeagueDetails.tsx's isSnakeOrLinear already uses.
+  const isSnakeOrLinear = (settings.draftType ?? "auction") !== "auction";
 
   const [defaultFormula, setDefaultFormula] = useState<DefaultFormulaDraft>(
     toDefaultFormulaDraft(keeperRules.defaultFormula),
   );
+  const [defaultRoundFormula, setDefaultRoundFormula] =
+    useState<RoundFormulaDraft>(
+      toRoundFormulaDraft(keeperRules.defaultRoundFormula),
+    );
   const [maxKeepersPerTeam, setMaxKeepersPerTeam] = useState<
     number | undefined
   >(keeperRules.maxKeepersPerTeam);
@@ -169,6 +213,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
 
   const committedSignature = definitionSignature({
     defaultFormula: toDefaultFormulaDraft(keeperRules.defaultFormula),
+    defaultRoundFormula: toRoundFormulaDraft(keeperRules.defaultRoundFormula),
     maxKeepersPerTeam: keeperRules.maxKeepersPerTeam,
     maxConsecutiveYears: keeperRules.maxConsecutiveYears,
     tiers: toTierDrafts(keeperRules.tiers),
@@ -176,6 +221,9 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
 
   useEffect(() => {
     setDefaultFormula(toDefaultFormulaDraft(keeperRules.defaultFormula));
+    setDefaultRoundFormula(
+      toRoundFormulaDraft(keeperRules.defaultRoundFormula),
+    );
     setMaxKeepersPerTeam(keeperRules.maxKeepersPerTeam);
     setMaxConsecutiveYears(keeperRules.maxConsecutiveYears);
     setTierDrafts(toTierDrafts(keeperRules.tiers));
@@ -187,6 +235,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
 
   const localSignature = definitionSignature({
     defaultFormula,
+    defaultRoundFormula,
     maxKeepersPerTeam,
     maxConsecutiveYears,
     tiers: tierDrafts,
@@ -320,6 +369,7 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
         name: `Rule ${current.length + 1}`,
         maxSize: undefined,
         formula: { multiplier: 1, flatAdd: 0, minimumCost: undefined },
+        roundFormula: { roundsEarlier: 1, minimumRound: undefined },
         positions: [],
       },
     ]);
@@ -342,7 +392,15 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
       await setKeeperRules({
         seasonId: settings._id,
         keeperRules: {
+          costMode: isSnakeOrLinear ? "round" : "dollar",
+          // defaultFormula is required by the schema regardless of
+          // costMode (SNAKE_DRAFT.md §8 doesn't drop the dollar formula,
+          // just leaves it unused) - a snake/linear league still writes
+          // whatever dollar draft it was seeded with, just never shows it.
           defaultFormula: buildDefaultFormula(defaultFormula),
+          ...(isSnakeOrLinear
+            ? { defaultRoundFormula: buildRoundFormula(defaultRoundFormula) }
+            : {}),
           ...(maxKeepersPerTeam !== undefined ? { maxKeepersPerTeam } : {}),
           ...(maxConsecutiveYears !== undefined ? { maxConsecutiveYears } : {}),
           tiers: tierDrafts.map((draft) => ({
@@ -350,6 +408,9 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
             name: draft.name,
             ...(draft.maxSize !== undefined ? { maxSize: draft.maxSize } : {}),
             formula: buildFormula(draft.formula),
+            ...(isSnakeOrLinear
+              ? { roundFormula: buildRoundFormula(draft.roundFormula) }
+              : {}),
             // Preserve whatever fpids are currently live on the server for
             // this tier (edited independently via the picker) rather than
             // whatever this draft happened to be seeded with.
@@ -404,70 +465,122 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
           <Text size="md" fw={500}>
             Default rule
           </Text>
-          <Text size="xs" c="dimmed">
-            Cost = multiplier × last season's price + flat add
-          </Text>
-          <Group gap="sm" wrap="wrap">
-            <NumberInput
-              label="Multiplier"
-              size="sm"
-              w={110}
-              step={0.1}
-              value={defaultFormula.multiplier}
-              onChange={(v) =>
-                setDefaultFormula((f) => ({ ...f, multiplier: Number(v) || 0 }))
-              }
-            />
-            <Stack gap={4}>
-              <Text size="sm" fw={500}>
-                Flat add ($)
+          {isSnakeOrLinear ? (
+            <>
+              <Text size="xs" c="dimmed">
+                Cost = last season's round − rounds earlier per year kept
               </Text>
-              <EditableNumberStepper
-                label="Flat add"
-                size="sm"
-                width={110}
-                prefix="$"
-                value={defaultFormula.flatAdd}
-                onChange={(v) =>
-                  setDefaultFormula((f) => ({ ...f, flatAdd: v ?? 0 }))
-                }
-              />
-            </Stack>
-            <Stack gap={4}>
-              <Text size="sm" fw={500}>
-                Minimum ($)
+              <Group gap="sm" wrap="wrap">
+                <Stack gap={4}>
+                  <Text size="sm" fw={500}>
+                    Rounds earlier per year kept
+                  </Text>
+                  <EditableNumberStepper
+                    label="Rounds earlier per year kept"
+                    size="sm"
+                    width={140}
+                    value={defaultRoundFormula.roundsEarlier}
+                    onChange={(v) =>
+                      setDefaultRoundFormula((f) => ({
+                        ...f,
+                        roundsEarlier: v ?? 0,
+                      }))
+                    }
+                  />
+                </Stack>
+                <Stack gap={4}>
+                  <Text size="sm" fw={500}>
+                    Minimum round
+                  </Text>
+                  <EditableNumberStepper
+                    label="Minimum round"
+                    size="sm"
+                    width={120}
+                    min={1}
+                    placeholder="1"
+                    nullable
+                    value={defaultRoundFormula.minimumRound}
+                    onChange={(v) =>
+                      setDefaultRoundFormula((f) => ({
+                        ...f,
+                        minimumRound: v,
+                      }))
+                    }
+                  />
+                </Stack>
+              </Group>
+            </>
+          ) : (
+            <>
+              <Text size="xs" c="dimmed">
+                Cost = multiplier × last season's price + flat add
               </Text>
-              <EditableNumberStepper
-                label="Minimum"
-                size="sm"
-                width={110}
-                prefix="$"
-                placeholder="None"
-                nullable
-                value={defaultFormula.minimumCost}
-                onChange={(v) =>
-                  setDefaultFormula((f) => ({ ...f, minimumCost: v }))
-                }
-              />
-            </Stack>
-            <Stack gap={4}>
-              <Text size="sm" fw={500}>
-                Undrafted player cost ($)
-              </Text>
-              <EditableNumberStepper
-                label="Undrafted player cost"
-                size="sm"
-                width={140}
-                prefix="$"
-                placeholder="Manual entry"
-                nullable
-                value={defaultFormula.undraftedCost}
-                onChange={(v) =>
-                  setDefaultFormula((f) => ({ ...f, undraftedCost: v }))
-                }
-              />
-            </Stack>
-          </Group>
+              <Group gap="sm" wrap="wrap">
+                <NumberInput
+                  label="Multiplier"
+                  size="sm"
+                  w={110}
+                  step={0.1}
+                  value={defaultFormula.multiplier}
+                  onChange={(v) =>
+                    setDefaultFormula((f) => ({
+                      ...f,
+                      multiplier: Number(v) || 0,
+                    }))
+                  }
+                />
+                <Stack gap={4}>
+                  <Text size="sm" fw={500}>
+                    Flat add ($)
+                  </Text>
+                  <EditableNumberStepper
+                    label="Flat add"
+                    size="sm"
+                    width={110}
+                    prefix="$"
+                    value={defaultFormula.flatAdd}
+                    onChange={(v) =>
+                      setDefaultFormula((f) => ({ ...f, flatAdd: v ?? 0 }))
+                    }
+                  />
+                </Stack>
+                <Stack gap={4}>
+                  <Text size="sm" fw={500}>
+                    Minimum ($)
+                  </Text>
+                  <EditableNumberStepper
+                    label="Minimum"
+                    size="sm"
+                    width={110}
+                    prefix="$"
+                    placeholder="None"
+                    nullable
+                    value={defaultFormula.minimumCost}
+                    onChange={(v) =>
+                      setDefaultFormula((f) => ({ ...f, minimumCost: v }))
+                    }
+                  />
+                </Stack>
+                <Stack gap={4}>
+                  <Text size="sm" fw={500}>
+                    Undrafted player cost ($)
+                  </Text>
+                  <EditableNumberStepper
+                    label="Undrafted player cost"
+                    size="sm"
+                    width={140}
+                    prefix="$"
+                    placeholder="Manual entry"
+                    nullable
+                    value={defaultFormula.undraftedCost}
+                    onChange={(v) =>
+                      setDefaultFormula((f) => ({ ...f, undraftedCost: v }))
+                    }
+                  />
+                </Stack>
+              </Group>
+            </>
+          )}
         </Stack>
       </Card>
 
@@ -530,57 +643,105 @@ export function KeeperRulesPanel({ settings }: KeeperRulesPanelProps) {
                         onChange={(v) => updateTier(tier.id, { maxSize: v })}
                       />
                     </Stack>
-                    <NumberInput
-                      label="Multiplier"
-                      size="sm"
-                      w={100}
-                      step={0.1}
-                      value={tier.formula.multiplier}
-                      onChange={(v) =>
-                        updateTier(tier.id, {
-                          formula: {
-                            ...tier.formula,
-                            multiplier: Number(v) || 0,
-                          },
-                        })
-                      }
-                    />
-                    <Stack gap={4}>
-                      <Text size="sm" fw={500}>
-                        Flat add ($)
-                      </Text>
-                      <EditableNumberStepper
-                        label="Flat add"
-                        size="sm"
-                        width={100}
-                        prefix="$"
-                        value={tier.formula.flatAdd}
-                        onChange={(v) =>
-                          updateTier(tier.id, {
-                            formula: { ...tier.formula, flatAdd: v ?? 0 },
-                          })
-                        }
-                      />
-                    </Stack>
-                    <Stack gap={4}>
-                      <Text size="sm" fw={500}>
-                        Minimum ($)
-                      </Text>
-                      <EditableNumberStepper
-                        label="Minimum"
-                        size="sm"
-                        width={100}
-                        prefix="$"
-                        placeholder="None"
-                        nullable
-                        value={tier.formula.minimumCost}
-                        onChange={(v) =>
-                          updateTier(tier.id, {
-                            formula: { ...tier.formula, minimumCost: v },
-                          })
-                        }
-                      />
-                    </Stack>
+                    {isSnakeOrLinear ? (
+                      <>
+                        <Stack gap={4}>
+                          <Text size="sm" fw={500}>
+                            Rounds earlier/yr
+                          </Text>
+                          <EditableNumberStepper
+                            label="Rounds earlier per year kept"
+                            size="sm"
+                            width={110}
+                            value={tier.roundFormula.roundsEarlier}
+                            onChange={(v) =>
+                              updateTier(tier.id, {
+                                roundFormula: {
+                                  ...tier.roundFormula,
+                                  roundsEarlier: v ?? 0,
+                                },
+                              })
+                            }
+                          />
+                        </Stack>
+                        <Stack gap={4}>
+                          <Text size="sm" fw={500}>
+                            Minimum round
+                          </Text>
+                          <EditableNumberStepper
+                            label="Minimum round"
+                            size="sm"
+                            width={110}
+                            min={1}
+                            placeholder="1"
+                            nullable
+                            value={tier.roundFormula.minimumRound}
+                            onChange={(v) =>
+                              updateTier(tier.id, {
+                                roundFormula: {
+                                  ...tier.roundFormula,
+                                  minimumRound: v,
+                                },
+                              })
+                            }
+                          />
+                        </Stack>
+                      </>
+                    ) : (
+                      <>
+                        <NumberInput
+                          label="Multiplier"
+                          size="sm"
+                          w={100}
+                          step={0.1}
+                          value={tier.formula.multiplier}
+                          onChange={(v) =>
+                            updateTier(tier.id, {
+                              formula: {
+                                ...tier.formula,
+                                multiplier: Number(v) || 0,
+                              },
+                            })
+                          }
+                        />
+                        <Stack gap={4}>
+                          <Text size="sm" fw={500}>
+                            Flat add ($)
+                          </Text>
+                          <EditableNumberStepper
+                            label="Flat add"
+                            size="sm"
+                            width={100}
+                            prefix="$"
+                            value={tier.formula.flatAdd}
+                            onChange={(v) =>
+                              updateTier(tier.id, {
+                                formula: { ...tier.formula, flatAdd: v ?? 0 },
+                              })
+                            }
+                          />
+                        </Stack>
+                        <Stack gap={4}>
+                          <Text size="sm" fw={500}>
+                            Minimum ($)
+                          </Text>
+                          <EditableNumberStepper
+                            label="Minimum"
+                            size="sm"
+                            width={100}
+                            prefix="$"
+                            placeholder="None"
+                            nullable
+                            value={tier.formula.minimumCost}
+                            onChange={(v) =>
+                              updateTier(tier.id, {
+                                formula: { ...tier.formula, minimumCost: v },
+                              })
+                            }
+                          />
+                        </Stack>
+                      </>
+                    )}
                     <ActionIcon
                       variant="default"
                       color="red"

@@ -86,6 +86,9 @@ export const getPlayerPriceHistory = query({
         // drafted/kept last season), so this is the same shape they already
         // guard for.
         price: number | undefined;
+        // Round counterpart to price (SNAKE_DRAFT.md §8) - undefined for an
+        // auction-season pick (round/pickInRound aren't tracked there).
+        round: number | undefined;
         season: string | undefined;
         isKeeper: boolean;
         keeperStreak: number | undefined;
@@ -123,6 +126,7 @@ export const getPlayerPriceHistory = query({
         }
         priceByFpid[pick.fpid] = {
           price: pick.price,
+          round: pick.round,
           season: season.year,
           isKeeper: pick.isKeeper ?? false,
           keeperStreak: pick.keeperStreak,

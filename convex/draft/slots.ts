@@ -89,12 +89,24 @@ export function isEligibleForSlot(
 // allow importing across the convex/ boundary). Formula and argument order
 // must match the client version exactly so the two never disagree; used by
 // convex/draft/status.ts's syncDraftStatus to persist drafts.status.
+//
+// forfeitedSlotsCount (SNAKE_DRAFT.md §9) reduces the expected total - a
+// team whose slot was forfeited in some round isn't expected to fill that
+// roster spot via this draft at all (the assumption made in the plan doc:
+// they'd backfill via waivers afterward, out of this app's scope), so the
+// draft is "complete" with that many fewer total picks. Defaults to 0
+// (today's exact behavior) for every auction league and every snake league
+// with no forfeits.
 export function isDraftComplete(
   rosterSlots: RosterSlotCounts,
   teamCount: number,
   picksCount: number,
+  forfeitedSlotsCount = 0,
 ): boolean {
-  return picksCount >= expandRosterSlots(rosterSlots).length * teamCount;
+  return (
+    picksCount >=
+    expandRosterSlots(rosterSlots).length * teamCount - forfeitedSlotsCount
+  );
 }
 
 // Greedily picks the best open roster slot for a newly-drafted player:

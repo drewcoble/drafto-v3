@@ -19,6 +19,7 @@ interface KeeperEditModalProps {
   showStreakInput: boolean;
   onClose: () => void;
   onSetPrice: (pickId: Id<"draftPicks">, price: number) => void;
+  onSetRound: (pickId: Id<"draftPicks">, round: number) => void;
   onSetTeam: (pickId: Id<"draftPicks">, teamId: Id<"seasonTeams">) => void;
   onSetStreak: (pickId: Id<"draftPicks">, streak: number) => void;
   onRemove: (pickId: Id<"draftPicks">) => void;
@@ -37,6 +38,7 @@ export function KeeperEditModal({
   showStreakInput,
   onClose,
   onSetPrice,
+  onSetRound,
   onSetTeam,
   onSetStreak,
   onRemove,
@@ -60,9 +62,13 @@ export function KeeperEditModal({
           </Stack>
           <Stack gap={4}>
             <Text size="xs" c="dimmed" fw={500}>
-              Price
+              {pick.round !== undefined ? "Round" : "Price"}
             </Text>
-            <KeeperPriceCell pick={pick} onSetPrice={onSetPrice} />
+            <KeeperPriceCell
+              pick={pick}
+              onSetPrice={onSetPrice}
+              onSetRound={onSetRound}
+            />
           </Stack>
           {showStreakInput && (
             <Stack gap={4}>

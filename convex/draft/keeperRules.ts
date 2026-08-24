@@ -9,22 +9,34 @@ const keeperFormulaValidator = v.object({
   minimumCost: v.optional(v.number()),
 });
 
+// Kept in sync with schema.ts's keeperRoundFormulaValidator by hand - this
+// file predates that schema addition and validates its own args shape
+// rather than importing the schema's (mutation args validators in this
+// codebase are conventionally self-contained, not schema-derived).
+const keeperRoundFormulaValidator = v.object({
+  roundsEarlier: v.number(),
+  minimumRound: v.optional(v.number()),
+});
+
 const keeperTierValidator = v.object({
   id: v.string(),
   name: v.string(),
   maxSize: v.optional(v.number()),
   formula: keeperFormulaValidator,
+  roundFormula: v.optional(keeperRoundFormulaValidator),
   fpids: v.array(v.number()),
   positions: v.optional(v.array(positionValidator)),
 });
 
 const keeperRulesValidator = v.object({
+  costMode: v.optional(v.union(v.literal("dollar"), v.literal("round"))),
   defaultFormula: v.object({
     multiplier: v.number(),
     flatAdd: v.number(),
     minimumCost: v.optional(v.number()),
     undraftedCost: v.optional(v.number()),
   }),
+  defaultRoundFormula: v.optional(keeperRoundFormulaValidator),
   tiers: v.array(keeperTierValidator),
   maxKeepersPerTeam: v.optional(v.number()),
   maxConsecutiveYears: v.optional(v.number()),

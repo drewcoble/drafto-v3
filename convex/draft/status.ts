@@ -3,6 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { isDraftComplete } from "./slots";
 import { scoringConfigFromSeason } from "../scoring";
+import { countForfeitedByRound } from "./pickSlots";
 
 // Mirrors src/constants/general.ts's WEEK - no shared module across the
 // convex/ bundler boundary (same duplication convention as
@@ -41,10 +42,19 @@ export async function syncDraftStatus(
       .query("draftPicks")
       .withIndex("by_draft", (q) => q.eq("draftId", draftId))
       .collect();
+    // Forfeited slots (SNAKE_DRAFT.md §9) reduce the total this draft
+    // needs to reach "complete" - a no-op sum (0) for every league with no
+    // forfeits, i.e. every auction league and most snake ones.
+    const forfeitedByRound = await countForfeitedByRound(ctx, draftId);
+    const forfeitedSlotsCount = [...forfeitedByRound.values()].reduce(
+      (sum, count) => sum + count,
+      0,
+    );
     const complete = isDraftComplete(
       season.rosterSlots,
       season.teamCount,
       picks.length,
+      forfeitedSlotsCount,
     );
     newStatus = complete ? "complete" : "in_progress";
   }

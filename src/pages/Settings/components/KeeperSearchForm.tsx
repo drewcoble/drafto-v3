@@ -21,7 +21,9 @@ import type { Position } from "../../../types";
 import { POSITION_COLORS } from "../../../lib/positionColors";
 import {
   computeKeeperCost,
+  computeKeeperCostRound,
   formulaForFpid,
+  roundFormulaForFpid,
   type KeeperPriceHistoryEntry,
   type KeeperRules,
 } from "../../../lib/keeperCost";
@@ -31,6 +33,29 @@ interface KeeperSearchResult {
   name: string;
   position: Position;
   team: string | null;
+}
+
+// Suggested keeper cost for one candidate, branching on format the same way
+// KeeperRulesPanel's Save payload does (SNAKE_DRAFT.md §8) - null whenever
+// there's nothing to base a suggestion on (no rules configured yet, or a
+// snake/linear league that hasn't set up a round formula), same "fall back
+// to manual entry" signal computeKeeperCost/computeKeeperCostRound use.
+function resolveSuggestedCost(
+  keeperRules: KeeperRules | undefined,
+  fpid: number,
+  position: Position,
+  lastSeason: KeeperPriceHistoryEntry | undefined,
+  isSnakeOrLinear: boolean,
+): number | null {
+  if (!keeperRules) return null;
+  if (isSnakeOrLinear) {
+    const formula = roundFormulaForFpid(keeperRules, fpid, position);
+    return formula ? computeKeeperCostRound(formula, lastSeason?.round) : null;
+  }
+  return computeKeeperCost(
+    formulaForFpid(keeperRules, fpid, position),
+    lastSeason?.price,
+  );
 }
 
 interface KeeperSearchFormProps {
@@ -47,6 +72,10 @@ interface KeeperSearchFormProps {
   draftValueByFpid: Map<number, { dollarValue: number }>;
   priceHistory: Record<number, KeeperPriceHistoryEntry> | undefined;
   keeperRules: KeeperRules | undefined;
+  // A snake/linear league's keeper cost is a draft-slot round, not a dollar
+  // price (SNAKE_DRAFT.md §8) - branches the suggested-cost formula, the
+  // last-season summary line, and the Cost/Round input's label below.
+  isSnakeOrLinear: boolean;
   atTeamKeeperCap: boolean;
   onAddKeeper: (fpid: number, position: Position, price: number) => void;
   onSelectPlayer: (fpid: number) => void;
@@ -70,6 +99,7 @@ export function KeeperSearchForm({
   draftValueByFpid,
   priceHistory,
   keeperRules,
+  isSnakeOrLinear,
   atTeamKeeperCap,
   onAddKeeper,
   onSelectPlayer,
@@ -100,12 +130,13 @@ export function KeeperSearchForm({
     setSelectedCandidate(candidate);
     onKeeperSearchChange(candidate.name);
     const lastSeason = priceHistory?.[candidate.fpid];
-    const suggestedCost = keeperRules
-      ? computeKeeperCost(
-          formulaForFpid(keeperRules, candidate.fpid, candidate.position),
-          lastSeason?.price,
-        )
-      : null;
+    const suggestedCost = resolveSuggestedCost(
+      keeperRules,
+      candidate.fpid,
+      candidate.position,
+      lastSeason,
+      isSnakeOrLinear,
+    );
     onKeeperPriceChange(suggestedCost ?? 1);
   };
 
@@ -115,17 +146,15 @@ export function KeeperSearchForm({
   const fairValue = selectedCandidate
     ? draftValueByFpid.get(selectedCandidate.fpid)
     : undefined;
-  const suggestedCost =
-    selectedCandidate && keeperRules
-      ? computeKeeperCost(
-          formulaForFpid(
-            keeperRules,
-            selectedCandidate.fpid,
-            selectedCandidate.position,
-          ),
-          lastSeason?.price,
-        )
-      : null;
+  const suggestedCost = selectedCandidate
+    ? resolveSuggestedCost(
+        keeperRules,
+        selectedCandidate.fpid,
+        selectedCandidate.position,
+        lastSeason,
+        isSnakeOrLinear,
+      )
+    : null;
 
   const disabled = !keeperTeamId || atTeamKeeperCap;
 
@@ -247,13 +276,23 @@ export function KeeperSearchForm({
               )}
             </Group>
             <Text size="xs" c="dimmed">
-              {fairValue ? `Fair ~$${Math.round(fairValue.dollarValue)}` : null}
-              {lastSeason && lastSeason.price !== undefined
-                ? ` · Last kept $${lastSeason.price}${
-                    lastSeason.season ? ` (${lastSeason.season})` : ""
-                  }`
+              {!isSnakeOrLinear && fairValue
+                ? `Fair ~$${Math.round(fairValue.dollarValue)}`
                 : null}
-              {suggestedCost !== null ? ` · Suggested $${suggestedCost}` : null}
+              {isSnakeOrLinear
+                ? lastSeason && lastSeason.round !== undefined
+                  ? ` · Last kept round ${lastSeason.round}${
+                      lastSeason.season ? ` (${lastSeason.season})` : ""
+                    }`
+                  : null
+                : lastSeason && lastSeason.price !== undefined
+                  ? ` · Last kept $${lastSeason.price}${
+                      lastSeason.season ? ` (${lastSeason.season})` : ""
+                    }`
+                  : null}
+              {suggestedCost !== null
+                ? ` · Suggested ${isSnakeOrLinear ? `round ${suggestedCost}` : `$${suggestedCost}`}`
+                : null}
             </Text>
             <Group grow align="flex-end">
               <Select
@@ -269,12 +308,12 @@ export function KeeperSearchForm({
               />
               <Stack gap={4}>
                 <Text size="sm" fw={500}>
-                  Cost
+                  {isSnakeOrLinear ? "Round" : "Cost"}
                 </Text>
                 <EditableNumberStepper
-                  label="Cost"
+                  label={isSnakeOrLinear ? "Round" : "Cost"}
                   min={1}
-                  prefix="$"
+                  {...(isSnakeOrLinear ? {} : { prefix: "$" })}
                   value={keeperPrice}
                   onChange={(value) => onKeeperPriceChange(value ?? 1)}
                 />

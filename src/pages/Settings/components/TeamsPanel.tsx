@@ -5,6 +5,7 @@ import {
   Badge,
   Box,
   Button,
+  Chip,
   Group,
   Menu,
   Modal,
@@ -68,6 +69,13 @@ interface TeamsPanelProps {
   // salary-cap editing entirely (not applicable outside auction).
   isSnakeOrLinear?: boolean;
   draftOrder?: Id<"seasonTeams">[] | undefined;
+  // 3rd-round-reversal & friends (SNAKE_DRAFT.md §10) - which round
+  // boundaries repeat the previous round's direction instead of the usual
+  // bounce-and-flip. Only rendered/editable for a snake/linear league;
+  // maxRounds bounds the picker to this league's actual roster length (no
+  // point offering a reversal round past the last one that'll ever exist).
+  reversalRounds?: number[] | undefined;
+  maxRounds?: number;
 }
 
 // One consolidated list for every "teams already exist" concern - renaming
@@ -94,6 +102,8 @@ export function TeamsPanel({
   removeLocked = false,
   isSnakeOrLinear = false,
   draftOrder,
+  reversalRounds,
+  maxRounds = 0,
 }: TeamsPanelProps) {
   const teamById = useMemo(() => {
     const map = new Map<string, Doc<"seasonTeams">>();
@@ -129,6 +139,11 @@ export function TeamsPanel({
   const [newTeamName, setNewTeamName] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [reversalDraft, setReversalDraft] = useState<number[]>(
+    reversalRounds ?? [],
+  );
+  const [reversalError, setReversalError] = useState<string | null>(null);
+  const [isSavingReversal, setIsSavingReversal] = useState(false);
 
   // Distance constraint so tapping the grip handle to just view/scroll
   // doesn't immediately start a drag - same reasoning as elsewhere in this
@@ -149,6 +164,14 @@ export function TeamsPanel({
     setMode(nominationOrderMode ?? "linear");
   }, [nominationOrderMode]);
 
+  useEffect(() => {
+    setReversalDraft(reversalRounds ?? []);
+    // Same "resync only when the actual prop changes" reasoning as the
+    // order effect above - reversalRounds isn't a stable reference across
+    // renders, but its own array of numbers is what should trigger a reset.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(reversalRounds ?? []).join(",")]);
+
   const setNominationOrder = useMutation(
     api.draft.nominationOrder.setNominationOrder,
   );
@@ -157,6 +180,9 @@ export function TeamsPanel({
   );
   const setDraftOrder = useMutation(api.draft.draftOrder.setDraftOrder);
   const clearDraftOrder = useMutation(api.draft.draftOrder.clearDraftOrder);
+  const setReversalRoundsMutation = useMutation(
+    api.draft.draftOrder.setReversalRounds,
+  );
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -250,6 +276,27 @@ export function TeamsPanel({
     !activeOrder ||
     localOrder.join(",") !== activeOrder.join(",") ||
     (!isSnakeOrLinear && mode !== (nominationOrderMode ?? "linear"));
+
+  const handleSaveReversalRounds = async () => {
+    setReversalError(null);
+    setIsSavingReversal(true);
+    try {
+      await setReversalRoundsMutation({
+        seasonId,
+        reversalRounds: reversalDraft,
+      });
+    } catch (err) {
+      setReversalError(
+        getErrorMessage(err, "Failed to save reversal rounds."),
+      );
+    } finally {
+      setIsSavingReversal(false);
+    }
+  };
+
+  const isReversalDirty =
+    [...reversalDraft].sort((a, b) => a - b).join(",") !==
+    [...(reversalRounds ?? [])].sort((a, b) => a - b).join(",");
 
   return (
     <Stack gap="sm">
@@ -391,6 +438,54 @@ export function TeamsPanel({
           </Badge>
         )}
       </Group>
+
+      {isSnakeOrLinear && maxRounds >= 2 && (
+        <Stack gap={6} mt="sm">
+          <Text size="sm" fw={500}>
+            Reversal rounds
+          </Text>
+          <Text size="xs" c="dimmed">
+            A picked round repeats the previous round's order instead of
+            alternating - e.g. 3rd-round reversal keeps rounds 2 and 3 in the
+            same order back to back.
+          </Text>
+          <Chip.Group
+            multiple
+            value={reversalDraft.map(String)}
+            onChange={(values) =>
+              setReversalDraft((values as string[]).map(Number))
+            }
+          >
+            <Group gap="xs" wrap="wrap">
+              {Array.from({ length: maxRounds - 1 }, (_, i) => i + 2).map(
+                (round) => (
+                  <Chip key={round} value={String(round)}>
+                    Round {round}
+                  </Chip>
+                ),
+              )}
+            </Group>
+          </Chip.Group>
+          {reversalError && (
+            <Text c="red" size="sm">
+              {reversalError}
+            </Text>
+          )}
+          <Group gap="xs">
+            <Button
+              size="sm"
+              onClick={handleSaveReversalRounds}
+              loading={isSavingReversal}
+              disabled={!isReversalDirty}
+            >
+              Save Reversal Rounds
+            </Button>
+            <Badge variant="light" color={isReversalDirty ? "yellow" : "teal"}>
+              {isReversalDirty ? "Unsaved changes" : "All changes saved"}
+            </Badge>
+          </Group>
+        </Stack>
+      )}
 
       <Modal
         opened={pendingRemoveId !== null}

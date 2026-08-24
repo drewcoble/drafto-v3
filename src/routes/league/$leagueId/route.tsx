@@ -182,11 +182,10 @@ function LeagueLayout() {
   // the tab (regardless of the setting) so clicking it lands on the
   // non-dismissible upgrade prompt (see keepers.tsx's Pro gate) instead of
   // the tab just vanishing, which read as the feature not existing at all.
-  // Keepers is also auction-only in phase 1 (SNAKE_DRAFT.md §3.4) - hidden
-  // for a snake/linear league regardless of Pro access, same as Budget.
+  // Keepers now supports snake/linear too (SNAKE_DRAFT.md §8, round-based
+  // cost) - unlike Budget, no longer auction-only.
   const hasProAccess = entitlement?.hasProAccess ?? false;
-  const keepersEnabled =
-    isAuction && (!hasProAccess || settings?.useKeepers !== false);
+  const keepersEnabled = !hasProAccess || settings?.useKeepers !== false;
   // Budget planning is auction-only too (SNAKE_DRAFT.md §3.4) - no
   // $-plan-vs-actual concept exists for a snake/linear draft.
   const budgetEnabled = isAuction;

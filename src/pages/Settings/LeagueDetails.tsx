@@ -34,6 +34,7 @@ import {
 import { SettingsForm } from "./components/SettingsForm";
 import { SeasonHistoryPanel } from "./components/SeasonHistoryPanel";
 import { TeamsPanel } from "./components/TeamsPanel";
+import { PickSlotsPanel } from "./components/PickSlotsPanel";
 import { LeagueCreateChoice } from "./components/LeagueCreateChoice";
 import { LeagueImportWizard } from "./components/LeagueImportWizard";
 import { YahooLeagueImportWizard } from "./components/YahooLeagueImportWizard";
@@ -458,6 +459,13 @@ export function LeagueDetails({
   const rosterEntries = ROSTER_SLOT_KEYS.map(
     (slot) => [slot, settings.rosterSlots[slot]] as const,
   );
+  // Total draft rounds for a snake/linear league (one round per roster
+  // slot, SNAKE_DRAFT.md §10) - bounds TeamsPanel's reversal-rounds picker
+  // to rounds that will actually exist in this league's draft.
+  const totalRounds = ROSTER_SLOT_KEYS.reduce(
+    (sum, slot) => sum + settings.rosterSlots[slot],
+    0,
+  );
 
   const hasTeams = !!draftTeams && draftTeams.length > 0;
 
@@ -721,10 +729,21 @@ export function LeagueDetails({
               removeLocked={isStarted}
               isSnakeOrLinear={(settings.draftType ?? "auction") !== "auction"}
               draftOrder={draftOrderConfig?.draftOrder}
+              reversalRounds={draftOrderConfig?.reversalRounds}
+              maxRounds={totalRounds}
             />
           )}
         </Card>
       </SimpleGrid>
+
+      {(settings.draftType ?? "auction") !== "auction" && hasTeams && (
+        <PickSlotsPanel
+          seasonId={settings._id}
+          teams={draftTeams ?? []}
+          maxRounds={totalRounds}
+          isDraftStarted={isStarted}
+        />
+      )}
 
       <Modal
         opened={deleteModalOpen}

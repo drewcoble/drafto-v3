@@ -31,6 +31,11 @@ interface KeeperCardListProps {
   // maxConsecutiveYears cap set (see schema.ts's trackConsecutiveYears
   // comment).
   showStreakInput: boolean;
+  // A snake/linear league's keeper cost is a draft-slot round, not a
+  // dollar price (SNAKE_DRAFT.md §8) - a round has no dollarValue-vs-cost
+  // "savings" equivalent yet, so the $ totals/value lines below are
+  // dollar-mode only.
+  isSnakeOrLinear: boolean;
 }
 
 // Renders every keeper as one card per team (used at every breakpoint - see
@@ -52,6 +57,7 @@ export function KeeperCardList({
   onEdit,
   onSelectPlayer,
   showStreakInput,
+  isSnakeOrLinear,
 }: KeeperCardListProps) {
   const keepersByTeamId = useMemo(() => {
     const map = new Map<Id<"seasonTeams">, Doc<"draftPicks">[]>();
@@ -74,8 +80,9 @@ export function KeeperCardList({
         const teamKeepers = keepersByTeamId.get(team._id);
         if (!teamKeepers || teamKeepers.length === 0) return null;
 
-        // Dollar keeper cost is auction-only (SNAKE_DRAFT.md §3.4/§8 -
-        // round-based keeper cost is a separate, phase-2 concept).
+        // Dollar keeper cost is per-player - a round-based league has no
+        // dollarValue-vs-cost "savings" equivalent yet (isSnakeOrLinear
+        // above), so these totals are dollar-mode only.
         const totalCost = teamKeepers.reduce(
           (sum, pick) => sum + (pick.price ?? 0),
           0,
@@ -97,11 +104,14 @@ export function KeeperCardList({
               <Group gap={6} wrap="wrap">
                 <Text size="sm" c="dimmed">
                   {teamKeepers.length} keeper
-                  {teamKeepers.length === 1 ? "" : "s"} · ${totalCost}
+                  {teamKeepers.length === 1 ? "" : "s"}
+                  {isSnakeOrLinear ? "" : ` · $${totalCost}`}
                 </Text>
-                <Text size="sm" fw={600} c={keeperValueColor(totalValue)}>
-                  {formatSignedDollar(totalValue)} value
-                </Text>
+                {!isSnakeOrLinear && (
+                  <Text size="sm" fw={600} c={keeperValueColor(totalValue)}>
+                    {formatSignedDollar(totalValue)} value
+                  </Text>
+                )}
               </Group>
             </Stack>
             <Stack gap={6}>
@@ -156,14 +166,16 @@ export function KeeperCardList({
                     </Group>
                     <Group gap={6} wrap="wrap" mt={4}>
                       <Text size="sm" c="dimmed">
-                        ${pick.price ?? 0}
+                        {isSnakeOrLinear ? `Round ${pick.round ?? "?"}` : `$${pick.price ?? 0}`}
                         {showStreakInput
                           ? ` · ${streak} yr${streak === 1 ? "" : "s"} kept`
                           : ""}
                       </Text>
-                      <Text size="sm" c={keeperValueColor(value)}>
-                        {formatSignedDollar(value)} value
-                      </Text>
+                      {!isSnakeOrLinear && (
+                        <Text size="sm" c={keeperValueColor(value)}>
+                          {formatSignedDollar(value)} value
+                        </Text>
+                      )}
                     </Group>
                   </Stack>
                 );

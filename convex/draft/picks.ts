@@ -10,13 +10,20 @@ import {
   requireRealDraft,
 } from "./auth";
 import { nextNominator } from "./nominationOrder";
-import { stepPickOrder } from "./pickOrder";
+import { resolveTeamPositionInRound, stepPickOrder } from "./pickOrder";
 import { expandRosterSlots } from "./slots";
 import { getPreviousSeason } from "./history";
 import { invalidateDraftValues } from "../draftValues";
 import { syncDraftStatus } from "./status";
 import { autoAdjustLiveBudgetForPick } from "./budgetAutoAdjust";
 import { resolveDraftType } from "../draftType";
+import {
+  countForfeitedByRound,
+  countRealSlotsThroughRound,
+  filledPositions,
+  findNextOpenSlot,
+  forfeitedPositions,
+} from "./pickSlots";
 
 export const listDraftPicks = query({
   args: { seasonId: v.id("seasons") },
@@ -362,24 +369,40 @@ export const draftPick = mutation({
       throw new Error("Player not found.");
     }
 
-    const lastPick = await ctx.db
+    const allPicks = await ctx.db
       .query("draftPicks")
       .withIndex("by_draft_sequence", (q) => q.eq("draftId", draft._id))
-      .order("desc")
-      .first();
+      .collect();
+    const lastPick = allPicks[allPicks.length - 1];
     const sequence = (lastPick?.sequence ?? 0) + 1;
 
-    // overallPick === sequence in phase 1 - picks always happen one at a
-    // time, in order, with no trading/forfeiting a slot (SNAKE_DRAFT.md §9,
-    // phase 2) to make the two diverge. round/pickInRound are purely
-    // positional (which slot within the round) regardless of "snake" vs.
-    // "linear" - only *which team* occupies that slot in an even round
-    // differs between the two, and that's already decided by whatever
-    // teamId the host passed in, not derived here.
+    // A round-based keeper (SNAKE_DRAFT.md §8) can claim a round out of
+    // natural draft order (a team's round-7 keeper exists before any
+    // round-1 live pick happens), so round/pickInRound for *this* pick
+    // can't be derived from a running pick count - findNextOpenSlot scans
+    // for the first slot that's neither already filled (by a keeper or an
+    // earlier live pick) nor forfeited, regardless of what order rounds
+    // actually get filled in. overallPick is a denormalization of the
+    // resolved (round, pickInRound) - see countRealSlotsThroughRound.
     const teamCount = draft.draftOrder.length;
-    const overallPick = sequence;
-    const round = Math.ceil(overallPick / teamCount);
-    const pickInRound = ((overallPick - 1) % teamCount) + 1;
+    const reversalRounds = draft.reversalRounds ?? [];
+    const forfeited = await forfeitedPositions(
+      ctx,
+      draft._id,
+      draft.draftOrder,
+      draftType,
+      reversalRounds,
+    );
+    const filled = filledPositions(allPicks);
+    const { round, pickInRound } = findNextOpenSlot(
+      teamCount,
+      filled,
+      forfeited,
+    );
+    const forfeitedByRound = await countForfeitedByRound(ctx, draft._id);
+    const overallPick =
+      countRealSlotsThroughRound(round - 1, teamCount, forfeitedByRound) +
+      pickInRound;
 
     const pickId = await ctx.db.insert("draftPicks", {
       draftId: draft._id,
@@ -405,10 +428,6 @@ export const draftPick = mutation({
       .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
       .first();
     if (turn) {
-      const allPicks = await ctx.db
-        .query("draftPicks")
-        .withIndex("by_draft_sequence", (q) => q.eq("draftId", draft._id))
-        .collect();
       const picksCountByTeam = new Map<string, number>();
       for (const pick of allPicks) {
         picksCountByTeam.set(
@@ -416,13 +435,30 @@ export const draftPick = mutation({
           (picksCountByTeam.get(pick.teamId) ?? 0) + 1,
         );
       }
+      // This pick isn't in allPicks (fetched before the insert above) -
+      // count it too, so a team that just filled its last roster slot is
+      // correctly skipped starting with the very next step.
+      picksCountByTeam.set(
+        args.teamId,
+        (picksCountByTeam.get(args.teamId) ?? 0) + 1,
+      );
       const totalSlots = expandRosterSlots(season.rosterSlots).length;
+      // A boundary is being crossed exactly when this pick was the last of
+      // its round (pickInRound === teamCount for that round's real slot
+      // count) - stepPickOrder only ever consults this flag when its own
+      // bounce math independently detects a boundary, so passing it
+      // unconditionally here is safe even when this pick wasn't actually
+      // last-in-round (SNAKE_DRAFT.md §10).
+      const isReversalBoundary = (draft.reversalRounds ?? []).includes(
+        round + 1,
+      );
       const next = stepPickOrder(
         draft.draftOrder,
         draftType,
         args.teamId,
         turn.direction,
         (teamId) => (picksCountByTeam.get(teamId) ?? 0) >= totalSlots,
+        isReversalBoundary,
       );
       await ctx.db.patch(turn._id, {
         currentTeamId: next.teamId,
@@ -469,20 +505,25 @@ async function computeKeeperStreak(
 }
 
 // Pre-draft equivalent of resolvePick - assigns a player straight to a team
-// for a fixed price with no nomination to consume, so this can run any time
-// before (or independent of) the live auction. Tagged isKeeper: true so the
-// value engine (convex/draftValues.ts) and UI can tell it apart from a real
-// auction result.
+// with no nomination to consume, so this can run any time before (or
+// independent of) the live auction/draft. Tagged isKeeper: true so the value
+// engine (convex/draftValues.ts) and UI can tell it apart from a real
+// result. An auction league's keeper costs a dollar price (`args.price`); a
+// snake/linear league's costs a draft-slot round instead (`args.round`,
+// SNAKE_DRAFT.md §8) - exactly one of the two applies, chosen by
+// resolveDraftType, mirroring how draftPick already branches on format.
 export const addKeeper = mutation({
   args: {
     seasonId: v.id("seasons"),
     teamId: v.id("seasonTeams"),
     fpid: v.number(),
-    price: v.number(),
+    price: v.optional(v.number()),
+    round: v.optional(v.number()),
     planSlotKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { season, draft } = await requireDraftNotStarted(ctx, args.seasonId);
+    const draftType = resolveDraftType(season, draft);
 
     const team = await ctx.db.get(args.teamId);
     if (!team || team.seasonId !== args.seasonId) {
@@ -538,16 +579,76 @@ export const addKeeper = mutation({
       }
     }
 
+    let round: number | undefined;
+    let pickInRound: number | undefined;
+    let overallPick: number | undefined;
+    let price: number | undefined;
+
+    if (draftType === "auction") {
+      if (args.price === undefined) {
+        throw new Error("A price is required for this keeper.");
+      }
+      price = args.price;
+    } else {
+      if (!draft.draftOrder || draft.draftOrder.length === 0) {
+        throw new Error("Set the draft order before adding a keeper.");
+      }
+      if (args.round === undefined) {
+        throw new Error("A round is required for this keeper.");
+      }
+      const reversalRounds = draft.reversalRounds ?? [];
+      const position = resolveTeamPositionInRound(
+        draft.draftOrder,
+        draftType,
+        reversalRounds,
+        args.round,
+        args.teamId,
+      );
+      if (position === null) {
+        throw new Error("Team not found in the draft order.");
+      }
+      const allPicks = await ctx.db
+        .query("draftPicks")
+        .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+        .collect();
+      const key = `${args.round}:${position}`;
+      if (filledPositions(allPicks).has(key)) {
+        throw new Error("This team's slot in that round is already taken.");
+      }
+      const forfeited = await forfeitedPositions(
+        ctx,
+        draft._id,
+        draft.draftOrder,
+        draftType,
+        reversalRounds,
+      );
+      if (forfeited.has(key)) {
+        throw new Error("This team's slot in that round was forfeited.");
+      }
+      round = args.round;
+      pickInRound = position;
+      const forfeitedByRound = await countForfeitedByRound(ctx, draft._id);
+      overallPick =
+        countRealSlotsThroughRound(
+          round - 1,
+          draft.draftOrder.length,
+          forfeitedByRound,
+        ) + pickInRound;
+    }
+
     const pickId = await ctx.db.insert("draftPicks", {
       draftId: draft._id,
       sequence,
       fpid: args.fpid,
       position: player.position,
       teamId: args.teamId,
-      price: args.price,
       isKeeper: true,
       keeperStreak,
       createdAt: Date.now(),
+      ...(price !== undefined ? { price } : {}),
+      ...(round !== undefined ? { round } : {}),
+      ...(pickInRound !== undefined ? { pickInRound } : {}),
+      ...(overallPick !== undefined ? { overallPick } : {}),
       ...(args.planSlotKey !== undefined
         ? { planSlotKey: args.planSlotKey }
         : {}),
@@ -651,6 +752,85 @@ export const setKeeperPrice = mutation({
   },
 });
 
+// Round-based counterpart to setKeeperPrice above - the manual correction
+// path for a snake/linear keeper's round (SNAKE_DRAFT.md §8). Recomputes
+// pickInRound/overallPick from the pick's own team, same as addKeeper -
+// this pick's own (now-stale) slot is excluded from the collision check
+// below via draftPicks.by_draft_fpid uniqueness (it's the only row that can
+// ever occupy fpid's slot), so moving a keeper to a different round it
+// still fits in is never blocked by itself.
+export const setKeeperRound = mutation({
+  args: { pickId: v.id("draftPicks"), round: v.number() },
+  handler: async (ctx, args) => {
+    const pick = await ctx.db.get(args.pickId);
+    if (!pick) {
+      throw new Error("Pick not found.");
+    }
+    const draft = await requireSeasonForPick(ctx, pick);
+    if (!pick.isKeeper) {
+      throw new Error("This pick isn't a keeper.");
+    }
+    if (draft.startedAt !== undefined) {
+      throw new Error(
+        "This draft has already started - reopen pre-draft to change league settings.",
+      );
+    }
+    const season = await ctx.db.get(draft.seasonId);
+    if (!season) {
+      throw new Error("Season not found.");
+    }
+    const draftType = resolveDraftType(season, draft);
+    if (draftType === "auction") {
+      throw new Error("This league's keepers use a dollar price, not a round.");
+    }
+    if (!draft.draftOrder || draft.draftOrder.length === 0) {
+      throw new Error("Set the draft order before assigning a keeper round.");
+    }
+    const reversalRounds = draft.reversalRounds ?? [];
+    const position = resolveTeamPositionInRound(
+      draft.draftOrder,
+      draftType,
+      reversalRounds,
+      args.round,
+      pick.teamId,
+    );
+    if (position === null) {
+      throw new Error("Team not found in the draft order.");
+    }
+    const otherPicks = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .collect();
+    const key = `${args.round}:${position}`;
+    if (filledPositions(otherPicks.filter((p) => p._id !== pick._id)).has(key)) {
+      throw new Error("This team's slot in that round is already taken.");
+    }
+    const forfeited = await forfeitedPositions(
+      ctx,
+      draft._id,
+      draft.draftOrder,
+      draftType,
+      reversalRounds,
+    );
+    if (forfeited.has(key)) {
+      throw new Error("This team's slot in that round was forfeited.");
+    }
+    const forfeitedByRound = await countForfeitedByRound(ctx, draft._id);
+    const overallPick =
+      countRealSlotsThroughRound(
+        args.round - 1,
+        draft.draftOrder.length,
+        forfeitedByRound,
+      ) + position;
+    await ctx.db.patch(args.pickId, {
+      round: args.round,
+      pickInRound: position,
+      overallPick,
+    });
+    return null;
+  },
+});
+
 // Manual correction for which team holds a keeper - e.g. Recommended
 // Keepers' team-name guess (see convex/draft/history.ts's
 // getPlayerPriceHistory) was wrong, or the host just fat-fingered the
@@ -686,11 +866,11 @@ export const setKeeperTeam = mutation({
     if (!season) {
       throw new Error("Season not found.");
     }
+    const teamPicks = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_draft", (q) => q.eq("draftId", pick.draftId))
+      .collect();
     if (season.keeperRules?.maxKeepersPerTeam !== undefined) {
-      const teamPicks = await ctx.db
-        .query("draftPicks")
-        .withIndex("by_draft", (q) => q.eq("draftId", pick.draftId))
-        .collect();
       const teamKeeperCount = teamPicks.filter(
         (p) => p.isKeeper && p.teamId === args.teamId,
       ).length;
@@ -701,9 +881,55 @@ export const setKeeperTeam = mutation({
       }
     }
 
+    // A round-based keeper's slot is tied to its team's position in that
+    // round (SNAKE_DRAFT.md §8) - moving it to a new team means recomputing
+    // pickInRound/overallPick for the new team's position, same math
+    // addKeeper/setKeeperRound use. An auction keeper (round undefined)
+    // skips this entirely; price never depends on which team holds it.
+    let roundPatch: { pickInRound: number; overallPick: number } | undefined;
+    const draftType = resolveDraftType(season, draft);
+    if (pick.round !== undefined && draft.draftOrder && draftType !== "auction") {
+      const reversalRounds = draft.reversalRounds ?? [];
+      const position = resolveTeamPositionInRound(
+        draft.draftOrder,
+        draftType,
+        reversalRounds,
+        pick.round,
+        args.teamId,
+      );
+      if (position === null) {
+        throw new Error("Team not found in the draft order.");
+      }
+      const key = `${pick.round}:${position}`;
+      if (
+        filledPositions(teamPicks.filter((p) => p._id !== pick._id)).has(key)
+      ) {
+        throw new Error("This team's slot in that round is already taken.");
+      }
+      const forfeited = await forfeitedPositions(
+        ctx,
+        draft._id,
+        draft.draftOrder,
+        draftType,
+        reversalRounds,
+      );
+      if (forfeited.has(key)) {
+        throw new Error("This team's slot in that round was forfeited.");
+      }
+      const forfeitedByRound = await countForfeitedByRound(ctx, draft._id);
+      const overallPick =
+        countRealSlotsThroughRound(
+          pick.round - 1,
+          draft.draftOrder.length,
+          forfeitedByRound,
+        ) + position;
+      roundPatch = { pickInRound: position, overallPick };
+    }
+
     await ctx.db.patch(args.pickId, {
       teamId: args.teamId,
       planSlotKey: undefined,
+      ...roundPatch,
     });
     return null;
   },

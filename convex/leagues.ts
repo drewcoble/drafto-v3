@@ -190,12 +190,6 @@ export const createLeague = mutation({
     if (args.useKeepers && !isPro) {
       throw new Error("Keepers is a Pro feature. Upgrade to enable it.");
     }
-    // Keepers is auction-only in phase 1 (SNAKE_DRAFT.md §3.4) - checked
-    // here too (not just setUseKeepers) since both fields are settable in
-    // this same call.
-    if (args.useKeepers && (args.draftType ?? "auction") !== "auction") {
-      throw new Error("Keepers isn't available for snake/linear drafts yet.");
-    }
 
     const { name, sleeperLeagueId, yahooLeagueKey, useKeepers, ...seasonFields } =
       args;

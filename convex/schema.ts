@@ -18,14 +18,34 @@ const rosterSlotsValidator = v.object({
   BENCH: v.number(),
 });
 
+// Round-denominated counterpart to the dollar formula below - used when
+// keeperRulesValidator's costMode is "round" (SNAKE_DRAFT.md §8). Move a
+// kept player up this many rounds per consecutive year kept (e.g. drafted/
+// kept in round 8 last year, roundsEarlier: 2 -> costs round 6 this year),
+// floored at minimumRound (typically 1 - can't draft earlier than round 1).
+const keeperRoundFormulaValidator = v.object({
+  roundsEarlier: v.number(),
+  minimumRound: v.optional(v.number()),
+});
+
 // Shared by leagues/seasons below.
 const keeperRulesValidator = v.object({
+  // Absent means "dollar" - every row written before this field existed is
+  // an auction league's keeper rules, which only ever meant the dollar
+  // formula. "round" switches every cost computation in src/lib/
+  // keeperCost.ts over to the *RoundFormula fields below instead - the two
+  // modes are mutually exclusive per season, not blendable.
+  costMode: v.optional(v.union(v.literal("dollar"), v.literal("round"))),
   defaultFormula: v.object({
     multiplier: v.number(),
     flatAdd: v.number(),
     minimumCost: v.optional(v.number()),
     undraftedCost: v.optional(v.number()),
   }),
+  // Only meaningful when costMode is "round" - kept optional (not required
+  // alongside defaultFormula) since every existing row predates this and
+  // is dollar-only.
+  defaultRoundFormula: v.optional(keeperRoundFormulaValidator),
   tiers: v.array(
     v.object({
       id: v.string(),
@@ -36,6 +56,9 @@ const keeperRulesValidator = v.object({
         flatAdd: v.number(),
         minimumCost: v.optional(v.number()),
       }),
+      // Round-formula counterpart to `formula` above, same "only meaningful
+      // when costMode is round" relationship as defaultRoundFormula.
+      roundFormula: v.optional(keeperRoundFormulaValidator),
       fpids: v.array(v.number()),
       // Whole positions this rule also applies to, in addition to fpids -
       // optional so existing tiers written before this field existed still
@@ -544,6 +567,11 @@ export default defineSchema({
     // SNAKE_DRAFT.md §3.1's open question on a "randomize" action);
     // meaningless for an auction-type draft.
     draftOrder: v.optional(v.array(v.id("seasonTeams"))),
+    // Rounds (1-indexed) where the natural snake bounce is additionally
+    // reversed - {3} alone reproduces classic 3rd-round reversal
+    // (SNAKE_DRAFT.md §10). Absent/empty means plain snake. Meaningless for
+    // "linear" (no bounce to reverse) or auction drafts.
+    reversalRounds: v.optional(v.array(v.number())),
     status: v.union(
       v.literal("pre_draft"),
       v.literal("in_progress"),
@@ -740,6 +768,43 @@ export default defineSchema({
     // keepers" without its query being invalidated by every live auction
     // pick - see the comment on that read in convex/draftValues.ts.
     .index("by_draft_keeper", ["draftId", "isKeeper"]),
+
+  // One row per (draftId, round, original-owner) slot whose ownership has
+  // actually been touched - traded away, forfeited, or claimed by a
+  // round-based keeper (SNAKE_DRAFT.md §8/§9). Lazily created, NOT one row
+  // per round x team up front: absence of a row for a given (draftId,
+  // round, originalTeamId) means "untouched - still owned by
+  // originalTeamId, still open for a live pick," so a league with zero
+  // trades/forfeits/keepers never writes to this table at all (same
+  // "invisible until touched" convention as draftLiveBudgetOverrides).
+  // Only meaningful for a snake/linear-format draft - auction has no slot
+  // concept to trade or forfeit.
+  draftPickSlots: defineTable({
+    draftId: v.id("drafts"),
+    round: v.number(),
+    // Stable identity for the slot across trades - baseOrder[P] from
+    // drafts.draftOrder, i.e. whichever team originally held this round's
+    // Pth slot before any trade.
+    originalTeamId: v.id("seasonTeams"),
+    // null = forfeited (no one picks this slot - see isDraftComplete's
+    // comment on the roster-fullness implication). A non-null value other
+    // than originalTeamId means the slot was traded.
+    currentTeamId: v.union(v.id("seasonTeams"), v.null()),
+    // Set when a round-based keeper (see draftPicks.isKeeper) claims this
+    // slot pre-draft, rather than it being traded/forfeited - the slot is
+    // filled (not available for a live pick) but currentTeamId still
+    // reflects who owns/owned it, for display consistency with the trade
+    // case. draftPicks is the source of truth for which player/keeper
+    // actually filled it; this just marks the slot itself as spoken for.
+    claimedByKeeper: v.optional(v.boolean()),
+    // Optional provenance for display ("via trade with Team X") - not
+    // load-bearing for draft mechanics, purely informational.
+    note: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_draft", ["draftId"])
+    .index("by_draft_round", ["draftId", "round"])
+    .index("by_draft_original_team", ["draftId", "originalTeamId"]),
 
   // The single live "on the block" nomination for a draft, if any. Kept as
   // its own table rather than a field on drafts so that fast-changing
