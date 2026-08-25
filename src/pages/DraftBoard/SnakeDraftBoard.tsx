@@ -104,9 +104,13 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
       setFooterHeight(0);
       return;
     }
-    const observer = new ResizeObserver((entries) => {
-      const height = entries[0]?.contentRect.height;
-      if (height !== undefined) setFooterHeight(height);
+    // Deliberately not `entries[0].contentRect.height` - that's always the
+    // content-box size (padding/border excluded) regardless of this node's
+    // own box-sizing, so it undercounts the footer's real rendered height by
+    // its padding+border and leaves the last round peeking out from behind
+    // it. getBoundingClientRect() gives the true border-box size instead.
+    const observer = new ResizeObserver(() => {
+      setFooterHeight(footerNode.getBoundingClientRect().height);
     });
     observer.observe(footerNode);
     return () => observer.disconnect();
@@ -127,9 +131,10 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
       setTopBarHeight(0);
       return;
     }
-    const observer = new ResizeObserver((entries) => {
-      const height = entries[0]?.contentRect.height;
-      if (height !== undefined) setTopBarHeight(height);
+    // getBoundingClientRect() rather than contentRect - see the footer's
+    // measuring effect above for why.
+    const observer = new ResizeObserver(() => {
+      setTopBarHeight(topBarNode.getBoundingClientRect().height);
     });
     observer.observe(topBarNode);
     return () => observer.disconnect();
