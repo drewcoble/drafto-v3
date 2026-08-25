@@ -598,7 +598,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
         }}
       >
         <style>{`
-        @keyframes snakeOnClockPulse { 0%,100% { box-shadow: 0 0 0 1px #d9803f; } 50% { box-shadow: 0 0 0 2px #d9803f; } }
+        @keyframes snakeOnClockPulse { 0%,100% { background-color: rgba(217,128,63,0.12); } 50% { background-color: rgba(217,128,63,0.26); } }
         @keyframes snakeDotBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
         @keyframes snakeLandFlash { 0% { background: rgba(90,160,111,0.32); } 100% { background: rgba(90,160,111,0.10); } }
         @keyframes snakeTickerIn { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
@@ -782,6 +782,13 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                         ...base,
                         background: "rgba(217,128,63,0.12)",
                         border: "1px solid #d9803f",
+                        // background-color instead of the box-shadow this
+                        // used to animate - box-shadow paints outside the
+                        // border box even at 0 blur once you add spread,
+                        // and combined with the sticky round column/rows
+                        // around it that was still visibly leaking into
+                        // neighboring rounds. A background pulse can't
+                        // escape the cell's own box no matter what.
                         animation:
                           "snakeOnClockPulse 1.8s ease-in-out infinite",
                       };
