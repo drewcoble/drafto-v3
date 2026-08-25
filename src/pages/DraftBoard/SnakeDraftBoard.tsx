@@ -213,7 +213,11 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                     letterSpacing: "-0.01em",
                   }}
                 >
-                  <span style={{ color: "#d9803f" }}>infini</span>
+                  {/* #8b4513 matches AppLogo.tsx's `saddlebrown.7` - the
+                      real brand wordmark color used everywhere else in the
+                      app, not this board's own bespoke accent orange
+                      (#d9803f, used for on-clock highlights below). */}
+                  <span style={{ color: "#8b4513" }}>infini</span>
                   <span style={{ color: "#e7e8e5" }}>draft</span>
                 </div>
               </div>
@@ -321,7 +325,11 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <img src={logo} alt="" style={{ height: 16, width: "auto" }} />
                 <div style={{ fontSize: 13, fontWeight: 700 }}>
-                  <span style={{ color: "#d9803f" }}>infini</span>
+                  {/* #8b4513 matches AppLogo.tsx's `saddlebrown.7` - the
+                      real brand wordmark color used everywhere else in the
+                      app, not this board's own bespoke accent orange
+                      (#d9803f, used for on-clock highlights below). */}
+                  <span style={{ color: "#8b4513" }}>infini</span>
                   <span style={{ color: "#e7e8e5" }}>draft</span>
                 </div>
               </div>
