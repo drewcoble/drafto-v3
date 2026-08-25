@@ -190,18 +190,18 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "16px 28px",
+            padding: "8px 14px",
             borderBottom: "1px solid rgba(255,255,255,0.08)",
             flexShrink: 0,
-            gap: 24,
+            gap: 12,
           }}
         >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 22 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <img src={logo} alt="" style={{ height: 28, width: "auto" }} />
+          <div style={{ display: "flex", alignItems: "baseline", gap: 11 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <img src={logo} alt="" style={{ height: 14, width: "auto" }} />
               <div
                 style={{
-                  fontSize: 22,
+                  fontSize: 12,
                   fontWeight: 700,
                   letterSpacing: "-0.01em",
                 }}
@@ -212,7 +212,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
             </div>
             <div
               style={{
-                fontSize: 13,
+                fontSize: 7,
                 color: "#7d8079",
                 letterSpacing: "0.14em",
                 textTransform: "uppercase",
@@ -226,25 +226,25 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 34,
+              gap: 17,
               flexWrap: "wrap",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <span
                 style={{
-                  width: 7,
-                  height: 7,
+                  width: 4,
+                  height: 4,
                   borderRadius: "50%",
                   background: board?.draftComplete ? "#5aa06f" : "#d9803f",
                   animation: "snakeDotBlink 1.6s ease-in-out infinite",
                 }}
               />
-              <span style={{ fontSize: 13, color: "#9a9d97" }}>
+              <span style={{ fontSize: 7, color: "#9a9d97" }}>
                 {onClockLabel}
               </span>
               {board?.onClockTeamName && (
-                <span style={{ fontSize: 16, fontWeight: 700 }}>
+                <span style={{ fontSize: 8, fontWeight: 700 }}>
                   {board.onClockTeamName}
                 </span>
               )}
@@ -252,36 +252,36 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
             <div
               style={{
                 width: 1,
-                height: 26,
+                height: 13,
                 background: "rgba(255,255,255,0.1)",
               }}
             />
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontSize: 13, color: "#7d8079" }}>Round</span>
-              <span style={{ fontSize: 18, fontWeight: 700 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+              <span style={{ fontSize: 7, color: "#7d8079" }}>Round</span>
+              <span style={{ fontSize: 9, fontWeight: 700 }}>
                 {board ? (board.onClockRound ?? board.totalRounds) : "—"}
               </span>
-              <span style={{ fontSize: 13, color: "#4d5049" }}>
+              <span style={{ fontSize: 7, color: "#4d5049" }}>
                 / {board?.totalRounds ?? "—"}
               </span>
-              <span style={{ fontSize: 13, color: "#7d8079", marginLeft: 14 }}>
+              <span style={{ fontSize: 7, color: "#7d8079", marginLeft: 7 }}>
                 Pick
               </span>
-              <span style={{ fontSize: 18, fontWeight: 700 }}>
+              <span style={{ fontSize: 9, fontWeight: 700 }}>
                 {board?.currentOverallPick ?? "—"}
               </span>
-              <span style={{ fontSize: 13, color: "#4d5049" }}>
+              <span style={{ fontSize: 7, color: "#4d5049" }}>
                 / {board?.totalPicks ?? "—"}
               </span>
             </div>
             <div
               style={{
                 width: 1,
-                height: 26,
+                height: 13,
                 background: "rgba(255,255,255,0.1)",
               }}
             />
-            <div style={{ fontSize: 17, fontWeight: 600, color: "#cfd1cd" }}>
+            <div style={{ fontSize: 9, fontWeight: 600, color: "#cfd1cd" }}>
               {settings.name}
             </div>
           </div>
@@ -292,25 +292,25 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 22,
-            padding: "12px 28px",
+            gap: 11,
+            padding: "6px 14px",
             flexShrink: 0,
             borderBottom: "1px solid rgba(255,255,255,0.08)",
             boxSizing: "border-box",
-            height: 74,
+            height: 37,
             background: announcing
               ? "linear-gradient(90deg, rgba(90,160,111,0.18), rgba(90,160,111,0.04) 55%, transparent)"
               : "rgba(255,255,255,0.015)",
-            borderLeft: `4px solid ${announcing ? "#5aa06f" : "rgba(255,255,255,0.09)"}`,
+            borderLeft: `2px solid ${announcing ? "#5aa06f" : "rgba(255,255,255,0.09)"}`,
             animation: announcing ? "snakeTickerIn 0.45s ease-out" : undefined,
           }}
         >
           <div
             style={{
-              fontSize: 11,
+              fontSize: 6,
               fontWeight: 700,
               letterSpacing: "0.18em",
-              width: 128,
+              width: 64,
               flexShrink: 0,
               color: announcing ? "#5aa06f" : "#4d5049",
               animation: announcing
@@ -326,13 +326,13 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                 style={{
                   display: "flex",
                   alignItems: "baseline",
-                  gap: 14,
+                  gap: 7,
                   minWidth: 0,
                 }}
               >
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: 6,
                     color: "#7d8079",
                     letterSpacing: "0.06em",
                     fontVariantNumeric: "tabular-nums",
@@ -346,7 +346,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                 </span>
                 <span
                   style={{
-                    fontSize: 17,
+                    fontSize: 9,
                     fontWeight: 700,
                     color: "#cfd1cd",
                     whiteSpace: "nowrap",
@@ -361,7 +361,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
               <div
                 style={{
                   width: 1,
-                  height: 30,
+                  height: 15,
                   background: "rgba(255,255,255,0.1)",
                   flexShrink: 0,
                 }}
@@ -370,13 +370,13 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 14,
+                  gap: 7,
                   minWidth: 0,
                 }}
               >
                 <span
                   style={{
-                    fontSize: announcing ? 28 : 22,
+                    fontSize: announcing ? 14 : 11,
                     fontWeight: 700,
                     letterSpacing: "-0.01em",
                     color: announcing ? "#ffffff" : "#9a9d97",
@@ -390,21 +390,21 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                 </span>
                 <span
                   style={{
-                    fontSize: 15,
+                    fontSize: 8,
                     fontWeight: 700,
                     letterSpacing: "0.04em",
                     color: POS_COLORS[lastPick.position],
                     background: `${POS_COLORS[lastPick.position]}24`,
                     border: `1px solid ${POS_COLORS[lastPick.position]}55`,
-                    borderRadius: 6,
-                    padding: "3px 10px",
+                    borderRadius: 3,
+                    padding: "1px 5px",
                   }}
                 >
                   {lastPick.position}
                 </span>
                 <span
                   style={{
-                    fontSize: 15,
+                    fontSize: 8,
                     color: "#7d8079",
                     letterSpacing: "0.04em",
                   }}
@@ -414,7 +414,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
               </div>
             </>
           ) : (
-            <span style={{ fontSize: 15, color: "#4d5049" }}>No picks yet</span>
+            <span style={{ fontSize: 8, color: "#4d5049" }}>No picks yet</span>
           )}
         </div>
       </div>
@@ -423,9 +423,8 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
         ref={containerRef}
         style={{
           width: "100vw",
-          height: `calc(100vh - ${footerHeight}px)`,
-          paddingTop: topBarHeight,
-          boxSizing: "border-box",
+          height: `calc(100vh - ${topBarHeight}px - ${footerHeight}px)`,
+          marginTop: topBarHeight,
           overflow: "hidden",
           display: "flex",
           alignItems: "center",
