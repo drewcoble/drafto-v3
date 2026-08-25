@@ -598,7 +598,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
         }}
       >
         <style>{`
-        @keyframes snakeOnClockPulse { 0%,100% { box-shadow: 0 0 0 1px #d9803f, 0 0 18px rgba(217,128,63,0.25); } 50% { box-shadow: 0 0 0 1px #d9803f, 0 0 32px rgba(217,128,63,0.55); } }
+        @keyframes snakeOnClockPulse { 0%,100% { box-shadow: 0 0 0 1px #d9803f; } 50% { box-shadow: 0 0 0 2px #d9803f; } }
         @keyframes snakeDotBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
         @keyframes snakeLandFlash { 0% { background: rgba(90,160,111,0.32); } 100% { background: rgba(90,160,111,0.10); } }
         @keyframes snakeTickerIn { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
