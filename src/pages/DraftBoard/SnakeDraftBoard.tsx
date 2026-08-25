@@ -4,7 +4,6 @@ import { Box, Center, Loader } from "@mantine/core";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { WEEK } from "../../constants/general";
-import { useFitScale } from "../../hooks/useFitScale";
 import logo from "../../infinidraft_v1_noBg.png";
 import type { Position } from "../../types";
 
@@ -34,15 +33,15 @@ const POS_COLORS: Record<Position, string> = {
 // schema/mutations, out of scope for this board).
 const ANNOUNCE_MS = 5000;
 
-const REFERENCE_TEAM_WIDTH = 160;
-
 // Round-by-round TV board for a snake/linear draft - the round-by-round
 // counterpart to DraftBoard.tsx's team-roster view (auction only makes
 // sense as "who has what," a snake draft's own shape - one slot per team
 // per round, in a fixed order - is much more legible as a grid). Rendered
 // by DraftBoard.tsx itself once it resolves draftType, same
-// /board/$leagueId public route and useFitScale "shrink everything to fit
-// one screen, no scrolling" convention as its auction sibling.
+// /board/$leagueId public route as its auction sibling, but deliberately
+// *not* sharing its useFitScale "shrink everything to fit one screen, no
+// scrolling" treatment - a snake board can run to many more rounds than fit
+// legibly at any single scale, so it just scrolls instead.
 export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
   const settings = useQuery(api.leagues.getSeasonPublic, { seasonId });
   const board = useQuery(api.draft.pickSlots.getSnakeBoardPublic, {
@@ -86,14 +85,11 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
     }
   }, [lastPick]);
 
-  const { containerRef, contentRef, scale, contentWidth } = useFitScale();
-
   // The footer is rendered fixed to the real viewport bottom (see below)
-  // instead of inside the scaled `contentRef` column, so its "UP NEXT"/color
-  // key text stays a fixed, readable size on a TV instead of shrinking along
-  // with everything else. That means the fit-to-screen container above it
-  // needs its height reduced by exactly the footer's own (unscaled) height,
-  // or the scaled board content would render underneath the fixed footer.
+  // instead of inside the scrollable board column, so its "UP NEXT"/color
+  // key text stays put on screen instead of scrolling away with the board.
+  // That means the scroll area above it needs its height reduced by exactly
+  // the footer's own height, or the board would render underneath it.
   const [footerNode, setFooterNode] = useState<HTMLDivElement | null>(null);
   const [footerHeight, setFooterHeight] = useState(0);
   const footerRef = useCallback((node: HTMLDivElement | null) => {
@@ -117,10 +113,10 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
   }, [footerNode]);
 
   // Same fixed-to-viewport treatment for the header + ticker bar, so the
-  // league name/on-clock status/last-pick ticker also stay a fixed,
-  // readable size pinned to the real top of the screen instead of shrinking
-  // with the scaled board. The fit-to-screen container below needs its top
-  // padded by this combined height so the board doesn't render underneath.
+  // league name/on-clock status/last-pick ticker stay pinned to the real
+  // top of the screen instead of scrolling away with the board. The scroll
+  // area below needs its top offset by this combined height so the board
+  // doesn't render underneath it.
   const [topBarNode, setTopBarNode] = useState<HTMLDivElement | null>(null);
   const [topBarHeight, setTopBarHeight] = useState(0);
   const topBarRef = useCallback((node: HTMLDivElement | null) => {
@@ -148,8 +144,6 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
     );
   }
 
-  const teamCount = board?.teamCount ?? 0;
-
   const upNext = board
     ? board.rounds
         .flatMap((r) => r.cells)
@@ -171,10 +165,9 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
 
   return (
     <>
-      {/* Header + ticker bar - fixed to the real viewport top (outside the
-          scaled `contentRef` column below) so they stay a consistent,
-          readable size instead of shrinking along with the rest of the
-          board. */}
+      {/* Header + ticker bar - fixed to the real viewport top, outside the
+          scrollable board below, so they stay put on screen instead of
+          scrolling away with it. */}
       <div
         ref={topBarRef}
         style={{
@@ -425,16 +418,15 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
       </div>
 
       <Box
-        ref={containerRef}
         style={{
           width: "100vw",
           height: `calc(100vh - ${topBarHeight}px - ${footerHeight}px)`,
           marginTop: topBarHeight,
-          overflow: "hidden",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          overflow: "auto",
           background: "#0a0f0d",
+          color: "#e7e8e5",
+          fontFamily:
+            '-apple-system, "Inter", "Helvetica Neue", Arial, sans-serif',
         }}
       >
         <style>{`
@@ -443,322 +435,307 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
         @keyframes snakeLandFlash { 0% { background: rgba(90,160,111,0.32); } 100% { background: rgba(90,160,111,0.10); } }
         @keyframes snakeTickerIn { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
       `}</style>
-        <Box
-          ref={contentRef}
-          style={{
-            width: contentWidth ?? teamCount * REFERENCE_TEAM_WIDTH + 200,
-            flexShrink: 0,
-            transform: `scale(${scale})`,
-            background: "#0a0f0d",
-            color: "#e7e8e5",
-            fontFamily:
-              '-apple-system, "Inter", "Helvetica Neue", Arial, sans-serif',
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {/* Board body */}
-          <div style={{ flex: 1, minHeight: 0, padding: "14px 20px" }}>
-            {!board ? (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  height: "100%",
-                  color: "#7d8079",
-                  fontSize: 18,
-                }}
-              >
-                Set the draft order before the board can show anything.
+        {/* Board body */}
+        <div style={{ padding: "14px 20px" }}>
+          {!board ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "60vh",
+                color: "#7d8079",
+                fontSize: 18,
+              }}
+            >
+              Set the draft order before the board can show anything.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {/* Team header row */}
+              <div style={{ display: "flex", padding: "0 0 10px" }}>
+                <div style={{ width: 74, flexShrink: 0 }} />
+                {board.teamOrder.map((teamId) => {
+                  const isOnClock = board.onClockTeamId === teamId;
+                  return (
+                    <div
+                      key={teamId}
+                      style={{
+                        flex: 1,
+                        minWidth: 152,
+                        margin: "0 3px",
+                        padding: "8px 9px",
+                        borderRadius: 8,
+                        boxSizing: "border-box",
+                        background: isOnClock
+                          ? "rgba(217,128,63,0.1)"
+                          : "rgba(255,255,255,0.025)",
+                        border: `1px solid ${isOnClock ? "rgba(217,128,63,0.45)" : "rgba(255,255,255,0.07)"}`,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 14.5,
+                          fontWeight: 700,
+                          color: isOnClock ? "#d9803f" : "#e7e8e5",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {board.rounds[0]?.cells.find(
+                          (c) => c.originalTeamId === teamId,
+                        )?.originalTeamName ?? ""}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {/* Team header row */}
-                <div style={{ display: "flex", padding: "0 0 10px" }}>
-                  <div style={{ width: 74, flexShrink: 0 }} />
-                  {board.teamOrder.map((teamId) => {
-                    const isOnClock = board.onClockTeamId === teamId;
+
+              {/* Round rows */}
+              {board.rounds.map((r) => (
+                <div
+                  key={r.round}
+                  style={{ display: "flex", alignItems: "stretch" }}
+                >
+                  <div
+                    style={{
+                      width: 74,
+                      flexShrink: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 2,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 10,
+                        letterSpacing: "0.12em",
+                        color: "#4d5049",
+                      }}
+                    >
+                      RD
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 20,
+                        fontWeight: 700,
+                        color:
+                          r.round === board.onClockRound
+                            ? "#d9803f"
+                            : "#7d8079",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {r.round}
+                    </div>
+                    <div
+                      title={
+                        r.forward
+                          ? "Round order: left to right"
+                          : "Round order: right to left (snake)"
+                      }
+                      style={{ fontSize: 12, color: "#4d5049" }}
+                    >
+                      {r.forward ? "→" : "←"}
+                    </div>
+                  </div>
+
+                  {r.cells.map((cell) => {
+                    const player = cell.pick
+                      ? playerByFpid.get(cell.pick.fpid)
+                      : undefined;
+                    const base: React.CSSProperties = {
+                      flex: 1,
+                      minWidth: 152,
+                      margin: "0 3px",
+                      borderRadius: 8,
+                      padding: "7px 9px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                      boxSizing: "border-box",
+                      height: 68,
+                      justifyContent: "center",
+                    };
+                    let cellStyle: React.CSSProperties;
+                    if (cell.isOnClock) {
+                      cellStyle = {
+                        ...base,
+                        background: "rgba(217,128,63,0.12)",
+                        border: "1px solid #d9803f",
+                        animation:
+                          "snakeOnClockPulse 1.8s ease-in-out infinite",
+                      };
+                    } else if (
+                      cell.pick &&
+                      cell.pick.fpid === lastPick?.fpid &&
+                      announcing
+                    ) {
+                      cellStyle = {
+                        ...base,
+                        background: "rgba(90,160,111,0.12)",
+                        border: "1px solid rgba(90,160,111,0.75)",
+                        animation: "snakeLandFlash 0.9s ease-out 3",
+                      };
+                    } else if (cell.pick || cell.isForfeited) {
+                      cellStyle = {
+                        ...base,
+                        background: "rgba(255,255,255,0.035)",
+                        border: `1px solid ${cell.traded ? "rgba(224,185,104,0.28)" : "rgba(255,255,255,0.07)"}`,
+                      };
+                    } else {
+                      cellStyle = {
+                        ...base,
+                        background: "rgba(255,255,255,0.012)",
+                        border: `1px dashed ${cell.traded ? "rgba(224,185,104,0.28)" : "rgba(255,255,255,0.06)"}`,
+                      };
+                    }
+
+                    const numColor = cell.isOnClock
+                      ? "#d9803f"
+                      : cell.pick || cell.isForfeited
+                        ? "#5c5f58"
+                        : "#3d403a";
+
                     return (
                       <div
-                        key={teamId}
-                        style={{
-                          flex: 1,
-                          minWidth: 152,
-                          margin: "0 3px",
-                          padding: "8px 9px",
-                          borderRadius: 8,
-                          boxSizing: "border-box",
-                          background: isOnClock
-                            ? "rgba(217,128,63,0.1)"
-                            : "rgba(255,255,255,0.025)",
-                          border: `1px solid ${isOnClock ? "rgba(217,128,63,0.45)" : "rgba(255,255,255,0.07)"}`,
-                        }}
+                        key={cell.originalTeamId}
+                        style={cellStyle}
+                        title={
+                          cell.tradeNote ??
+                          (cell.traded
+                            ? `Traded pick — originally ${cell.originalTeamName}'s, now owned by ${cell.currentTeamName}`
+                            : undefined)
+                        }
                       >
                         <div
                           style={{
-                            fontSize: 14.5,
-                            fontWeight: 700,
-                            color: isOnClock ? "#d9803f" : "#e7e8e5",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 6,
+                            flexShrink: 0,
+                            height: 16,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 10.5,
+                              color: numColor,
+                              fontVariantNumeric: "tabular-nums",
+                              letterSpacing: "0.04em",
+                            }}
+                          >
+                            {r.round}.{String(cell.position).padStart(2, "0")} ·
+                            #{cell.overallPick}
+                          </span>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                            }}
+                          >
+                            {cell.traded && (
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  fontWeight: 700,
+                                  letterSpacing: "0.06em",
+                                  color: "#e0b968",
+                                  background: "rgba(224,185,104,0.14)",
+                                  border: "1px solid rgba(224,185,104,0.35)",
+                                  borderRadius: 4,
+                                  padding: "1px 5px",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                → {cell.currentTeamName}
+                              </span>
+                            )}
+                            {cell.pick && (
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  fontWeight: 700,
+                                  letterSpacing: "0.04em",
+                                  color: POS_COLORS[cell.pick.position],
+                                  background: `${POS_COLORS[cell.pick.position]}1f`,
+                                  borderRadius: 4,
+                                  padding: "1px 5px",
+                                }}
+                              >
+                                {cell.pick.position}
+                                {cell.pick.isKeeper ? " · K" : ""}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            flexShrink: 0,
+                            fontSize: 13.5,
+                            fontWeight: cell.isOnClock ? 700 : 600,
+                            color: cell.isOnClock
+                              ? "#d9803f"
+                              : cell.isForfeited
+                                ? "#5c5f58"
+                                : cell.pick
+                                  ? "#e7e8e5"
+                                  : "#3d403a",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            lineHeight: "18px",
+                            height: 18,
+                          }}
+                        >
+                          {cell.isForfeited
+                            ? "Forfeited"
+                            : cell.pick
+                              ? (player?.name ?? `#${cell.pick.fpid}`)
+                              : cell.isOnClock
+                                ? "On the clock"
+                                : ""}
+                        </div>
+                        <div
+                          style={{
+                            flexShrink: 0,
+                            height: 14,
+                            lineHeight: "14px",
+                            fontSize: 10.5,
+                            color: cell.isOnClock
+                              ? "rgba(217,128,63,0.75)"
+                              : "#5c5f58",
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                           }}
                         >
-                          {board.rounds[0]?.cells.find(
-                            (c) => c.originalTeamId === teamId,
-                          )?.originalTeamName ?? ""}
+                          {cell.isForfeited
+                            ? (cell.tradeNote ?? "")
+                            : cell.pick
+                              ? (player?.team ?? "")
+                              : cell.isOnClock
+                                ? `${cell.currentTeamName} selecting`
+                                : ""}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-
-                {/* Round rows */}
-                {board.rounds.map((r) => (
-                  <div
-                    key={r.round}
-                    style={{ display: "flex", alignItems: "stretch" }}
-                  >
-                    <div
-                      style={{
-                        width: 74,
-                        flexShrink: 0,
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 2,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 10,
-                          letterSpacing: "0.12em",
-                          color: "#4d5049",
-                        }}
-                      >
-                        RD
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 20,
-                          fontWeight: 700,
-                          color:
-                            r.round === board.onClockRound
-                              ? "#d9803f"
-                              : "#7d8079",
-                          lineHeight: 1,
-                        }}
-                      >
-                        {r.round}
-                      </div>
-                      <div
-                        title={
-                          r.forward
-                            ? "Round order: left to right"
-                            : "Round order: right to left (snake)"
-                        }
-                        style={{ fontSize: 12, color: "#4d5049" }}
-                      >
-                        {r.forward ? "→" : "←"}
-                      </div>
-                    </div>
-
-                    {r.cells.map((cell) => {
-                      const player = cell.pick
-                        ? playerByFpid.get(cell.pick.fpid)
-                        : undefined;
-                      const base: React.CSSProperties = {
-                        flex: 1,
-                        minWidth: 152,
-                        margin: "0 3px",
-                        borderRadius: 8,
-                        padding: "7px 9px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 2,
-                        boxSizing: "border-box",
-                        height: 68,
-                        justifyContent: "center",
-                      };
-                      let cellStyle: React.CSSProperties;
-                      if (cell.isOnClock) {
-                        cellStyle = {
-                          ...base,
-                          background: "rgba(217,128,63,0.12)",
-                          border: "1px solid #d9803f",
-                          animation:
-                            "snakeOnClockPulse 1.8s ease-in-out infinite",
-                        };
-                      } else if (
-                        cell.pick &&
-                        cell.pick.fpid === lastPick?.fpid &&
-                        announcing
-                      ) {
-                        cellStyle = {
-                          ...base,
-                          background: "rgba(90,160,111,0.12)",
-                          border: "1px solid rgba(90,160,111,0.75)",
-                          animation: "snakeLandFlash 0.9s ease-out 3",
-                        };
-                      } else if (cell.pick || cell.isForfeited) {
-                        cellStyle = {
-                          ...base,
-                          background: "rgba(255,255,255,0.035)",
-                          border: `1px solid ${cell.traded ? "rgba(224,185,104,0.28)" : "rgba(255,255,255,0.07)"}`,
-                        };
-                      } else {
-                        cellStyle = {
-                          ...base,
-                          background: "rgba(255,255,255,0.012)",
-                          border: `1px dashed ${cell.traded ? "rgba(224,185,104,0.28)" : "rgba(255,255,255,0.06)"}`,
-                        };
-                      }
-
-                      const numColor = cell.isOnClock
-                        ? "#d9803f"
-                        : cell.pick || cell.isForfeited
-                          ? "#5c5f58"
-                          : "#3d403a";
-
-                      return (
-                        <div
-                          key={cell.originalTeamId}
-                          style={cellStyle}
-                          title={
-                            cell.tradeNote ??
-                            (cell.traded
-                              ? `Traded pick — originally ${cell.originalTeamName}'s, now owned by ${cell.currentTeamName}`
-                              : undefined)
-                          }
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: 6,
-                              flexShrink: 0,
-                              height: 16,
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: 10.5,
-                                color: numColor,
-                                fontVariantNumeric: "tabular-nums",
-                                letterSpacing: "0.04em",
-                              }}
-                            >
-                              {r.round}.{String(cell.position).padStart(2, "0")}{" "}
-                              · #{cell.overallPick}
-                            </span>
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 5,
-                              }}
-                            >
-                              {cell.traded && (
-                                <span
-                                  style={{
-                                    fontSize: 9.5,
-                                    fontWeight: 700,
-                                    letterSpacing: "0.06em",
-                                    color: "#e0b968",
-                                    background: "rgba(224,185,104,0.14)",
-                                    border: "1px solid rgba(224,185,104,0.35)",
-                                    borderRadius: 4,
-                                    padding: "1px 5px",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  → {cell.currentTeamName}
-                                </span>
-                              )}
-                              {cell.pick && (
-                                <span
-                                  style={{
-                                    fontSize: 9.5,
-                                    fontWeight: 700,
-                                    letterSpacing: "0.04em",
-                                    color: POS_COLORS[cell.pick.position],
-                                    background: `${POS_COLORS[cell.pick.position]}1f`,
-                                    borderRadius: 4,
-                                    padding: "1px 5px",
-                                  }}
-                                >
-                                  {cell.pick.position}
-                                  {cell.pick.isKeeper ? " · K" : ""}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div
-                            style={{
-                              flexShrink: 0,
-                              fontSize: 13.5,
-                              fontWeight: cell.isOnClock ? 700 : 600,
-                              color: cell.isOnClock
-                                ? "#d9803f"
-                                : cell.isForfeited
-                                  ? "#5c5f58"
-                                  : cell.pick
-                                    ? "#e7e8e5"
-                                    : "#3d403a",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              lineHeight: "18px",
-                              height: 18,
-                            }}
-                          >
-                            {cell.isForfeited
-                              ? "Forfeited"
-                              : cell.pick
-                                ? (player?.name ?? `#${cell.pick.fpid}`)
-                                : cell.isOnClock
-                                  ? "On the clock"
-                                  : ""}
-                          </div>
-                          <div
-                            style={{
-                              flexShrink: 0,
-                              height: 14,
-                              lineHeight: "14px",
-                              fontSize: 10.5,
-                              color: cell.isOnClock
-                                ? "rgba(217,128,63,0.75)"
-                                : "#5c5f58",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {cell.isForfeited
-                              ? (cell.tradeNote ?? "")
-                              : cell.pick
-                                ? (player?.team ?? "")
-                                : cell.isOnClock
-                                  ? `${cell.currentTeamName} selecting`
-                                  : ""}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Box>
+              ))}
+            </div>
+          )}
+        </div>
       </Box>
 
-      {/* Footer - fixed to the real viewport bottom (outside the scaled
-        `contentRef` column above) so it stays a consistent, readable size
-        instead of shrinking along with the rest of the board. */}
+      {/* Footer - fixed to the real viewport bottom, outside the scrollable
+        board above, so it stays put on screen instead of scrolling away
+        with it. */}
       {board && (
         <div
           ref={footerRef}
