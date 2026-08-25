@@ -1,6 +1,7 @@
 import { useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Center, Loader } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { WEEK } from "../../constants/general";
@@ -43,6 +44,13 @@ const ANNOUNCE_MS = 5000;
 // scrolling" treatment - a snake board can run to many more rounds than fit
 // legibly at any single scale, so it just scrolls instead.
 export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
+  // Same breakpoint/convention as MobileNomination.tsx and keepers.tsx.
+  // The header/ticker/footer render entirely different (much more compact,
+  // stacked) markup below this breakpoint - on a phone there's no room for
+  // the desktop layout's side-by-side stat groups without everything
+  // overlapping, and every pixel spent on chrome is a pixel not spent on
+  // the actual round grid.
+  const isDesktop = useMediaQuery("(min-width: 48em)");
   const settings = useQuery(api.leagues.getSeasonPublic, { seasonId });
   const board = useQuery(api.draft.pickSlots.getSnakeBoardPublic, {
     seasonId,
@@ -151,7 +159,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
           (c) => !c.isForfeited && c.overallPick > board.currentOverallPick,
         )
         .sort((a, b) => a.overallPick - b.overallPick)
-        .slice(0, 5)
+        .slice(0, isDesktop ? 5 : 2)
     : [];
 
   // Round/pick numbers stay meaningful pre-draft too (keepers already
@@ -183,238 +191,398 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
         }}
       >
         {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 21px",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
-            flexShrink: 0,
-            gap: 18,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <img src={logo} alt="" style={{ height: 21, width: "auto" }} />
-              <div
-                style={{
-                  fontSize: 18,
-                  fontWeight: 700,
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                <span style={{ color: "#d9803f" }}>infini</span>
-                <span style={{ color: "#e7e8e5" }}>draft</span>
-              </div>
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: "#7d8079",
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-              }}
-            >
-              Snake Draft Board
-            </div>
-          </div>
-
+        {isDesktop ? (
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 26,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: board?.draftComplete ? "#5aa06f" : "#d9803f",
-                  animation: "snakeDotBlink 1.6s ease-in-out infinite",
-                }}
-              />
-              <span style={{ fontSize: 11, color: "#9a9d97" }}>
-                {onClockLabel}
-              </span>
-              {board?.onClockTeamName && (
-                <span style={{ fontSize: 12, fontWeight: 700 }}>
-                  {board.onClockTeamName}
-                </span>
-              )}
-            </div>
-            <div
-              style={{
-                width: 1,
-                height: 20,
-                background: "rgba(255,255,255,0.1)",
-              }}
-            />
-            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-              <span style={{ fontSize: 11, color: "#7d8079" }}>Round</span>
-              <span style={{ fontSize: 14, fontWeight: 700 }}>
-                {board ? (board.onClockRound ?? board.totalRounds) : "—"}
-              </span>
-              <span style={{ fontSize: 11, color: "#4d5049" }}>
-                / {board?.totalRounds ?? "—"}
-              </span>
-              <span style={{ fontSize: 11, color: "#7d8079", marginLeft: 11 }}>
-                Pick
-              </span>
-              <span style={{ fontSize: 14, fontWeight: 700 }}>
-                {board?.currentOverallPick ?? "—"}
-              </span>
-              <span style={{ fontSize: 11, color: "#4d5049" }}>
-                / {board?.totalPicks ?? "—"}
-              </span>
-            </div>
-            <div
-              style={{
-                width: 1,
-                height: 20,
-                background: "rgba(255,255,255,0.1)",
-              }}
-            />
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#cfd1cd" }}>
-              {settings.name}
-            </div>
-          </div>
-        </div>
-
-        {/* Ticker bar - last/just-drafted pick */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 17,
-            padding: "9px 21px",
-            flexShrink: 0,
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
-            boxSizing: "border-box",
-            height: 56,
-            background: announcing
-              ? "linear-gradient(90deg, rgba(90,160,111,0.18), rgba(90,160,111,0.04) 55%, transparent)"
-              : "rgba(255,255,255,0.015)",
-            borderLeft: `3px solid ${announcing ? "#5aa06f" : "rgba(255,255,255,0.09)"}`,
-            animation: announcing ? "snakeTickerIn 0.45s ease-out" : undefined,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: "0.18em",
-              width: 96,
+              justifyContent: "space-between",
+              padding: "12px 21px",
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
               flexShrink: 0,
-              color: announcing ? "#5aa06f" : "#4d5049",
-              animation: announcing
-                ? "snakeDotBlink 1s ease-in-out infinite"
-                : undefined,
+              gap: 18,
             }}
           >
-            {announcing ? "JUST DRAFTED" : "LAST PICK"}
-          </div>
-          {lastPick ? (
-            <>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <img src={logo} alt="" style={{ height: 21, width: "auto" }} />
+                <div
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 700,
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  <span style={{ color: "#d9803f" }}>infini</span>
+                  <span style={{ color: "#e7e8e5" }}>draft</span>
+                </div>
+              </div>
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: 11,
-                  minWidth: 0,
+                  fontSize: 11,
+                  color: "#7d8079",
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
                 }}
               >
+                Snake Draft Board
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 26,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span
                   style={{
-                    fontSize: 9,
-                    color: "#7d8079",
-                    letterSpacing: "0.06em",
-                    fontVariantNumeric: "tabular-nums",
-                    whiteSpace: "nowrap",
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: board?.draftComplete ? "#5aa06f" : "#d9803f",
+                    animation: "snakeDotBlink 1.6s ease-in-out infinite",
                   }}
-                >
-                  {lastPick.round !== undefined &&
-                  lastPick.pickInRound !== undefined
-                    ? `${lastPick.round}.${String(lastPick.pickInRound).padStart(2, "0")}  ·  PICK #${lastPick.overallPick ?? ""}`
-                    : ""}
+                />
+                <span style={{ fontSize: 11, color: "#9a9d97" }}>
+                  {onClockLabel}
+                </span>
+                {board?.onClockTeamName && (
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>
+                    {board.onClockTeamName}
+                  </span>
+                )}
+              </div>
+              <div
+                style={{
+                  width: 1,
+                  height: 20,
+                  background: "rgba(255,255,255,0.1)",
+                }}
+              />
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontSize: 11, color: "#7d8079" }}>Round</span>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>
+                  {board ? (board.onClockRound ?? board.totalRounds) : "—"}
+                </span>
+                <span style={{ fontSize: 11, color: "#4d5049" }}>
+                  / {board?.totalRounds ?? "—"}
                 </span>
                 <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: "#cfd1cd",
-                    whiteSpace: "nowrap",
-                  }}
+                  style={{ fontSize: 11, color: "#7d8079", marginLeft: 11 }}
                 >
-                  {board?.rounds
-                    .flatMap((r) => r.cells)
-                    .find((c) => c.pick?.fpid === lastPick.fpid)
-                    ?.currentTeamName ?? ""}
+                  Pick
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>
+                  {board?.currentOverallPick ?? "—"}
+                </span>
+                <span style={{ fontSize: 11, color: "#4d5049" }}>
+                  / {board?.totalPicks ?? "—"}
                 </span>
               </div>
               <div
                 style={{
                   width: 1,
-                  height: 23,
+                  height: 20,
                   background: "rgba(255,255,255,0.1)",
-                  flexShrink: 0,
                 }}
               />
+              <div style={{ fontSize: 14, fontWeight: 600, color: "#cfd1cd" }}>
+                {settings.name}
+              </div>
+            </div>
+          </div>
+        ) : (
+          // Mobile: stacked instead of side-by-side, and trimmed to only
+          // what matters mid-draft (who's on the clock, round/pick count) -
+          // the subtitle and league name are dropped entirely to keep this
+          // to two short lines.
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              padding: "8px 14px",
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              flexShrink: 0,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <img src={logo} alt="" style={{ height: 16, width: "auto" }} />
+                <div style={{ fontSize: 13, fontWeight: 700 }}>
+                  <span style={{ color: "#d9803f" }}>infini</span>
+                  <span style={{ color: "#e7e8e5" }}>draft</span>
+                </div>
+              </div>
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 11,
-                  minWidth: 0,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "#9a9d97",
+                  fontVariantNumeric: "tabular-nums",
+                  flexShrink: 0,
                 }}
               >
+                R{board ? (board.onClockRound ?? board.totalRounds) : "—"}/
+                {board?.totalRounds ?? "—"} · P
+                {board?.currentOverallPick ?? "—"}/{board?.totalPicks ?? "—"}
+              </div>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                minWidth: 0,
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  flexShrink: 0,
+                  background: board?.draftComplete ? "#5aa06f" : "#d9803f",
+                  animation: "snakeDotBlink 1.6s ease-in-out infinite",
+                }}
+              />
+              <span style={{ fontSize: 10, color: "#7d8079", flexShrink: 0 }}>
+                {onClockLabel}
+              </span>
+              {board?.onClockTeamName && (
                 <span
                   style={{
-                    fontSize: announcing ? 21 : 17,
+                    fontSize: 12,
                     fontWeight: 700,
-                    letterSpacing: "-0.01em",
-                    color: announcing ? "#ffffff" : "#9a9d97",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
-                    transition: "font-size 0.25s ease, color 0.25s ease",
                   }}
                 >
+                  {board.onClockTeamName}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Ticker bar - last/just-drafted pick */}
+        {isDesktop ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 17,
+              padding: "9px 21px",
+              flexShrink: 0,
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              boxSizing: "border-box",
+              height: 56,
+              background: announcing
+                ? "linear-gradient(90deg, rgba(90,160,111,0.18), rgba(90,160,111,0.04) 55%, transparent)"
+                : "rgba(255,255,255,0.015)",
+              borderLeft: `3px solid ${announcing ? "#5aa06f" : "rgba(255,255,255,0.09)"}`,
+              animation: announcing
+                ? "snakeTickerIn 0.45s ease-out"
+                : undefined,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.18em",
+                width: 96,
+                flexShrink: 0,
+                color: announcing ? "#5aa06f" : "#4d5049",
+                animation: announcing
+                  ? "snakeDotBlink 1s ease-in-out infinite"
+                  : undefined,
+              }}
+            >
+              {announcing ? "JUST DRAFTED" : "LAST PICK"}
+            </div>
+            {lastPick ? (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: 11,
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 9,
+                      color: "#7d8079",
+                      letterSpacing: "0.06em",
+                      fontVariantNumeric: "tabular-nums",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {lastPick.round !== undefined &&
+                    lastPick.pickInRound !== undefined
+                      ? `${lastPick.round}.${String(lastPick.pickInRound).padStart(2, "0")}  ·  PICK #${lastPick.overallPick ?? ""}`
+                      : ""}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: "#cfd1cd",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {board?.rounds
+                      .flatMap((r) => r.cells)
+                      .find((c) => c.pick?.fpid === lastPick.fpid)
+                      ?.currentTeamName ?? ""}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    width: 1,
+                    height: 23,
+                    background: "rgba(255,255,255,0.1)",
+                    flexShrink: 0,
+                  }}
+                />
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 11,
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: announcing ? 21 : 17,
+                      fontWeight: 700,
+                      letterSpacing: "-0.01em",
+                      color: announcing ? "#ffffff" : "#9a9d97",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      transition: "font-size 0.25s ease, color 0.25s ease",
+                    }}
+                  >
+                    {playerByFpid.get(lastPick.fpid)?.name ??
+                      `#${lastPick.fpid}`}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      color: POS_COLORS[lastPick.position],
+                      background: `${POS_COLORS[lastPick.position]}24`,
+                      border: `1px solid ${POS_COLORS[lastPick.position]}55`,
+                      borderRadius: 5,
+                      padding: "2px 8px",
+                    }}
+                  >
+                    {lastPick.position}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: "#7d8079",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    {playerByFpid.get(lastPick.fpid)?.team ?? ""}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <span style={{ fontSize: 12, color: "#4d5049" }}>
+                No picks yet
+              </span>
+            )}
+          </div>
+        ) : (
+          // Mobile: a single truncating line instead of several nowrap
+          // segments side by side - the desktop layout's pieces don't fit a
+          // phone width and, without wrapping, were overlapping each other
+          // rather than reflowing.
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 14px",
+              flexShrink: 0,
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              boxSizing: "border-box",
+              height: 30,
+              background: announcing
+                ? "rgba(90,160,111,0.14)"
+                : "rgba(255,255,255,0.015)",
+              borderLeft: `2px solid ${announcing ? "#5aa06f" : "rgba(255,255,255,0.09)"}`,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                flexShrink: 0,
+                color: announcing ? "#5aa06f" : "#4d5049",
+              }}
+            >
+              {announcing ? "NEW" : "LAST"}
+            </span>
+            {lastPick ? (
+              <span
+                style={{
+                  fontSize: 11,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  minWidth: 0,
+                }}
+              >
+                <span style={{ fontWeight: 700, color: "#cfd1cd" }}>
                   {playerByFpid.get(lastPick.fpid)?.name ?? `#${lastPick.fpid}`}
                 </span>
                 <span
                   style={{
-                    fontSize: 12,
                     fontWeight: 700,
-                    letterSpacing: "0.04em",
                     color: POS_COLORS[lastPick.position],
-                    background: `${POS_COLORS[lastPick.position]}24`,
-                    border: `1px solid ${POS_COLORS[lastPick.position]}55`,
-                    borderRadius: 5,
-                    padding: "2px 8px",
                   }}
                 >
+                  {" "}
                   {lastPick.position}
                 </span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    color: "#7d8079",
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  {playerByFpid.get(lastPick.fpid)?.team ?? ""}
+                <span style={{ color: "#7d8079" }}>
+                  {" "}
+                  →{" "}
+                  {board?.rounds
+                    .flatMap((r) => r.cells)
+                    .find((c) => c.pick?.fpid === lastPick.fpid)
+                    ?.currentTeamName ?? ""}
                 </span>
-              </div>
-            </>
-          ) : (
-            <span style={{ fontSize: 12, color: "#4d5049" }}>No picks yet</span>
-          )}
-        </div>
+              </span>
+            ) : (
+              <span style={{ fontSize: 11, color: "#4d5049" }}>
+                No picks yet
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <Box
@@ -797,13 +965,13 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "12px 28px",
+            padding: isDesktop ? "12px 28px" : "8px 14px",
             borderTop: "1px solid rgba(255,255,255,0.08)",
             background: "#0d120e",
             color: "#e7e8e5",
             fontFamily:
               '-apple-system, "Inter", "Helvetica Neue", Arial, sans-serif',
-            gap: 24,
+            gap: isDesktop ? 24 : 10,
             flexWrap: "wrap",
           }}
         >
@@ -811,15 +979,17 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 26,
+              gap: isDesktop ? 26 : 10,
               flexWrap: "wrap",
+              minWidth: 0,
             }}
           >
             <div
               style={{
-                fontSize: 11,
+                fontSize: isDesktop ? 11 : 9,
                 color: "#4d5049",
                 letterSpacing: "0.12em",
+                flexShrink: 0,
               }}
             >
               UP NEXT
@@ -827,23 +997,37 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
             {upNext.map((cell) => (
               <div
                 key={`${cell.overallPick}`}
-                style={{ display: "flex", alignItems: "center", gap: 9 }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 9,
+                  minWidth: 0,
+                }}
               >
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: isDesktop ? 11 : 9,
                     color: "#4d5049",
                     fontVariantNumeric: "tabular-nums",
+                    flexShrink: 0,
                   }}
                 >
                   #{cell.overallPick}
                 </span>
                 <span
-                  style={{ fontSize: 14, fontWeight: 600, color: "#cfd1cd" }}
+                  style={{
+                    fontSize: isDesktop ? 14 : 12,
+                    fontWeight: 600,
+                    color: "#cfd1cd",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    maxWidth: isDesktop ? undefined : "32vw",
+                  }}
                 >
                   {cell.currentTeamName}
                 </span>
-                {cell.traded && (
+                {cell.traded && isDesktop && (
                   <span
                     title={`Pick acquired from ${cell.originalTeamName}`}
                     style={{
@@ -862,50 +1046,52 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
               </div>
             ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <span
-                style={{
-                  width: 11,
-                  height: 11,
-                  borderRadius: 3,
-                  background: "rgba(217,128,63,0.2)",
-                  border: "1px solid #d9803f",
-                  display: "inline-block",
-                }}
-              />
-              <span style={{ fontSize: 11, color: "#7d8079" }}>
-                On the clock
-              </span>
+          {isDesktop && (
+            <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span
+                  style={{
+                    width: 11,
+                    height: 11,
+                    borderRadius: 3,
+                    background: "rgba(217,128,63,0.2)",
+                    border: "1px solid #d9803f",
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ fontSize: 11, color: "#7d8079" }}>
+                  On the clock
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span
+                  style={{
+                    width: 11,
+                    height: 11,
+                    borderRadius: 3,
+                    background: "rgba(224,185,104,0.14)",
+                    border: "1px solid rgba(224,185,104,0.55)",
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ fontSize: 11, color: "#7d8079" }}>
+                  Traded pick
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span
+                  style={{
+                    width: 11,
+                    height: 11,
+                    borderRadius: 3,
+                    border: "1px dashed rgba(255,255,255,0.25)",
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ fontSize: 11, color: "#7d8079" }}>Upcoming</span>
+              </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <span
-                style={{
-                  width: 11,
-                  height: 11,
-                  borderRadius: 3,
-                  background: "rgba(224,185,104,0.14)",
-                  border: "1px solid rgba(224,185,104,0.55)",
-                  display: "inline-block",
-                }}
-              />
-              <span style={{ fontSize: 11, color: "#7d8079" }}>
-                Traded pick
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <span
-                style={{
-                  width: 11,
-                  height: 11,
-                  borderRadius: 3,
-                  border: "1px dashed rgba(255,255,255,0.25)",
-                  display: "inline-block",
-                }}
-              />
-              <span style={{ fontSize: 11, color: "#7d8079" }}>Upcoming</span>
-            </div>
-          </div>
+          )}
         </div>
       )}
     </>
