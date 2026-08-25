@@ -156,7 +156,14 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
     ? board.rounds
         .flatMap((r) => r.cells)
         .filter(
-          (c) => !c.isForfeited && c.overallPick > board.currentOverallPick,
+          (c) =>
+            // A keeper can pre-fill a slot well ahead of the current pick
+            // pointer, so "overallPick > current" alone isn't enough to
+            // mean "still needs a pick made" - exclude anything already
+            // resolved (keeper or otherwise), same as forfeited slots.
+            !c.isForfeited &&
+            !c.pick &&
+            c.overallPick > board.currentOverallPick,
         )
         .sort((a, b) => a.overallPick - b.overallPick)
         .slice(0, isDesktop ? 5 : 2)
