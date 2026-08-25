@@ -216,7 +216,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                   {/* #8b4513 matches AppLogo.tsx's `saddlebrown.7` - the
                       real brand wordmark color used everywhere else in the
                       app, not this board's own bespoke accent orange
-                      (#d9803f, used for on-clock highlights below). */}
+                      (#ca8d3e / burlywood.6, used for on-clock highlights below). */}
                   <span style={{ color: "#8b4513" }}>infini</span>
                   <span style={{ color: "#e7e8e5" }}>draft</span>
                 </div>
@@ -247,7 +247,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: board?.draftComplete ? "#5aa06f" : "#d9803f",
+                    background: board?.draftComplete ? "#5aa06f" : "#ca8d3e",
                     animation: "snakeDotBlink 1.6s ease-in-out infinite",
                   }}
                 />
@@ -328,7 +328,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                   {/* #8b4513 matches AppLogo.tsx's `saddlebrown.7` - the
                       real brand wordmark color used everywhere else in the
                       app, not this board's own bespoke accent orange
-                      (#d9803f, used for on-clock highlights below). */}
+                      (#ca8d3e / burlywood.6, used for on-clock highlights below). */}
                   <span style={{ color: "#8b4513" }}>infini</span>
                   <span style={{ color: "#e7e8e5" }}>draft</span>
                 </div>
@@ -361,7 +361,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                   height: 6,
                   borderRadius: "50%",
                   flexShrink: 0,
-                  background: board?.draftComplete ? "#5aa06f" : "#d9803f",
+                  background: board?.draftComplete ? "#5aa06f" : "#ca8d3e",
                   animation: "snakeDotBlink 1.6s ease-in-out infinite",
                 }}
               />
@@ -606,7 +606,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
         }}
       >
         <style>{`
-        @keyframes snakeOnClockPulse { 0%,100% { background-color: rgba(217,128,63,0.12); } 50% { background-color: rgba(217,128,63,0.26); } }
+        @keyframes snakeOnClockPulse { 0%,100% { background-color: rgba(202,141,62,0.12); } 50% { background-color: rgba(202,141,62,0.26); } }
         @keyframes snakeDotBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
         @keyframes snakeLandFlash { 0% { background: rgba(90,160,111,0.32); } 100% { background: rgba(90,160,111,0.10); } }
         @keyframes snakeTickerIn { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
@@ -685,16 +685,16 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                         borderRadius: 8,
                         boxSizing: "border-box",
                         background: isOnClock
-                          ? "rgba(217,128,63,0.1)"
+                          ? "rgba(202,141,62,0.1)"
                           : "rgba(255,255,255,0.025)",
-                        border: `1px solid ${isOnClock ? "rgba(217,128,63,0.45)" : "rgba(255,255,255,0.07)"}`,
+                        border: `1px solid ${isOnClock ? "rgba(202,141,62,0.45)" : "rgba(255,255,255,0.07)"}`,
                       }}
                     >
                       <div
                         style={{
                           fontSize: 14.5,
                           fontWeight: 700,
-                          color: isOnClock ? "#d9803f" : "#e7e8e5",
+                          color: isOnClock ? "#ca8d3e" : "#e7e8e5",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -748,7 +748,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                         fontWeight: 700,
                         color:
                           r.round === board.onClockRound
-                            ? "#d9803f"
+                            ? "#ca8d3e"
                             : "#7d8079",
                         lineHeight: 1,
                       }}
@@ -788,8 +788,8 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                     if (cell.isOnClock) {
                       cellStyle = {
                         ...base,
-                        background: "rgba(217,128,63,0.12)",
-                        border: "1px solid #d9803f",
+                        background: "rgba(202,141,62,0.12)",
+                        border: "1px solid #ca8d3e",
                         // background-color instead of the box-shadow this
                         // used to animate - box-shadow paints outside the
                         // border box even at 0 blur once you add spread,
@@ -826,7 +826,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                     }
 
                     const numColor = cell.isOnClock
-                      ? "#d9803f"
+                      ? "#ca8d3e"
                       : cell.pick || cell.isForfeited
                         ? "#5c5f58"
                         : "#3d403a";
@@ -911,7 +911,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                             fontSize: 13.5,
                             fontWeight: cell.isOnClock ? 700 : 600,
                             color: cell.isOnClock
-                              ? "#d9803f"
+                              ? "#ca8d3e"
                               : cell.isForfeited
                                 ? "#5c5f58"
                                 : cell.pick
@@ -939,7 +939,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                             lineHeight: "14px",
                             fontSize: 10.5,
                             color: cell.isOnClock
-                              ? "rgba(217,128,63,0.75)"
+                              ? "rgba(202,141,62,0.75)"
                               : "#5c5f58",
                             whiteSpace: "nowrap",
                             overflow: "hidden",
@@ -1069,8 +1069,8 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                     width: 11,
                     height: 11,
                     borderRadius: 3,
-                    background: "rgba(217,128,63,0.2)",
-                    border: "1px solid #d9803f",
+                    background: "rgba(202,141,62,0.2)",
+                    border: "1px solid #ca8d3e",
                     display: "inline-block",
                   }}
                 />
