@@ -9,12 +9,14 @@ import { api, internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import { POSITIONS } from "../positions";
 import {
+  adpForScoring,
   scoringConfigValidator,
   scoringValidator,
   type ScoringConfig,
 } from "../scoring";
 import { getRealDraftValues } from "../draftValues";
-import { computeTiers } from "../draft/tiers";
+import { computeTiers, RELEVANT_ADP_CEILING } from "../draft/tiers";
+import { resolveDraftType, type DraftType } from "../draftType";
 import { generateGeminiText, MODEL } from "./client";
 
 type Position = (typeof POSITIONS)[number];
@@ -41,6 +43,7 @@ interface KeeperScarcity {
 
 interface InsightsInputs {
   teamCount: number;
+  format: DraftType;
   tierGaps: TierGap[];
   valueGapCounts: ValueGapCount[];
   keeperScarcity: KeeperScarcity[];
@@ -65,6 +68,7 @@ export function buildInputsFingerprint(
     | "flexPositions"
     | "superflexPositions"
     | "keeperRules"
+    | "draftType"
   >,
   keeperFpids: number[],
 ): string {
@@ -78,6 +82,11 @@ export function buildInputsFingerprint(
     superflexPositions: season.superflexPositions,
     keeperRules: season.keeperRules ?? null,
     keeperFpids: [...keeperFpids].sort((a, b) => a - b),
+    // $-vs-market and ADP-vs-league-rank produce entirely different insight
+    // content from the same underlying data - a post-creation format
+    // correction (setDraftType) must invalidate any previously cached
+    // insights, not just leave them looking merely "stale."
+    draftType: season.draftType ?? "auction",
   });
 }
 
@@ -113,7 +122,10 @@ async function buildStandardValueByFpid(
   for (const fpid of new Set([...std.keys(), ...ppr.keys()])) {
     const a = std.get(fpid);
     const b = ppr.get(fpid);
-    merged.set(fpid, a !== undefined && b !== undefined ? (a + b) / 2 : (a ?? b)!);
+    merged.set(
+      fpid,
+      a !== undefined && b !== undefined ? (a + b) / 2 : (a ?? b)!,
+    );
   }
   return merged;
 }
@@ -173,33 +185,92 @@ export const gatherInsightsInputs = internalQuery({
       args.scoringConfig.scoring,
     );
 
-    const isSuperflex = season.rosterSlots.SUPERFLEX > 0;
-    const standardValueByFpid = await buildStandardValueByFpid(
-      ctx,
-      season.year,
-      args.scoringConfig.scoring,
-      isSuperflex,
-    );
+    const format = resolveDraftType(season, draft);
+    const isAuction = format === "auction";
 
-    // Average (our $ - market $) per (position, tier) group - the same
-    // per-player diff src/components/StandardValueLabel.tsx already renders,
-    // aggregated so the model reasons at tier level, not per player.
+    // Average diff per (position, tier) group, aggregated so the model
+    // reasons at tier level, not per player. Auction: (our $ - market $),
+    // the same per-player diff src/components/StandardValueLabel.tsx
+    // already renders. Snake/linear: this league's own points-based
+    // position rank vs. market ADP's position rank, converted to rounds -
+    // $ value has no meaning to a snake drafter, but "this tier goes about
+    // a round earlier/later than ADP suggests" does.
     const tierGroups = new Map<
       string,
       { position: Position; tier: number; diffs: number[] }
     >();
-    for (const row of values) {
-      const tier = tiersByFpid.get(row.fpid);
-      const market = standardValueByFpid.get(row.fpid);
-      if (!tier || market === undefined) continue;
-      const key = `${row.position}:${tier.tier}`;
-      const group = tierGroups.get(key) ?? {
-        position: row.position,
-        tier: tier.tier,
-        diffs: [],
-      };
-      group.diffs.push(row.dollarValue - market);
-      tierGroups.set(key, group);
+    if (isAuction) {
+      const isSuperflex = season.rosterSlots.SUPERFLEX > 0;
+      const standardValueByFpid = await buildStandardValueByFpid(
+        ctx,
+        season.year,
+        args.scoringConfig.scoring,
+        isSuperflex,
+      );
+      for (const row of values) {
+        const tier = tiersByFpid.get(row.fpid);
+        const market = standardValueByFpid.get(row.fpid);
+        if (!tier || market === undefined) continue;
+        const key = `${row.position}:${tier.tier}`;
+        const group = tierGroups.get(key) ?? {
+          position: row.position,
+          tier: tier.tier,
+          diffs: [],
+        };
+        group.diffs.push(row.dollarValue - market);
+        tierGroups.set(key, group);
+      }
+    } else {
+      // Position-relative ADP rank (1 = earliest at that position),
+      // independent of this league's own points-based positionRank on
+      // `values`. Deep-bench players with no real ADP (past
+      // RELEVANT_ADP_CEILING, or Sleeper's own 999 "no real ADP" sentinel -
+      // same cutoff computeTiers uses) are excluded entirely rather than
+      // assigned a fake rank, since a sentinel-driven gap would be
+      // meaningless noise rather than a real signal.
+      const rowsByPosition = new Map<Position, typeof values>();
+      for (const row of values) {
+        const list = rowsByPosition.get(row.position) ?? [];
+        list.push(row);
+        rowsByPosition.set(row.position, list);
+      }
+      const adpPositionRankByFpid = new Map<number, number>();
+      for (const rows of rowsByPosition.values()) {
+        const withAdp = rows
+          .map((row) => {
+            const adpRow = adpByFpid.get(row.fpid);
+            const adp = adpRow
+              ? adpForScoring(adpRow, args.scoringConfig.scoring)
+              : undefined;
+            return { fpid: row.fpid, adp };
+          })
+          .filter(
+            (r): r is { fpid: number; adp: number } =>
+              r.adp !== undefined && r.adp < RELEVANT_ADP_CEILING,
+          )
+          .sort((a, b) => a.adp - b.adp);
+        withAdp.forEach((r, index) =>
+          adpPositionRankByFpid.set(r.fpid, index + 1),
+        );
+      }
+
+      for (const row of values) {
+        const tier = tiersByFpid.get(row.fpid);
+        const adpRank = adpPositionRankByFpid.get(row.fpid);
+        if (!tier || adpRank === undefined) continue;
+        const key = `${row.position}:${tier.tier}`;
+        const group = tierGroups.get(key) ?? {
+          position: row.position,
+          tier: tier.tier,
+          diffs: [],
+        };
+        // Positive = this league's own rank has the player going EARLIER
+        // than market ADP (a potential value if they last that long);
+        // negative = ADP drafts them earlier than this league's own math
+        // justifies.
+        group.diffs.push((adpRank - row.positionRank) / season.teamCount);
+        tierGroups.set(key, group);
+      }
     }
     // Single-player groups are too noisy to generalize into a tier-level
     // takeaway - require at least 2 comparable players.
@@ -292,6 +363,7 @@ export const gatherInsightsInputs = internalQuery({
 
     return {
       teamCount: season.teamCount,
+      format,
       tierGaps,
       valueGapCounts,
       keeperScarcity,
@@ -307,6 +379,11 @@ function formatSigned(amount: number): string {
   return amount >= 0
     ? `+$${Math.round(amount)}`
     : `-$${Math.round(Math.abs(amount))}`;
+}
+
+function formatRoundsSigned(rounds: number): string {
+  const abs = Math.abs(rounds).toFixed(1);
+  return rounds >= 0 ? `+${abs} rounds` : `-${abs} rounds`;
 }
 
 // Forces Gemini's response into { insights: [{ headline, body }] } - see
@@ -330,14 +407,27 @@ const RESPONSE_SCHEMA = {
 };
 
 function buildInsightsPrompt(inputs: InsightsInputs): string {
+  const isAuction = inputs.format === "auction";
+
   const payload = {
     totalTeams: inputs.teamCount,
-    dollarValueVsMarketByPositionTier: inputs.tierGaps.map((gap) => ({
-      position: gap.position,
-      tier: gap.tier,
-      playersInTier: gap.playerCount,
-      avgDiffVsMarketPerPlayer: formatSigned(gap.avgDiff),
-    })),
+    ...(isAuction
+      ? {
+          dollarValueVsMarketByPositionTier: inputs.tierGaps.map((gap) => ({
+            position: gap.position,
+            tier: gap.tier,
+            playersInTier: gap.playerCount,
+            avgDiffVsMarketPerPlayer: formatSigned(gap.avgDiff),
+          })),
+        }
+      : {
+          adpVsThisLeagueRankByPositionTier: inputs.tierGaps.map((gap) => ({
+            position: gap.position,
+            tier: gap.tier,
+            playersInTier: gap.playerCount,
+            avgRoundsVsAdpPerPlayer: formatRoundsSigned(gap.avgDiff),
+          })),
+        }),
     valueGapSignal: inputs.valueGapCounts.map(
       (gap) => `${gap.position} ${gap.direction}: ${gap.count}`,
     ),
@@ -349,14 +439,26 @@ function buildInsightsPrompt(inputs: InsightsInputs): string {
     })),
   };
 
+  const intro = isAuction
+    ? "You are a fantasy football draft strategy assistant writing a short pre-draft briefing for one specific league, based on data comparing this league's own dollar-value engine (tuned to its exact roster/scoring settings) against the broader market, plus how many likely starting roster spots keepers have already taken off the board."
+    : "You are a fantasy football draft strategy assistant writing a short pre-draft briefing for one specific snake/linear-draft league, based on data comparing this league's own player rankings (tuned to its exact roster/scoring settings) against typical draft ADP (average draft position), plus how many likely starting roster spots keepers have already taken off the board.";
+
+  const tierSignalInstructions = isAuction
+    ? "dollarValueVsMarketByPositionTier: avgDiffVsMarketPerPlayer is a PER-PLAYER AVERAGE (this league's own computed value MINUS the broader market's typical auction value, averaged across the playersInTier players in that position/tier) - it is NOT a total or a single player's price, and your wording must make that clear (e.g. 'about $X per player', 'on average'), never state it as a flat dollar figure that reads like one player's price or a lump sum. Cite playersInTier too when it fits without breaking the one-sentence limit (e.g. 'the 4 Tier 2 QBs'). A negative number means this league's math values that tier LOWER than the market typically pays - i.e. other drafters in a market-priced auction might overpay there, so there's a strategic opportunity to let that tier go and find value lower down. A positive number means the opposite - this league's settings make that tier worth MORE than a typical market price, i.e. a bargain if it's still available near market price."
+    : "adpVsThisLeagueRankByPositionTier: avgRoundsVsAdpPerPlayer is a PER-PLAYER AVERAGE (this league's own points-based rank at that position MINUS typical ADP's rank at that position, converted to rounds by dividing by team count, averaged across the playersInTier players in that position/tier) - it is NOT one player's actual draft round, and your wording must make that clear (e.g. 'about X rounds on average', 'roughly X rounds later'), never state it as a single exact round for one player. Cite playersInTier too when it fits without breaking the one-sentence limit (e.g. 'the 4 Tier 2 RBs'). A positive number means this league's own rankings have that tier going EARLIER than typical ADP - other drafters may let them slide, so there's a value opportunity if the tier is still around a round or so after its typical ADP. A negative number means the opposite - ADP drafts that tier earlier than this league's own rankings justify, i.e. taking them right at ADP is a reach; you can likely wait.";
+
+  const keeperSignalInstructions = isAuction
+    ? "keeperScarcityByPosition: pctOfStartingSlotsAlreadyKept estimates how much of the league-wide starting need at a position has already been claimed by keepers before the draft even starts - a high percentage means that position's remaining pool is thin, so drafters may need to be more aggressive/pay a premium to lock in a starter there. Positions absent from this list have no notable keeper activity - don't invent a keeper angle for them."
+    : "keeperScarcityByPosition: pctOfStartingSlotsAlreadyKept estimates how much of the league-wide starting need at a position has already been claimed by keepers before the draft even starts - a high percentage means that position's remaining pool is thin, so drafters may need to reach a round or two early to lock in a starter there. Positions absent from this list have no notable keeper activity - don't invent a keeper angle for them.";
+
   return [
-    "You are a fantasy football draft strategy assistant writing a short pre-draft briefing for one specific league, based on data comparing this league's own dollar-value engine (tuned to its exact roster/scoring settings) against the broader market, plus how many likely starting roster spots keepers have already taken off the board.",
+    intro,
     "Use only the facts in the JSON data below - don't invent players, prices, or stats that aren't there, and don't name individual players by name (this data is aggregated by position/tier, not per-player).",
     "Respond with JSON matching the given schema: at most 3 insights (fewer is fine - only include the strongest signals), each a punchy headline (5 words or fewer) plus exactly one short sentence of plain, conversational body text a casual fantasy player would understand. Be terse - no throat-clearing, no restating the headline in the body, no hedging.",
     "",
-    "dollarValueVsMarketByPositionTier: avgDiffVsMarketPerPlayer is a PER-PLAYER AVERAGE (this league's own computed value MINUS the broader market's typical auction value, averaged across the playersInTier players in that position/tier) - it is NOT a total or a single player's price, and your wording must make that clear (e.g. 'about $X per player', 'on average'), never state it as a flat dollar figure that reads like one player's price or a lump sum. Cite playersInTier too when it fits without breaking the one-sentence limit (e.g. 'the 4 Tier 2 QBs'). A negative number means this league's math values that tier LOWER than the market typically pays - i.e. other drafters in a market-priced auction might overpay there, so there's a strategic opportunity to let that tier go and find value lower down. A positive number means the opposite - this league's settings make that tier worth MORE than a typical market price, i.e. a bargain if it's still available near market price.",
+    tierSignalInstructions,
     "valueGapSignal: counts of players per position flagged as undervalued/overvalued (ADP vs. actual track record + projection mismatch) or breakout/falloff (a track-record-vs-outlook mismatch) - higher counts mean more mispriced players at that position this year.",
-    "keeperScarcityByPosition: pctOfStartingSlotsAlreadyKept estimates how much of the league-wide starting need at a position has already been claimed by keepers before the draft even starts - a high percentage means that position's remaining pool is thin, so drafters may need to be more aggressive/pay a premium to lock in a starter there. Positions absent from this list have no notable keeper activity - don't invent a keeper angle for them.",
+    keeperSignalInstructions,
     "Ground every insight in these specific numbers - reference the position and tier or the percentage when relevant, don't give generic advice that could apply to any league. If a data section is empty, don't write an insight about it.",
     "",
     JSON.stringify(payload),
@@ -458,11 +560,18 @@ export const generatePreDraftInsights = internalAction({
     try {
       parsed = JSON.parse(raw);
     } catch (err) {
-      console.error("Gemini pre-draft insights returned invalid JSON", err, raw);
+      console.error(
+        "Gemini pre-draft insights returned invalid JSON",
+        err,
+        raw,
+      );
       return;
     }
     if (!Array.isArray(parsed.insights)) {
-      console.error("Gemini pre-draft insights JSON missing expected fields", parsed);
+      console.error(
+        "Gemini pre-draft insights JSON missing expected fields",
+        parsed,
+      );
       return;
     }
     const insights = parsed.insights.filter(

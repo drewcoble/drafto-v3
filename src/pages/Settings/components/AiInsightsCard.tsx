@@ -22,9 +22,11 @@ interface AiInsightsCardProps {
   scoringConfig: ScoringConfig;
 }
 
-// Pre-draft AI Insights - a Gemini-written strategy briefing (our $ value vs.
-// market by position/tier, value-gap counts, keeper-driven scarcity) sitting
-// above the pre-draft player table (see PlayersTable.tsx). Pro-only: a
+// Pre-draft AI Insights - a Gemini-written strategy briefing (auction: our $
+// value vs. market by position/tier; snake/linear: our rank vs. ADP by
+// position/tier - see convex/gemini/preDraftInsights.ts - plus value-gap
+// counts and keeper-driven scarcity either way) sitting above the pre-draft
+// player table (see PlayersTable.tsx). Pro-only: a
 // free-tier caller never sees any of this - convex/draft/insights.ts's
 // getPreDraftInsights returns "requires_upgrade" with no insight data at all
 // in that case. Only ever rendered for the season's own owner - the pre-
@@ -40,8 +42,19 @@ export function AiInsightsCard({
     api.draft.insights.getPreDraftInsights,
     seasonId ? { seasonId, week, scoringConfig } : "skip",
   );
+  // Only needed for the upgrade-prompt copy below (the actual insight
+  // headlines/body text are already fully $-vs-ADP aware server-side, per
+  // convex/gemini/preDraftInsights.ts) - same `settings.draftType` pattern
+  // AUCTION.md/SNAKE.md document every frontend file uses.
+  const settings = useQuery(
+    api.leagues.getSeasonPublic,
+    seasonId ? { seasonId } : "skip",
+  );
+  const isAuction = (settings?.draftType ?? "auction") === "auction";
 
-  const ensureGenerated = useMutation(api.draft.insights.ensureInsightsGenerated);
+  const ensureGenerated = useMutation(
+    api.draft.insights.ensureInsightsGenerated,
+  );
   const regenerate = useMutation(api.draft.insights.regenerateInsights);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
@@ -75,7 +88,11 @@ export function AiInsightsCard({
       <Card withBorder padding="md">
         <UpgradePrompt
           title="AI Insights is a Pro feature"
-          message="Get an AI-written briefing on where your league's $ values diverge from the market and how your keepers should shape draft-day strategy."
+          message={
+            isAuction
+              ? "Get an AI-written briefing on where your league's $ values diverge from the market and how your keepers should shape draft-day strategy."
+              : "Get an AI-written briefing on where your league's rankings diverge from ADP and how your keepers should shape draft-day strategy."
+          }
         />
       </Card>
     );
@@ -102,7 +119,11 @@ export function AiInsightsCard({
           <Title order={4}>AI Insights</Title>
         </Group>
         {report.isStale && (
-          <Alert variant="light" color="yellow" title="These insights may be outdated">
+          <Alert
+            variant="light"
+            color="yellow"
+            title="These insights may be outdated"
+          >
             <Group justify="space-between" wrap="wrap" gap="xs">
               <Text size="sm">
                 Your league settings, scoring, or keepers have changed since
