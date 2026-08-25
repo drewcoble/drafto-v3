@@ -451,7 +451,25 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
               Set the draft order before the board can show anything.
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                // Explicit floor, not just each column's own minWidth: a
+                // block-level flex container's width is normally just
+                // "fill the available viewport," and overflowing flex-item
+                // content doesn't grow that box - it just paints past its
+                // edge. Rows stretch (default align-items) to match this
+                // wrapper's own width, so without this floor the sticky
+                // header/round-column backgrounds below only ever cover the
+                // *original* viewport-width slice of the row, not the true
+                // scrolled-to content width, leaving a transparent gap that
+                // other rows' unpinned content shows through once you
+                // scroll horizontally past that point.
+                minWidth: 74 + board.teamOrder.length * (152 + 6),
+              }}
+            >
               {/* Team header row - sticky to the top of the scrollable board
                   so team names stay visible while scrolling through rounds. */}
               <div
