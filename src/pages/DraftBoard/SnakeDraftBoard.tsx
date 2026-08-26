@@ -620,7 +620,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
         <style>{`
         @keyframes snakeOnClockPulse { 0%,100% { background-color: rgba(202,141,62,0.12); } 50% { background-color: rgba(202,141,62,0.26); } }
         @keyframes snakeDotBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
-        @keyframes snakeLandFlash { 0% { background: rgba(90,160,111,0.32); } 100% { background: rgba(90,160,111,0.10); } }
+        @keyframes snakeLandFlash { 0% { background: rgba(90,160,111,0.18); } 100% { background: rgba(90,160,111,0.07); } }
         @keyframes snakeTickerIn { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
       `}</style>
         {/* Board body */}
@@ -819,9 +819,14 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
                     ) {
                       cellStyle = {
                         ...base,
-                        background: "rgba(90,160,111,0.12)",
-                        border: "1px solid rgba(90,160,111,0.75)",
-                        animation: "snakeLandFlash 0.9s ease-out 3",
+                        background: "rgba(90,160,111,0.07)",
+                        border: "1px solid rgba(90,160,111,0.45)",
+                        // A single slow fade from a soft glow down to this
+                        // resting tint - not the repeated 3x pulse this used
+                        // to have (kept because it read as too flashy/
+                        // distracting for something as small as a routine
+                        // pick landing).
+                        animation: "snakeLandFlash 1.6s ease-out 1",
                       };
                     } else if (cell.pick || cell.isForfeited) {
                       cellStyle = {
