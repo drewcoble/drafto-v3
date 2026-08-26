@@ -175,6 +175,26 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
     [picks],
   );
 
+  // Nominating-team pickers (the desktop turn Select, the mobile team chip
+  // row) should read in the order teams actually nominate in, not whichever
+  // order `listSeasonTeams` happens to return - same reasoning/pattern as
+  // DraftBoard.tsx's teamSummaries sort. Falls back to the raw team list
+  // when no nomination order is configured yet.
+  const orderedTeams = useMemo(() => {
+    const orderIndex = new Map(
+      (nominationConfig?.nominationOrder ?? []).map((teamId, index) => [
+        teamId,
+        index,
+      ]),
+    );
+    if (orderIndex.size === 0) return teams ?? [];
+    return [...(teams ?? [])].sort(
+      (a, b) =>
+        (orderIndex.get(a._id) ?? Infinity) -
+        (orderIndex.get(b._id) ?? Infinity),
+    );
+  }, [teams, nominationConfig]);
+
   const tagByFpid = useMemo(() => {
     const map = new Map<number, PlayerTag>();
     for (const row of playerTags ?? []) map.set(row.fpid, row.tag);
@@ -392,7 +412,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
         <NominationPanel
           nextPickNumber={nextPickNumber}
           totalPicks={totalPicks}
-          teams={teams}
+          teams={orderedTeams}
           nominationOrderEnabled={!!nominationConfig?.nominationOrder}
           turnTeamId={currentNominator?.currentTeamId}
           onSetTurnTeam={(teamId) =>
@@ -454,7 +474,7 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
         onSetTurnTeam={(teamId) =>
           runAction(() => setCurrentNominator({ seasonId, teamId }))
         }
-        teams={teams}
+        teams={orderedTeams}
         selfTeamId={selfTeamId}
         activeNomination={activeNomination ?? undefined}
         nominatedPlayer={nominatedPlayer}

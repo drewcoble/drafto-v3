@@ -84,6 +84,24 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
     return map;
   }, [teams]);
 
+  // "Picking as" should read top-to-bottom in the order teams actually pick
+  // in (board.teamOrder is drafts.draftOrder itself - see
+  // getSnakeBoardPublic), not whatever order they happen to sit in `teams`
+  // (creation order) - same reasoning as DraftBoard.tsx's teamSummaries sort
+  // for auction's nomination order. Falls back to raw `teams` order for any
+  // team somehow missing from the configured order.
+  const orderedTeams = useMemo(() => {
+    const orderIndex = new Map(
+      (board?.teamOrder ?? []).map((teamId, index) => [teamId, index]),
+    );
+    if (orderIndex.size === 0) return teams;
+    return [...teams].sort(
+      (a, b) =>
+        (orderIndex.get(a._id) ?? Infinity) -
+        (orderIndex.get(b._id) ?? Infinity),
+    );
+  }, [teams, board]);
+
   const pickedFpids = useMemo(
     () => new Set((picks ?? []).map((pick) => pick.fpid)),
     [picks],
@@ -127,7 +145,8 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
   }, [draftBoardResult]);
 
   const currentTeamId = board?.onClockTeamId ?? null;
-  const effectivePickingTeamId = pickingTeamId ?? currentTeamId ?? teams[0]?._id ?? null;
+  const effectivePickingTeamId =
+    pickingTeamId ?? currentTeamId ?? orderedTeams[0]?._id ?? null;
 
   const runAction = async (action: () => Promise<unknown>) => {
     setActionError(null);
@@ -180,7 +199,7 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
           <Group gap="sm" wrap="wrap">
             <Select
               label="Picking as"
-              data={teams.map((team) => ({
+              data={orderedTeams.map((team) => ({
                 value: team._id,
                 label: team.name,
               }))}
