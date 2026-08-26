@@ -28,6 +28,17 @@ interface TierGap {
   playerCount: number;
 }
 
+// Snake/linear only - see gatherInsightsInputs. A whole-position rollup of
+// the same per-player vs-ADP diff tierGaps groups by (position, tier) -
+// tierGaps alone requires the model to notice a pattern repeating across
+// several tier rows before it can say "this whole position," which isn't
+// reliable; this hands it the aggregate directly.
+interface PositionAdpGap {
+  position: Position;
+  avgDiff: number;
+  playerCount: number;
+}
+
 interface ValueGapCount {
   position: Position;
   direction: string;
@@ -45,6 +56,7 @@ interface InsightsInputs {
   teamCount: number;
   format: DraftType;
   tierGaps: TierGap[];
+  positionAdpGaps: PositionAdpGap[];
   valueGapCounts: ValueGapCount[];
   keeperScarcity: KeeperScarcity[];
   inputsFingerprint: string;
@@ -90,16 +102,25 @@ export function buildInputsFingerprint(
   });
 }
 
+interface StandardValueRow {
+  rank: number;
+  auctionValue: number;
+}
+
 // Mirrors src/lib/standardValues.ts's buildStandardValueByFpid (convex/
 // never imports from src/ - see convex/draft/tiers.ts's comment on the same
-// duplication convention). auctionValue instead of rank, since this feeds
-// the $-vs-market gap rather than valueGaps.ts's rank-blend signal.
+// duplication convention). Returns both rank and auctionValue (the frontend
+// version's full StandardValueRow shape) - auction's $-vs-market gap only
+// needs auctionValue, but snake/linear's blended-ADP signal below needs
+// ESPN's overall rank too, the same "second market-consensus source" role
+// it plays for PlayersTable.tsx's ADP column (src/lib/valueRank.ts) and
+// convex/valueGaps.ts's buildEspnRankByFpid.
 async function buildStandardValueByFpid(
   ctx: QueryCtx,
   season: string,
   scoring: ScoringConfig["scoring"],
   isSuperflex: boolean,
-): Promise<Map<number, number>> {
+): Promise<Map<number, StandardValueRow>> {
   const loadFormat = async (format: "standard" | "ppr" | "superflex") => {
     const rows = await ctx.db
       .query("standardValues")
@@ -107,7 +128,12 @@ async function buildStandardValueByFpid(
         q.eq("platform", "espn").eq("format", format).eq("season", season),
       )
       .collect();
-    return new Map(rows.map((row) => [row.fpid, row.auctionValue]));
+    return new Map(
+      rows.map((row) => [
+        row.fpid,
+        { rank: row.rank, auctionValue: row.auctionValue },
+      ]),
+    );
   };
 
   if (isSuperflex) return loadFormat("superflex");
@@ -118,13 +144,18 @@ async function buildStandardValueByFpid(
     loadFormat("standard"),
     loadFormat("ppr"),
   ]);
-  const merged = new Map<number, number>();
+  const merged = new Map<number, StandardValueRow>();
   for (const fpid of new Set([...std.keys(), ...ppr.keys()])) {
     const a = std.get(fpid);
     const b = ppr.get(fpid);
     merged.set(
       fpid,
-      a !== undefined && b !== undefined ? (a + b) / 2 : (a ?? b)!,
+      a && b
+        ? {
+            rank: (a.rank + b.rank) / 2,
+            auctionValue: (a.auctionValue + b.auctionValue) / 2,
+          }
+        : (a ?? b)!,
     );
   }
   return merged;
@@ -191,13 +222,22 @@ export const gatherInsightsInputs = internalQuery({
     // Average diff per (position, tier) group, aggregated so the model
     // reasons at tier level, not per player. Auction: (our $ - market $),
     // the same per-player diff src/components/StandardValueLabel.tsx
-    // already renders. Snake/linear: this league's own points-based
-    // position rank vs. market ADP's position rank, converted to rounds -
-    // $ value has no meaning to a snake drafter, but "this tier goes about
-    // a round earlier/later than ADP suggests" does.
+    // already renders. Snake/linear: this league's own overall rank
+    // (pooled across every position by dollarValue - see below) vs. a
+    // blended market ADP, converted to rounds - $ value has no meaning to a
+    // snake drafter, but "this tier goes about a round earlier/later than
+    // ADP suggests" does. Same methodology (and, deliberately, the same
+    // sign convention) as PlayersTable.tsx's "vs ADP" column
+    // (src/lib/valueRank.ts/AdpValueLabel.tsx) - convex/ can't import from
+    // src/ (see buildStandardValueByFpid's comment), so this mirrors it
+    // rather than sharing code.
     const tierGroups = new Map<
       string,
       { position: Position; tier: number; diffs: number[] }
+    >();
+    const positionGroups = new Map<
+      Position,
+      { position: Position; diffs: number[] }
     >();
     if (isAuction) {
       const isSuperflex = season.rosterSlots.SUPERFLEX > 0;
@@ -209,7 +249,7 @@ export const gatherInsightsInputs = internalQuery({
       );
       for (const row of values) {
         const tier = tiersByFpid.get(row.fpid);
-        const market = standardValueByFpid.get(row.fpid);
+        const market = standardValueByFpid.get(row.fpid)?.auctionValue;
         if (!tier || market === undefined) continue;
         const key = `${row.position}:${tier.tier}`;
         const group = tierGroups.get(key) ?? {
@@ -221,55 +261,89 @@ export const gatherInsightsInputs = internalQuery({
         tierGroups.set(key, group);
       }
     } else {
-      // Position-relative ADP rank (1 = earliest at that position),
-      // independent of this league's own points-based positionRank on
-      // `values`. Deep-bench players with no real ADP (past
-      // RELEVANT_ADP_CEILING, or Sleeper's own 999 "no real ADP" sentinel -
-      // same cutoff computeTiers uses) are excluded entirely rather than
-      // assigned a fake rank, since a sentinel-driven gap would be
-      // meaningless noise rather than a real signal.
-      const rowsByPosition = new Map<Position, typeof values>();
+      const isSuperflex = season.rosterSlots.SUPERFLEX > 0;
+      const standardValueByFpid = await buildStandardValueByFpid(
+        ctx,
+        season.year,
+        args.scoringConfig.scoring,
+        isSuperflex,
+      );
+      // Blended overall (cross-position) ADP: Sleeper ADP averaged with
+      // ESPN's overall rank - both already overall numbers, not
+      // position-relative, same blend PlayersTable.tsx's blendedAdpByFpid
+      // builds. Superflex leagues use ESPN's superflex rank alone -
+      // Sleeper's `rankings` table has no superflex-aware ADP field at all,
+      // so blending it in would understate QBs relative to a real
+      // superflex draft (same precedent buildStandardValueByFpid already
+      // sets for auction's HALF-averaging). Sleeper's side is dropped for
+      // any player past RELEVANT_ADP_CEILING (or missing a real ADP
+      // entirely, Sleeper's own 999 sentinel) - unlike ESPN's data (which
+      // simply has no row for a player it doesn't rank), a raw Sleeper ADP
+      // value can't be trusted to mean "no real ADP" on its own.
+      const blendedAdpByFpid = new Map<number, number>();
       for (const row of values) {
-        const list = rowsByPosition.get(row.position) ?? [];
-        list.push(row);
-        rowsByPosition.set(row.position, list);
+        const espnRank = standardValueByFpid.get(row.fpid)?.rank;
+        if (isSuperflex) {
+          if (espnRank !== undefined) blendedAdpByFpid.set(row.fpid, espnRank);
+          continue;
+        }
+        const adpRow = adpByFpid.get(row.fpid);
+        const rawSleeperAdp = adpRow
+          ? adpForScoring(adpRow, args.scoringConfig.scoring)
+          : undefined;
+        const sleeperAdp =
+          rawSleeperAdp !== undefined && rawSleeperAdp < RELEVANT_ADP_CEILING
+            ? rawSleeperAdp
+            : undefined;
+        if (sleeperAdp !== undefined && espnRank !== undefined) {
+          blendedAdpByFpid.set(row.fpid, (sleeperAdp + espnRank) / 2);
+        } else if (sleeperAdp !== undefined) {
+          blendedAdpByFpid.set(row.fpid, sleeperAdp);
+        } else if (espnRank !== undefined) {
+          blendedAdpByFpid.set(row.fpid, espnRank);
+        }
       }
-      const adpPositionRankByFpid = new Map<number, number>();
-      for (const rows of rowsByPosition.values()) {
-        const withAdp = rows
-          .map((row) => {
-            const adpRow = adpByFpid.get(row.fpid);
-            const adp = adpRow
-              ? adpForScoring(adpRow, args.scoringConfig.scoring)
-              : undefined;
-            return { fpid: row.fpid, adp };
-          })
-          .filter(
-            (r): r is { fpid: number; adp: number } =>
-              r.adp !== undefined && r.adp < RELEVANT_ADP_CEILING,
-          )
-          .sort((a, b) => a.adp - b.adp);
-        withAdp.forEach((r, index) =>
-          adpPositionRankByFpid.set(r.fpid, index + 1),
-        );
-      }
+
+      // "Our rank": every active-position player pooled by dollarValue
+      // descending - the one number that's already normalized VOR to be
+      // comparable across positions (draftValues.ts's FALLOFF_EXPONENT
+      // curve), reused here purely as a cross-position ranking key ($
+      // itself is never surfaced to a snake/linear league). Mirrors
+      // src/lib/valueRank.ts's sortValuesDescending/rankByDollarValue.
+      const ourRankByFpid = new Map<number, number>();
+      [...values]
+        .sort((a, b) => b.dollarValue - a.dollarValue)
+        .forEach((row, index) => ourRankByFpid.set(row.fpid, index + 1));
 
       for (const row of values) {
         const tier = tiersByFpid.get(row.fpid);
-        const adpRank = adpPositionRankByFpid.get(row.fpid);
-        if (!tier || adpRank === undefined) continue;
+        const adp = blendedAdpByFpid.get(row.fpid);
+        const ourRank = ourRankByFpid.get(row.fpid);
+        if (!tier || adp === undefined || ourRank === undefined) continue;
+        // Positive = ADP has this player going LATER than our own
+        // cross-position rank says (a potential value if they last that
+        // long); negative = ADP drafts them earlier than our math
+        // justifies. Divided by team count to express the gap in rounds -
+        // meaningful here specifically because both adp and ourRank are
+        // already overall/cross-position numbers, exactly what a round
+        // boundary (teamCount picks) spans.
+        const diff = (adp - ourRank) / season.teamCount;
+
         const key = `${row.position}:${tier.tier}`;
-        const group = tierGroups.get(key) ?? {
+        const tierGroup = tierGroups.get(key) ?? {
           position: row.position,
           tier: tier.tier,
           diffs: [],
         };
-        // Positive = this league's own rank has the player going EARLIER
-        // than market ADP (a potential value if they last that long);
-        // negative = ADP drafts them earlier than this league's own math
-        // justifies.
-        group.diffs.push((adpRank - row.positionRank) / season.teamCount);
-        tierGroups.set(key, group);
+        tierGroup.diffs.push(diff);
+        tierGroups.set(key, tierGroup);
+
+        const positionGroup = positionGroups.get(row.position) ?? {
+          position: row.position,
+          diffs: [],
+        };
+        positionGroup.diffs.push(diff);
+        positionGroups.set(row.position, positionGroup);
       }
     }
     // Single-player groups are too noisy to generalize into a tier-level
@@ -287,6 +361,25 @@ export const gatherInsightsInputs = internalQuery({
         playerCount: group.diffs.length,
       }))
       .sort((a, b) => a.position.localeCompare(b.position) || a.tier - b.tier);
+
+    // Same diffs, rolled up to one row per position instead of split by
+    // tier - see PositionAdpGap's comment on why this exists alongside
+    // tierGaps rather than making the model infer it from several tier
+    // rows. Empty for auction (positionGroups is never populated there).
+    const positionAdpGaps: PositionAdpGap[] = Array.from(
+      positionGroups.values(),
+    )
+      .filter((group) => group.diffs.length >= 2)
+      .map((group) => ({
+        position: group.position,
+        avgDiff:
+          Math.round(
+            (group.diffs.reduce((sum, d) => sum + d, 0) / group.diffs.length) *
+              10,
+          ) / 10,
+        playerCount: group.diffs.length,
+      }))
+      .sort((a, b) => a.position.localeCompare(b.position));
 
     const lastSeason = String(Number(season.year) - 1);
     const valueGaps = await ctx.runQuery(api.valueGaps.getAllValueGaps, {
@@ -365,6 +458,7 @@ export const gatherInsightsInputs = internalQuery({
       teamCount: season.teamCount,
       format,
       tierGaps,
+      positionAdpGaps,
       valueGapCounts,
       keeperScarcity,
       inputsFingerprint: buildInputsFingerprint(
@@ -421,6 +515,13 @@ function buildInsightsPrompt(inputs: InsightsInputs): string {
           })),
         }
       : {
+          adpVsThisLeagueRankByWholePosition: inputs.positionAdpGaps.map(
+            (gap) => ({
+              position: gap.position,
+              playersConsidered: gap.playerCount,
+              avgRoundsVsAdpPerPlayer: formatRoundsSigned(gap.avgDiff),
+            }),
+          ),
           adpVsThisLeagueRankByPositionTier: inputs.tierGaps.map((gap) => ({
             position: gap.position,
             tier: gap.tier,
@@ -445,7 +546,7 @@ function buildInsightsPrompt(inputs: InsightsInputs): string {
 
   const tierSignalInstructions = isAuction
     ? "dollarValueVsMarketByPositionTier: avgDiffVsMarketPerPlayer is a PER-PLAYER AVERAGE (this league's own computed value MINUS the broader market's typical auction value, averaged across the playersInTier players in that position/tier) - it is NOT a total or a single player's price, and your wording must make that clear (e.g. 'about $X per player', 'on average'), never state it as a flat dollar figure that reads like one player's price or a lump sum. Cite playersInTier too when it fits without breaking the one-sentence limit (e.g. 'the 4 Tier 2 QBs'). A negative number means this league's math values that tier LOWER than the market typically pays - i.e. other drafters in a market-priced auction might overpay there, so there's a strategic opportunity to let that tier go and find value lower down. A positive number means the opposite - this league's settings make that tier worth MORE than a typical market price, i.e. a bargain if it's still available near market price."
-    : "adpVsThisLeagueRankByPositionTier: avgRoundsVsAdpPerPlayer is a PER-PLAYER AVERAGE (this league's own points-based rank at that position MINUS typical ADP's rank at that position, converted to rounds by dividing by team count, averaged across the playersInTier players in that position/tier) - it is NOT one player's actual draft round, and your wording must make that clear (e.g. 'about X rounds on average', 'roughly X rounds later'), never state it as a single exact round for one player. Cite playersInTier too when it fits without breaking the one-sentence limit (e.g. 'the 4 Tier 2 RBs'). A positive number means this league's own rankings have that tier going EARLIER than typical ADP - other drafters may let them slide, so there's a value opportunity if the tier is still around a round or so after its typical ADP. A negative number means the opposite - ADP drafts that tier earlier than this league's own rankings justify, i.e. taking them right at ADP is a reach; you can likely wait.";
+    : "adpVsThisLeagueRankByWholePosition and adpVsThisLeagueRankByPositionTier both compare this league's own OVERALL rank (every drafted-relevant player pooled together by projected value, across every position) against a blended market ADP (Sleeper's ADP averaged with ESPN's own overall rank), converted to rounds by dividing by team count - byWholePosition rolls every player at a position into one number (playersConsidered), byPositionTier breaks the same comparison down by tier within a position (playersInTier) for a more specific callout when one tier stands out from the rest of its position. avgRoundsVsAdpPerPlayer in both is a PER-PLAYER AVERAGE, not one player's actual draft round - your wording must make that clear (e.g. 'about X rounds on average', 'roughly X rounds later'), never state it as a single exact round for one player. A positive number means this league's own math has that position/tier going EARLIER than typical ADP - other drafters may let them slide, so there's a value opportunity if they're still there a round or so after ADP. A negative number means the opposite - ADP drafts that position/tier earlier than this league's own math justifies (an overvalued-by-the-market signal - e.g. a whole position everyone reaches for too early), i.e. taking them right at ADP is a reach; you can likely wait. Prefer byWholePosition for a broad 'this whole position is overvalued/undervalued by ADP' takeaway (most useful when most of a position's players share the same sign) over byPositionTier's narrower per-tier framing, unless one specific tier clearly diverges from its own position's overall number.";
 
   const keeperSignalInstructions = isAuction
     ? "keeperScarcityByPosition: pctOfStartingSlotsAlreadyKept estimates how much of the league-wide starting need at a position has already been claimed by keepers before the draft even starts - a high percentage means that position's remaining pool is thin, so drafters may need to be more aggressive/pay a premium to lock in a starter there. Positions absent from this list have no notable keeper activity - don't invent a keeper angle for them."
