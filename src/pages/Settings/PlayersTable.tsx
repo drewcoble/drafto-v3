@@ -57,7 +57,8 @@ interface PlayersTableProps {
   selectedLeagueId: Id<"seasons"> | undefined;
 }
 
-type SortKey = "player" | "team" | "tier" | "dollar" | "market" | "pts";
+type SortKey =
+  "player" | "team" | "tier" | "dollar" | "market" | "pts" | "rank";
 
 // Same "premier positions" list convex/valueGaps.ts's VALUE_GAP_POSITIONS
 // and convex/gemini/preDraftInsights.ts's own PREMIER_POSITIONS already
@@ -76,14 +77,15 @@ const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
   dollar: "desc",
   market: "desc",
   pts: "desc",
+  rank: "desc",
 };
 
-// "dollar" is auction's $ column (highest first) but snake/linear's ADP
-// column (lowest/earliest first) - the one default that flips per format.
-// "market"/vs-ADP both want "best value first" (highest positive diff),
-// so that one doesn't need a format-aware override.
+// "dollar"/"rank" are auction's $ value (highest first) but snake/linear's
+// ADP/our-own-rank (lowest/earliest number first) - the two defaults that
+// flip per format. "market"/vs-ADP both want "best value first" (highest
+// positive diff), so that one doesn't need a format-aware override.
 function defaultSortDirFor(key: SortKey, isAuction: boolean): SortDir {
-  if (key === "dollar" && !isAuction) return "asc";
+  if ((key === "dollar" || key === "rank") && !isAuction) return "asc";
   return DEFAULT_SORT_DIR[key];
 }
 
@@ -534,6 +536,16 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
         }
         case "pts":
           return pointsForScoringConfig(row, scoringConfig);
+        case "rank":
+          // Auction: same dollarValue the "$" column sorts by (there's no
+          // separate "overall auction rank" number to speak of - $ itself
+          // already is one). Snake/linear: our own cross-position value
+          // rank (ourRankByFpid) - deliberately NOT blendedAdpByFpid (the
+          // "ADP" column's own field), so Rank gives a way to sort by this
+          // league's own opinion independent of the market.
+          return isAuction
+            ? draftValueByFpid.get(row.fpid)?.dollarValue
+            : ourRankByFpid.get(row.fpid);
       }
     };
 
@@ -653,7 +665,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                 <Table striped highlightOnHover verticalSpacing={4}>
                   <Table.Thead>
                     <Table.Tr>
-                      <Table.Th>Rank</Table.Th>
+                      {renderSortableTh("Rank", "rank")}
                       {renderSortableTh("FPTS", "pts")}
                       {draftValues &&
                         renderSortableTh(
