@@ -22,12 +22,14 @@ import {
   formulaForFpid,
   prospectiveKeeperStreak,
   roundFormulaForFpid,
-  sortValuesDescending,
   valueImpliedRound,
   type KeeperPriceHistoryEntry,
   type KeeperRules,
-  type ValueRankEntry,
 } from "../../../lib/keeperCost";
+import {
+  sortValuesDescending,
+  type ValueRankEntry,
+} from "../../../lib/valueRank";
 
 interface ProjectionRow {
   fpid: number;
@@ -158,11 +160,12 @@ export function RecommendedKeepers({
     }
     return [...names].sort();
   }, [priceHistory, draftTeams]);
-  const selectedTeamName = teamFilter === ALL_TEAMS
-    ? undefined
-    : teamFilter.startsWith(HISTORY_PREFIX)
-      ? teamFilter.slice(HISTORY_PREFIX.length)
-      : draftTeams.find((t) => t._id === teamFilter)?.name;
+  const selectedTeamName =
+    teamFilter === ALL_TEAMS
+      ? undefined
+      : teamFilter.startsWith(HISTORY_PREFIX)
+        ? teamFilter.slice(HISTORY_PREFIX.length)
+        : draftTeams.find((t) => t._id === teamFilter)?.name;
   const sortedValues = useMemo(
     () => sortValuesDescending(availableValues),
     [availableValues],

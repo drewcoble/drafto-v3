@@ -31,6 +31,7 @@ import {
   scoringConfigFromSeason,
 } from "../../lib/relevantPlayers";
 import { compareSortValues, type SortDir } from "../../lib/tableSort";
+import { rankByDollarValue, sortValuesDescending } from "../../lib/valueRank";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { PositionFilterBar } from "../../components/PositionFilterBar";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
@@ -368,20 +369,19 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   }, [adpByFpid, standardValueByFpid, isSuperflex, scoring]);
 
   // Snake/linear's "our rank" for the vs-ADP diff: every active-position
-  // player sorted by dollarValue, the one number that's already normalized
-  // VOR to be comparable across positions (see PlayersTable.tsx's earlier
-  // $-vs-market column and convex/draftValues.ts's FALLOFF_EXPONENT curve) -
-  // raw valueOverReplacement isn't directly comparable position to position,
-  // so this reuses $ purely as an internal cross-position ranking key. $
-  // itself is never displayed for a snake/linear league.
+  // player pooled by dollarValue descending, the one number that's already
+  // normalized VOR to be comparable across positions (see PlayersTable.tsx's
+  // earlier $-vs-market column and convex/draftValues.ts's
+  // FALLOFF_EXPONENT curve) - raw valueOverReplacement isn't directly
+  // comparable position to position, so this reuses $ purely as an internal
+  // cross-position ranking key. $ itself is never displayed for a
+  // snake/linear league. Same pooled-dollarValue-rank primitive
+  // keeperCost.ts's round-mode keeper bargains rank against (see
+  // valueRank.ts) - draftValues already excludes kept players from its pool
+  // the same way RecommendedKeepers.tsx's availableValues does.
   const ourRankByFpid = useMemo(() => {
-    const map = new Map<number, number>();
-    if (!draftValues) return map;
-    const sorted = [...draftValues].sort(
-      (a, b) => b.dollarValue - a.dollarValue,
-    );
-    sorted.forEach((row, index) => map.set(row.fpid, index + 1));
-    return map;
+    if (!draftValues) return new Map<number, number>();
+    return rankByDollarValue(sortValuesDescending(draftValues));
   }, [draftValues]);
 
   const relevantProjections = useMemo(() => {

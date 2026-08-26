@@ -1,10 +1,13 @@
 import type { Doc } from "../../convex/_generated/dataModel";
 import type { Position } from "../types";
+import type { ValueRankEntry } from "./valueRank";
 
 export type KeeperRules = NonNullable<Doc<"seasons">["keeperRules"]>;
 export type KeeperFormula = KeeperRules["defaultFormula"];
 export type KeeperTier = KeeperRules["tiers"][number];
-export type KeeperRoundFormula = NonNullable<KeeperRules["defaultRoundFormula"]>;
+export type KeeperRoundFormula = NonNullable<
+  KeeperRules["defaultRoundFormula"]
+>;
 
 // Mirrors the shape returned by convex/draft/history.ts's
 // getPlayerPriceHistory - kept as its own type here (rather than derived
@@ -61,7 +64,7 @@ export function roundFormulaForFpid(
   const tier = keeperRules.tiers.find(
     (t) => t.fpids.includes(fpid) || t.positions?.includes(position),
   );
-  return (tier?.roundFormula ?? keeperRules.defaultRoundFormula) ?? null;
+  return tier?.roundFormula ?? keeperRules.defaultRoundFormula ?? null;
 }
 
 // The suggested keeper cost for a player given their resolved formula and
@@ -123,23 +126,10 @@ export function computeKeeperCostRound(
 // per round is nearly flat), and a round's real-world ADP can be skewed by
 // position runs (e.g. a QB glut making an early round's *average* value
 // look worse than a later one). Ranking by dollarValue against a rank
-// (not ADP) baseline sidesteps both.
-export interface ValueRankEntry {
-  fpid: number;
-  dollarValue: number;
-}
-
-// Sorted once by the caller (RecommendedKeepers.tsx, via useMemo) and
-// reused by both functions below - the "if every position drafted by pure
-// value" board for this year, pooling every position together rather than
-// bucketing by real ADP. Should be built from only the currently
-// available/undrafted pool - a kept player isn't actually available at any
-// round this year, so including them would skew the rank bands.
-export function sortValuesDescending(
-  values: readonly ValueRankEntry[],
-): ValueRankEntry[] {
-  return [...values].sort((a, b) => b.dollarValue - a.dollarValue);
-}
+// (not ADP) baseline sidesteps both. ValueRankEntry/sortValuesDescending
+// moved to valueRank.ts - PlayersTable.tsx's snake/linear "vs ADP" column
+// needs the identical pooled dollarValue rank for its own "our rank" side
+// of that diff, so this is no longer keeper-specific.
 
 // The round a player's OWN dollarValue implies, ranked against the pooled
 // (not per-position, not ADP) value curve - "this player's actual
