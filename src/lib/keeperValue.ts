@@ -14,3 +14,11 @@ export function formatSignedDollar(value: number): string {
   const rounded = Math.round(value);
   return `${rounded >= 0 ? "+" : "-"}$${Math.abs(rounded)}`;
 }
+
+// Same signed formatting as formatSignedDollar, no unit - for snake/linear's
+// "vs ADP" rank-spot diff (see AdpValueLabel.tsx), where a "$" prefix would
+// be wrong.
+export function formatSignedNumber(value: number): string {
+  const rounded = Math.round(value);
+  return `${rounded >= 0 ? "+" : "-"}${Math.abs(rounded)}`;
+}

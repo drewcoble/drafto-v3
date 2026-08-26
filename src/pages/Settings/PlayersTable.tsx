@@ -25,6 +25,7 @@ import {
   type ValueGap,
 } from "../../types";
 import {
+  adpForScoring,
   filterRelevantPlayers,
   pointsForScoringConfig,
   scoringConfigFromSeason,
@@ -68,6 +69,15 @@ const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
   pts: "desc",
 };
 
+// "dollar" is auction's $ column (highest first) but snake/linear's ADP
+// column (lowest/earliest first) - the one default that flips per format.
+// "market"/vs-ADP both want "best value first" (highest positive diff),
+// so that one doesn't need a format-aware override.
+function defaultSortDirFor(key: SortKey, isAuction: boolean): SortDir {
+  if (key === "dollar" && !isAuction) return "asc";
+  return DEFAULT_SORT_DIR[key];
+}
+
 export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   const [selectedPositions, setSelectedPositions] = useState<Position[]>([
     ...POSITIONS,
@@ -105,7 +115,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
       setSortDir((current) => (current === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir(DEFAULT_SORT_DIR[key]);
+      setSortDir(defaultSortDirFor(key, isAuction));
     }
   };
 
@@ -120,6 +130,10 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     (league) => league._id === selectedLeagueId,
   );
   const seasonId = selectedSettings?._id;
+  // AUCTION.md/SNAKE.md's standard `(settings.draftType ?? "auction") ===
+  // "auction"` frontend pattern - determines whether the value columns show
+  // $-vs-market (auction) or ADP-vs-our-rank (snake/linear).
+  const isAuction = (selectedSettings?.draftType ?? "auction") === "auction";
   // Scoring format now lives on the league settings (edited on the Settings
   // tab) instead of local component state, so it's shared/persisted rather
   // than resetting per-tab-visit.
@@ -314,6 +328,62 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     return map;
   }, [draftValues]);
 
+  // Snake/linear's "ADP" column: Sleeper ADP (adpByFpid, scoring-matched)
+  // averaged with ESPN's own overall draft-kit rank (standardValueByFpid -
+  // already fetched for auction's "vs market" column) - two independently-
+  // sourced market consensus numbers agreeing is a stronger signal than
+  // either alone, same reasoning convex/valueGaps.ts's buildEspnRankByFpid
+  // already uses. Falls back to whichever one exists if only one does.
+  // Superflex leagues use ESPN's superflex rank alone - Sleeper has no
+  // superflex-aware ADP field at all (see schema.ts's rankings table), so
+  // blending it in would water down/mislead the superflex signal (it
+  // understates QBs relative to how a real superflex draft actually goes),
+  // same "superflex overrides scoring-format nuance" precedent
+  // buildStandardValueByFpid already sets for the auction $-vs-market column.
+  const blendedAdpByFpid = useMemo(() => {
+    const map = new Map<number, number>();
+    const fpids = new Set<number>([
+      ...adpByFpid.keys(),
+      ...standardValueByFpid.keys(),
+    ]);
+    for (const fpid of fpids) {
+      const espnRank = standardValueByFpid.get(fpid)?.rank;
+      if (isSuperflex) {
+        if (espnRank !== undefined) map.set(fpid, espnRank);
+        continue;
+      }
+      const sleeperRow = adpByFpid.get(fpid);
+      const sleeperAdp = sleeperRow
+        ? adpForScoring(sleeperRow, scoring)
+        : undefined;
+      if (sleeperAdp !== undefined && espnRank !== undefined) {
+        map.set(fpid, (sleeperAdp + espnRank) / 2);
+      } else if (sleeperAdp !== undefined) {
+        map.set(fpid, sleeperAdp);
+      } else if (espnRank !== undefined) {
+        map.set(fpid, espnRank);
+      }
+    }
+    return map;
+  }, [adpByFpid, standardValueByFpid, isSuperflex, scoring]);
+
+  // Snake/linear's "our rank" for the vs-ADP diff: every active-position
+  // player sorted by dollarValue, the one number that's already normalized
+  // VOR to be comparable across positions (see PlayersTable.tsx's earlier
+  // $-vs-market column and convex/draftValues.ts's FALLOFF_EXPONENT curve) -
+  // raw valueOverReplacement isn't directly comparable position to position,
+  // so this reuses $ purely as an internal cross-position ranking key. $
+  // itself is never displayed for a snake/linear league.
+  const ourRankByFpid = useMemo(() => {
+    const map = new Map<number, number>();
+    if (!draftValues) return map;
+    const sorted = [...draftValues].sort(
+      (a, b) => b.dollarValue - a.dollarValue,
+    );
+    sorted.forEach((row, index) => map.set(row.fpid, index + 1));
+    return map;
+  }, [draftValues]);
+
   const relevantProjections = useMemo(() => {
     if (!allProjections) return [];
     return filterRelevantPlayers(
@@ -407,13 +477,22 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
         case "tier":
           return draftValueByFpid.get(row.fpid)?.tier;
         case "dollar":
-          return draftValueByFpid.get(row.fpid)?.dollarValue;
+          return isAuction
+            ? draftValueByFpid.get(row.fpid)?.dollarValue
+            : blendedAdpByFpid.get(row.fpid);
         case "market": {
-          const draftValue = draftValueByFpid.get(row.fpid);
-          const standardValue = standardValueByFpid.get(row.fpid);
-          return draftValue && standardValue
-            ? Math.round(draftValue.dollarValue) -
-                Math.round(standardValue.auctionValue)
+          if (isAuction) {
+            const draftValue = draftValueByFpid.get(row.fpid);
+            const standardValue = standardValueByFpid.get(row.fpid);
+            return draftValue && standardValue
+              ? Math.round(draftValue.dollarValue) -
+                  Math.round(standardValue.auctionValue)
+              : undefined;
+          }
+          const adp = blendedAdpByFpid.get(row.fpid);
+          const ourRank = ourRankByFpid.get(row.fpid);
+          return adp !== undefined && ourRank !== undefined
+            ? Math.round(adp) - ourRank
             : undefined;
         }
         case "pts":
@@ -423,7 +502,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
 
     const rows = [...visibleRows];
     const key: SortKey = sortKey ?? (draftValues ? "dollar" : "pts");
-    const dir: SortDir = sortKey ? sortDir : DEFAULT_SORT_DIR[key];
+    const dir: SortDir = sortKey ? sortDir : defaultSortDirFor(key, isAuction);
     rows.sort((a, b) => {
       const primary = compareSortValues(
         sortValueFor(a, key),
@@ -453,6 +532,9 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     draftValues,
     draftValueByFpid,
     standardValueByFpid,
+    blendedAdpByFpid,
+    ourRankByFpid,
+    isAuction,
     scoringConfig,
   ]);
 
@@ -538,10 +620,18 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                       {renderSortableTh("FPTS", "pts")}
                       {draftValues &&
                         renderSortableTh(
-                          draftValuesResult?.isGeneric ? "$ (est.)" : "$",
+                          isAuction
+                            ? draftValuesResult?.isGeneric
+                              ? "$ (est.)"
+                              : "$"
+                            : "ADP",
                           "dollar",
                         )}
-                      {draftValues && renderSortableTh("vs. market", "market")}
+                      {draftValues &&
+                        renderSortableTh(
+                          isAuction ? "vs. market" : "vs ADP",
+                          "market",
+                        )}
                       {draftValues && renderSortableTh("Tier", "tier")}
                       {/* Target/avoid toggle - unlabeled icon column. */}
                       <Table.Th></Table.Th>
@@ -566,6 +656,9 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                         isRookie={rookieFpids.has(row.fpid)}
                         draftValue={draftValueByFpid.get(row.fpid)}
                         standardValue={standardValueByFpid.get(row.fpid)}
+                        isAuction={isAuction}
+                        adp={blendedAdpByFpid.get(row.fpid)}
+                        ourRank={ourRankByFpid.get(row.fpid)}
                         valueGap={valueGapByFpid.get(row.fpid)}
                         showValueColumn={!!draftValues}
                         tag={tagByFpid.get(row.fpid)}
@@ -609,15 +702,19 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
               >
                 {renderSortableLabel("Player", "player", { flex: 1 })}
                 {!!draftValues &&
-                  renderSortableLabel("$", "dollar", {
+                  renderSortableLabel(isAuction ? "$" : "ADP", "dollar", {
                     width: 36,
                     flexShrink: 0,
                   })}
                 {!!draftValues &&
-                  renderSortableLabel("vs Mkt", "market", {
-                    width: 36,
-                    flexShrink: 0,
-                  })}
+                  renderSortableLabel(
+                    isAuction ? "vs Mkt" : "vs ADP",
+                    "market",
+                    {
+                      width: 36,
+                      flexShrink: 0,
+                    },
+                  )}
                 <Text
                   size="10px"
                   c="dimmed"
@@ -641,6 +738,9 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                   isRookie={rookieFpids.has(row.fpid)}
                   draftValue={draftValueByFpid.get(row.fpid)}
                   standardValue={standardValueByFpid.get(row.fpid)}
+                  isAuction={isAuction}
+                  adp={blendedAdpByFpid.get(row.fpid)}
+                  ourRank={ourRankByFpid.get(row.fpid)}
                   valueGap={valueGapByFpid.get(row.fpid)}
                   showValueColumn={!!draftValues}
                   tag={tagByFpid.get(row.fpid)}

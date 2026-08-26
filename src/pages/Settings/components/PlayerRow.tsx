@@ -22,6 +22,7 @@ import { ConsistencyIcon } from "./ConsistencyIcon";
 import { ValueGapIcon } from "./ValueGapIcon";
 import { RookieBadge } from "../../../components/RookieBadge";
 import { StandardValueLabel } from "../../../components/StandardValueLabel";
+import { AdpValueLabel } from "../../../components/AdpValueLabel";
 
 // One player's keeper status for the pre-draft rankings' Keeper column - the
 // actual price/streak entered on the Keepers tab (see KeepersTab.tsx's
@@ -52,6 +53,12 @@ interface PlayerRowProps {
       }
     | undefined;
   standardValue: StandardValueRow | undefined;
+  // Auction: $ / vs. market (draftValue/standardValue above). Snake/linear:
+  // ADP / vs ADP (adp/ourRank below) - see PlayersTable.tsx's
+  // blendedAdpByFpid/ourRankByFpid for how these are built.
+  isAuction: boolean;
+  adp: number | undefined;
+  ourRank: number | undefined;
   valueGap: ValueGap | undefined;
   showValueColumn: boolean;
   tag: PlayerTag | undefined;
@@ -74,6 +81,9 @@ export function PlayerRow({
   isRookie,
   draftValue,
   standardValue,
+  isAuction,
+  adp,
+  ourRank,
   valueGap,
   showValueColumn,
   tag,
@@ -110,21 +120,27 @@ export function PlayerRow({
         </Table.Td>
         {showValueColumn && (
           <Table.Td>
-            {draftValue ? (
-              draftValue.usedFallback ? (
-                <Tooltip
-                  label="Approximate: this position's replacement-level player isn't in our data yet, so this uses a fallback estimate"
-                  multiline
-                  w={260}
-                  withArrow
-                >
-                  <Text span size="sm" fs="italic" c="dimmed">
-                    ${Math.round(draftValue.dollarValue)}
-                  </Text>
-                </Tooltip>
+            {isAuction ? (
+              draftValue ? (
+                draftValue.usedFallback ? (
+                  <Tooltip
+                    label="Approximate: this position's replacement-level player isn't in our data yet, so this uses a fallback estimate"
+                    multiline
+                    w={260}
+                    withArrow
+                  >
+                    <Text span size="sm" fs="italic" c="dimmed">
+                      ${Math.round(draftValue.dollarValue)}
+                    </Text>
+                  </Tooltip>
+                ) : (
+                  `$${Math.round(draftValue.dollarValue)}`
+                )
               ) : (
-                `$${Math.round(draftValue.dollarValue)}`
+                "—"
               )
+            ) : adp !== undefined ? (
+              Math.round(adp)
             ) : (
               "—"
             )}
@@ -132,11 +148,15 @@ export function PlayerRow({
         )}
         {showValueColumn && (
           <Table.Td>
-            <StandardValueLabel
-              draftValue={draftValue?.dollarValue}
-              standardValue={standardValue}
-              showLabel={false}
-            />
+            {isAuction ? (
+              <StandardValueLabel
+                draftValue={draftValue?.dollarValue}
+                standardValue={standardValue}
+                showLabel={false}
+              />
+            ) : (
+              <AdpValueLabel ourRank={ourRank} adp={adp} showLabel={false} />
+            )}
           </Table.Td>
         )}
         {showValueColumn && (

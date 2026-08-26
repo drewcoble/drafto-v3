@@ -32,6 +32,7 @@ import type { StandardValueRow } from "../../../lib/standardValues";
 import type { PlayerTag, ValueGap } from "../../../types";
 import { RookieBadge } from "../../../components/RookieBadge";
 import { StandardValueLabel } from "../../../components/StandardValueLabel";
+import { AdpValueLabel } from "../../../components/AdpValueLabel";
 import { useSwipeReveal } from "../../../hooks/useSwipeReveal";
 
 // Same icon choices ValueGapIcon.tsx/ConsistencyIcon.tsx use (those render a
@@ -64,6 +65,12 @@ interface PlayerRowMobileProps {
       }
     | undefined;
   standardValue: StandardValueRow | undefined;
+  // Auction: $ / vs. market (draftValue/standardValue above). Snake/linear:
+  // ADP / vs ADP (adp/ourRank below) - see PlayersTable.tsx's
+  // blendedAdpByFpid/ourRankByFpid for how these are built.
+  isAuction: boolean;
+  adp: number | undefined;
+  ourRank: number | undefined;
   valueGap: ValueGap | undefined;
   showValueColumn: boolean;
   tag: PlayerTag | undefined;
@@ -95,6 +102,9 @@ export function PlayerRowMobile({
   isRookie,
   draftValue,
   standardValue,
+  isAuction,
+  adp,
+  ourRank,
   valueGap,
   showValueColumn,
   tag,
@@ -270,7 +280,13 @@ export function PlayerRowMobile({
             }}
           >
             <Text size="sm" fw={700}>
-              {draftValue ? `$${Math.round(draftValue.dollarValue)}` : "—"}
+              {isAuction
+                ? draftValue
+                  ? `$${Math.round(draftValue.dollarValue)}`
+                  : "—"
+                : adp !== undefined
+                  ? Math.round(adp)
+                  : "—"}
             </Text>
           </Box>
         )}
@@ -283,11 +299,15 @@ export function PlayerRowMobile({
               alignItems: "center",
             }}
           >
-            <StandardValueLabel
-              draftValue={draftValue?.dollarValue}
-              standardValue={standardValue}
-              showLabel={false}
-            />
+            {isAuction ? (
+              <StandardValueLabel
+                draftValue={draftValue?.dollarValue}
+                standardValue={standardValue}
+                showLabel={false}
+              />
+            ) : (
+              <AdpValueLabel ourRank={ourRank} adp={adp} showLabel={false} />
+            )}
           </Box>
         )}
         <Box
