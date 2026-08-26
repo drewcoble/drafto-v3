@@ -17,7 +17,6 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
-import { useDraftPhase } from "../../hooks/useDraftPhase";
 import { getErrorMessage } from "../../lib/errors";
 import { positionColorOrDefault } from "../../lib/positionColors";
 import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
@@ -49,9 +48,15 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
   const thisSeason = settings?.year ?? String(new Date().getFullYear());
-  const phase = useDraftPhase(seasonId);
   const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
-  const currentTurn = useQuery(api.draft.nominationOrder.getCurrentNominator, {
+  // Same authoritative on-the-clock resolution the TV board uses
+  // (findNextOpenSlot, keeper-aware) - draftNominationTurns' turn pointer
+  // only self-corrects once the first real pick has been made (see
+  // draftPick's comment in convex/draft/picks.ts), so it can disagree with
+  // reality while keepers alone occupy the early rotation slots. Reading the
+  // same query the board reads guarantees this tab can never show a
+  // different "on the clock" team than the TV board does.
+  const board = useQuery(api.draft.pickSlots.getSnakeBoardPublic, {
     seasonId,
   });
   const draftOrderConfig = useQuery(
@@ -121,7 +126,7 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
     return map;
   }, [draftBoardResult]);
 
-  const currentTeamId = currentTurn?.currentTeamId ?? null;
+  const currentTeamId = board?.onClockTeamId ?? null;
   const effectivePickingTeamId = pickingTeamId ?? currentTeamId ?? teams[0]?._id ?? null;
 
   const runAction = async (action: () => Promise<unknown>) => {
@@ -166,7 +171,7 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
         <Group justify="space-between" align="center" wrap="wrap" gap="sm">
           <Stack gap={0}>
             <Text size="sm" c="dimmed">
-              {phase?.isStarted ? "On the clock" : "Draft not started"}
+              {board?.draftStarted ? "On the clock" : "Draft not started"}
             </Text>
             <Text size="lg" fw={700}>
               {currentTeamId ? (teamNameById.get(currentTeamId) ?? "—") : "—"}
