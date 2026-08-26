@@ -249,15 +249,17 @@ export const gatherInsightsInputs = internalQuery({
     // Average diff per (position, tier) group, aggregated so the model
     // reasons at tier level, not per player. Auction: (our $ - market $),
     // the same per-player diff src/components/StandardValueLabel.tsx
-    // already renders. Snake/linear: this league's own overall rank
-    // (pooled across every position by dollarValue - see below) vs. a
-    // blended market ADP, converted to rounds - $ value has no meaning to a
-    // snake drafter, but "this tier goes about a round earlier/later than
-    // ADP suggests" does. Same methodology (and, deliberately, the same
-    // sign convention) as PlayersTable.tsx's "vs ADP" column
-    // (src/lib/valueRank.ts/AdpValueLabel.tsx) - convex/ can't import from
-    // src/ (see buildStandardValueByFpid's comment), so this mirrors it
-    // rather than sharing code.
+    // already renders. Snake/linear: see the `else` branch below - this one
+    // deliberately does NOT mirror PlayersTable.tsx's rank-spot "vs ADP"
+    // column (src/lib/valueRank.ts/AdpValueLabel.tsx) the way earlier
+    // versions of this function did. A fixed rank-spot gap represents
+    // wildly different amounts of real value depending on where in the
+    // pool it falls (the $ curve drops off steeply at the top and flattens
+    // out later - a 20-spot ADP gap from rank 5 to 25 is a much bigger deal
+    // than the same 20-spot gap from rank 100 to 120), so for a narrative
+    // insight (as opposed to PlayersTable's simple, scannable per-player
+    // column, which deliberately keeps the raw rank-spot version) this
+    // reasons in $ value terms instead - see the else branch's own comment.
     const tierGroups = new Map<
       string,
       { position: Position; tier: number; diffs: number[] }
@@ -331,30 +333,50 @@ export const gatherInsightsInputs = internalQuery({
         }
       }
 
-      // "Our rank": every active-position player pooled by dollarValue
-      // descending - the one number that's already normalized VOR to be
-      // comparable across positions (draftValues.ts's FALLOFF_EXPONENT
-      // curve), reused here purely as a cross-position ranking key ($
-      // itself is never surfaced to a snake/linear league). Mirrors
-      // src/lib/valueRank.ts's sortValuesDescending/rankByDollarValue.
-      const ourRankByFpid = new Map<number, number>();
-      [...relevantValues]
-        .sort((a, b) => b.dollarValue - a.dollarValue)
-        .forEach((row, index) => ourRankByFpid.set(row.fpid, index + 1));
+      // Every active-position player pooled by dollarValue descending - the
+      // one number that's already normalized VOR to be comparable across
+      // positions (draftValues.ts's FALLOFF_EXPONENT curve). Used below to
+      // look up what a TYPICAL player taken around a given ADP slot is
+      // actually worth in our own math, rather than assuming rank spacing
+      // and value spacing are the same thing.
+      const sortedByValue = [...relevantValues].sort(
+        (a, b) => b.dollarValue - a.dollarValue,
+      );
+
+      // Mirrors src/lib/keeperCost.ts's expectedValueAtRound (convex/ can't
+      // import src/, same as buildStandardValueByFpid above) - the average
+      // dollarValue across the teamCount-sized rank band a given ADP
+      // position falls into. This is the actual fix for the "20-spot gap
+      // near the top matters way more than a 20-spot gap in the double
+      // digits" problem: comparing $ VALUES (which already bakes in the
+      // curve's real shape) instead of raw ranks. null past the end of the
+      // (already relevance-filtered) pool.
+      const expectedValueAtAdpRank = (adpRank: number): number | null => {
+        const round = Math.max(1, Math.round(adpRank / season.teamCount));
+        const startIndex = (round - 1) * season.teamCount;
+        if (startIndex >= sortedByValue.length) return null;
+        const band = sortedByValue.slice(
+          startIndex,
+          startIndex + season.teamCount,
+        );
+        if (band.length === 0) return null;
+        return band.reduce((sum, v) => sum + v.dollarValue, 0) / band.length;
+      };
 
       for (const row of relevantValues) {
         const tier = tiersByFpid.get(row.fpid);
         const adp = blendedAdpByFpid.get(row.fpid);
-        const ourRank = ourRankByFpid.get(row.fpid);
-        if (!tier || adp === undefined || ourRank === undefined) continue;
-        // Positive = ADP has this player going LATER than our own
-        // cross-position rank says (a potential value if they last that
-        // long); negative = ADP drafts them earlier than our math
-        // justifies. Divided by team count to express the gap in rounds -
-        // meaningful here specifically because both adp and ourRank are
-        // already overall/cross-position numbers, exactly what a round
-        // boundary (teamCount picks) spans.
-        const diff = (adp - ourRank) / season.teamCount;
+        if (!tier || adp === undefined) continue;
+        const expected = expectedValueAtAdpRank(adp);
+        if (expected === null) continue;
+        // Positive = this player's own $ value (VOR-derived, same currency
+        // the auction engine uses - never shown as a literal price to a
+        // snake/linear league, see buildInsightsPrompt's instructions)
+        // exceeds what a typical player taken around their ADP slot is
+        // worth by our own math (a value if they're still there at ADP);
+        // negative = they're worth less than typical for that slot (a
+        // reach at ADP).
+        const diff = row.dollarValue - expected;
 
         const key = `${row.position}:${tier.tier}`;
         const tierGroup = tierGroups.get(key) ?? {
@@ -503,11 +525,6 @@ function formatSigned(amount: number): string {
     : `-$${Math.round(Math.abs(amount))}`;
 }
 
-function formatRoundsSigned(rounds: number): string {
-  const abs = Math.abs(rounds).toFixed(1);
-  return rounds >= 0 ? `+${abs} rounds` : `-${abs} rounds`;
-}
-
 // Forces Gemini's response into { insights: [{ headline, body }] } - see
 // convex/gemini/reportSummary.ts's RESPONSE_SCHEMA for the same pattern.
 const RESPONSE_SCHEMA = {
@@ -543,18 +560,18 @@ function buildInsightsPrompt(inputs: InsightsInputs): string {
           })),
         }
       : {
-          adpVsThisLeagueRankByWholePosition: inputs.positionAdpGaps.map(
+          valueVsAdpExpectedByWholePosition: inputs.positionAdpGaps.map(
             (gap) => ({
               position: gap.position,
               playersConsidered: gap.playerCount,
-              avgRoundsVsAdpPerPlayer: formatRoundsSigned(gap.avgDiff),
+              avgValueSurplusPerPlayer: formatSigned(gap.avgDiff),
             }),
           ),
-          adpVsThisLeagueRankByPositionTier: inputs.tierGaps.map((gap) => ({
+          valueVsAdpExpectedByPositionTier: inputs.tierGaps.map((gap) => ({
             position: gap.position,
             tier: gap.tier,
             playersInTier: gap.playerCount,
-            avgRoundsVsAdpPerPlayer: formatRoundsSigned(gap.avgDiff),
+            avgValueSurplusPerPlayer: formatSigned(gap.avgDiff),
           })),
         }),
     valueGapSignal: inputs.valueGapCounts.map(
@@ -570,11 +587,11 @@ function buildInsightsPrompt(inputs: InsightsInputs): string {
 
   const intro = isAuction
     ? "You are a fantasy football draft strategy assistant writing a short pre-draft briefing for one specific league, based on data comparing this league's own dollar-value engine (tuned to its exact roster/scoring settings) against the broader market, plus how many likely starting roster spots keepers have already taken off the board."
-    : "You are a fantasy football draft strategy assistant writing a short pre-draft briefing for one specific snake/linear-draft league, based on data comparing this league's own player rankings (tuned to its exact roster/scoring settings) against typical draft ADP (average draft position), plus how many likely starting roster spots keepers have already taken off the board.";
+    : "You are a fantasy football draft strategy assistant writing a short pre-draft briefing for one specific snake/linear-draft league, based on data comparing each player's own projected value (this league's internal $-denominated VOR engine, tuned to its exact roster/scoring settings) against the value a typical player taken around their ADP slot actually has in that same engine, plus how many likely starting roster spots keepers have already taken off the board.";
 
   const tierSignalInstructions = isAuction
     ? "dollarValueVsMarketByPositionTier: avgDiffVsMarketPerPlayer is a PER-PLAYER AVERAGE (this league's own computed value MINUS the broader market's typical auction value, averaged across the playersInTier players in that position/tier) - it is NOT a total or a single player's price, and your wording must make that clear (e.g. 'about $X per player', 'on average'), never state it as a flat dollar figure that reads like one player's price or a lump sum. Cite playersInTier too when it fits without breaking the one-sentence limit (e.g. 'the 4 Tier 2 QBs'). A negative number means this league's math values that tier LOWER than the market typically pays - i.e. other drafters in a market-priced auction might overpay there, so there's a strategic opportunity to let that tier go and find value lower down. A positive number means the opposite - this league's settings make that tier worth MORE than a typical market price, i.e. a bargain if it's still available near market price."
-    : "adpVsThisLeagueRankByWholePosition and adpVsThisLeagueRankByPositionTier both compare this league's own OVERALL rank (every drafted-relevant player pooled together by projected value, across every position) against a blended market ADP (Sleeper's ADP averaged with ESPN's own overall rank), converted to rounds by dividing by team count - byWholePosition rolls every player at a position into one number (playersConsidered), byPositionTier breaks the same comparison down by tier within a position (playersInTier) for a more specific callout when one tier stands out from the rest of its position. avgRoundsVsAdpPerPlayer in both is a PER-PLAYER AVERAGE, not one player's actual draft round - your wording must make that clear (e.g. 'about X rounds on average', 'roughly X rounds later'), never state it as a single exact round for one player. A positive number means this league's own math has that position/tier going EARLIER than typical ADP - other drafters may let them slide, so there's a value opportunity if they're still there a round or so after ADP. A negative number means the opposite - ADP drafts that position/tier earlier than this league's own math justifies (an overvalued-by-the-market signal - e.g. a whole position everyone reaches for too early), i.e. taking them right at ADP is a reach; you can likely wait. Prefer byWholePosition for a broad 'this whole position is overvalued/undervalued by ADP' takeaway (most useful when most of a position's players share the same sign) over byPositionTier's narrower per-tier framing, unless one specific tier clearly diverges from its own position's overall number.";
+    : "valueVsAdpExpectedByWholePosition and valueVsAdpExpectedByPositionTier both compare each player's own $ value in this league's internal VOR engine against the $ value a TYPICAL player taken around their blended-ADP slot (Sleeper's ADP averaged with ESPN's own overall rank) actually has in that SAME engine - i.e. is this player a better or worse pick than what usually goes this early, not just a raw rank/round gap. This matters because a fixed ADP-rank gap represents very different amounts of real value depending on where in the draft it falls (value drops off steeply at the top of the pool and flattens out later, so a 20-spot gap in the first two rounds is a much bigger deal than the same 20-spot gap in the double-digit rounds) - this signal already accounts for that. avgValueSurplusPerPlayer is a PER-PLAYER AVERAGE in this league's own internal $ currency (the exact same VOR-based number the auction engine prices with) - it is NOT a real auction price and this is a snake/linear league with no salary cap, so CRITICAL: never state it as a dollar figure, an auction price, or anything a reader could mistake for real money. Instead translate the sign and MAGNITUDE into plain value language scaled to how big the number is relative to others in the data (e.g. a small gap is 'a slight value'/'barely a reach', a large gap is 'a significant value'/'a real reach' - don't invent a fixed dollar threshold, judge relative to the other numbers you're given). byWholePosition rolls every relevant player at a position into one number (playersConsidered); byPositionTier breaks the same comparison down by tier (playersInTier) for a specific callout when one tier diverges from the rest of its position. Positive = this player/tier/position is worth MORE than what typically goes at that ADP slot (a value if they're still there); negative = worth LESS (a reach at ADP - e.g. a whole position everyone reaches for too early). Prefer byWholePosition for a broad 'this whole position is overvalued/undervalued by ADP' takeaway (most useful when most of a position's players share the same sign) over byPositionTier's narrower framing, unless one specific tier clearly diverges from its own position's overall number.";
 
   const keeperSignalInstructions = isAuction
     ? "keeperScarcityByPosition: pctOfStartingSlotsAlreadyKept estimates how much of the league-wide starting need at a position has already been claimed by keepers before the draft even starts - a high percentage means that position's remaining pool is thin, so drafters may need to be more aggressive/pay a premium to lock in a starter there. Positions absent from this list have no notable keeper activity - don't invent a keeper angle for them."
