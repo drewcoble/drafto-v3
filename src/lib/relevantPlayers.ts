@@ -1,4 +1,9 @@
-import type { Position, ScoringFormat, ScoringConfig, TeScoringFormat } from "../types";
+import type {
+  Position,
+  ScoringFormat,
+  ScoringConfig,
+  TeScoringFormat,
+} from "../types";
 
 export function pointsForScoring(
   row: { pointsStd: number; pointsHalf: number; pointsPpr: number },
@@ -82,7 +87,7 @@ export function scoringConfigFromSeason(season: {
 // depth of even a large/deep redraft league. DST never gets a real ADP from
 // Sleeper at all, but it's already naturally capped at exactly 32 (one per
 // team), so it needs no filtering.
-const RELEVANT_ADP_CEILING = 350;
+export const RELEVANT_ADP_CEILING = 350;
 
 export interface PositionedRow {
   fpid: number;

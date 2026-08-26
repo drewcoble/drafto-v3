@@ -21,6 +21,14 @@ import { generateGeminiText, MODEL } from "./client";
 
 type Position = (typeof POSITIONS)[number];
 
+// Same "premier positions" list convex/valueGaps.ts's VALUE_GAP_POSITIONS
+// already established for its own signal - K is never actionable strategy
+// advice, and DST's value is too shallow/flat to generate a meaningful
+// tier/rank signal either. Used below to keep every value/rank-based
+// signal (tierGaps, positionAdpGaps, keeperScarcity) scoped to positions
+// worth an insight about.
+const PREMIER_POSITIONS: Position[] = ["QB", "RB", "WR", "TE"];
+
 interface TierGap {
   position: Position;
   tier: number;
@@ -219,6 +227,25 @@ export const gatherInsightsInputs = internalQuery({
     const format = resolveDraftType(season, draft);
     const isAuction = format === "auction";
 
+    // The pool every value/rank-based signal below reasons over - premier
+    // positions only (see PREMIER_POSITIONS), and only players with a real,
+    // meaningfully-ranked market ADP (Sleeper, under RELEVANT_ADP_CEILING -
+    // same cutoff computeTiers uses to keep deep-bench noise out of tier
+    // clustering). Without this, a late-round/undrafted-in-practice player
+    // with no real ADP (Sleeper's own "no real ADP" sentinel, far past any
+    // realistic draft position) can still show up in `values` with some
+    // small nonzero dollarValue, producing a wildly misleading vs-ADP or
+    // vs-market gap that's not a real signal - just noise from comparing
+    // against a number that was never a genuine market opinion.
+    const relevantValues = values.filter((row) => {
+      if (!PREMIER_POSITIONS.includes(row.position)) return false;
+      const adpRow = adpByFpid.get(row.fpid);
+      const sleeperAdp = adpRow
+        ? adpForScoring(adpRow, args.scoringConfig.scoring)
+        : undefined;
+      return sleeperAdp !== undefined && sleeperAdp < RELEVANT_ADP_CEILING;
+    });
+
     // Average diff per (position, tier) group, aggregated so the model
     // reasons at tier level, not per player. Auction: (our $ - market $),
     // the same per-player diff src/components/StandardValueLabel.tsx
@@ -247,7 +274,7 @@ export const gatherInsightsInputs = internalQuery({
         args.scoringConfig.scoring,
         isSuperflex,
       );
-      for (const row of values) {
+      for (const row of relevantValues) {
         const tier = tiersByFpid.get(row.fpid);
         const market = standardValueByFpid.get(row.fpid)?.auctionValue;
         if (!tier || market === undefined) continue;
@@ -281,7 +308,7 @@ export const gatherInsightsInputs = internalQuery({
       // simply has no row for a player it doesn't rank), a raw Sleeper ADP
       // value can't be trusted to mean "no real ADP" on its own.
       const blendedAdpByFpid = new Map<number, number>();
-      for (const row of values) {
+      for (const row of relevantValues) {
         const espnRank = standardValueByFpid.get(row.fpid)?.rank;
         if (isSuperflex) {
           if (espnRank !== undefined) blendedAdpByFpid.set(row.fpid, espnRank);
@@ -311,11 +338,11 @@ export const gatherInsightsInputs = internalQuery({
       // itself is never surfaced to a snake/linear league). Mirrors
       // src/lib/valueRank.ts's sortValuesDescending/rankByDollarValue.
       const ourRankByFpid = new Map<number, number>();
-      [...values]
+      [...relevantValues]
         .sort((a, b) => b.dollarValue - a.dollarValue)
         .forEach((row, index) => ourRankByFpid.set(row.fpid, index + 1));
 
-      for (const row of values) {
+      for (const row of relevantValues) {
         const tier = tiersByFpid.get(row.fpid);
         const adp = blendedAdpByFpid.get(row.fpid);
         const ourRank = ourRankByFpid.get(row.fpid);
@@ -429,6 +456,7 @@ export const gatherInsightsInputs = internalQuery({
         ? season.rosterSlots.SUPERFLEX / season.superflexPositions.length
         : 0;
     const keeperScarcity: KeeperScarcity[] = activePositions
+      .filter((position) => PREMIER_POSITIONS.includes(position))
       .map((position) => {
         const dedicated = season.rosterSlots[position] ?? 0;
         const flexBonus = season.flexPositions.includes(position)

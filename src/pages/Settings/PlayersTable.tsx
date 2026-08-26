@@ -28,6 +28,7 @@ import {
   adpForScoring,
   filterRelevantPlayers,
   pointsForScoringConfig,
+  RELEVANT_ADP_CEILING,
   scoringConfigFromSeason,
 } from "../../lib/relevantPlayers";
 import { compareSortValues, type SortDir } from "../../lib/tableSort";
@@ -57,6 +58,13 @@ interface PlayersTableProps {
 }
 
 type SortKey = "player" | "team" | "tier" | "dollar" | "market" | "pts";
+
+// Same "premier positions" list convex/valueGaps.ts's VALUE_GAP_POSITIONS
+// and convex/gemini/preDraftInsights.ts's own PREMIER_POSITIONS already
+// establish - used here to keep "our rank" (the snake/linear vs-ADP diff's
+// internal ranking key, see ourRankByFpid below) scoped to the same
+// meaningfully-comparable population blended ADP covers.
+const PREMIER_POSITIONS: Position[] = ["QB", "RB", "WR", "TE"];
 
 // Direction a column sorts to the first time it's clicked - numeric value
 // columns default to "best first" (highest $/points, lowest/best tier),
@@ -354,9 +362,20 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
         continue;
       }
       const sleeperRow = adpByFpid.get(fpid);
-      const sleeperAdp = sleeperRow
+      const rawSleeperAdp = sleeperRow
         ? adpForScoring(sleeperRow, scoring)
         : undefined;
+      // A player with no real ADP (Sleeper's own sentinel, or a long tail
+      // of technically-non-sentinel-but-still-noise values - same
+      // RELEVANT_ADP_CEILING cutoff filterRelevantPlayers uses) can't be
+      // trusted as a genuine market opinion - dropped rather than blended
+      // in, so a deep/marginal player never shows a wildly misleading
+      // vs-ADP diff built from comparing against a number that was never a
+      // real draft position.
+      const sleeperAdp =
+        rawSleeperAdp !== undefined && rawSleeperAdp < RELEVANT_ADP_CEILING
+          ? rawSleeperAdp
+          : undefined;
       if (sleeperAdp !== undefined && espnRank !== undefined) {
         map.set(fpid, (sleeperAdp + espnRank) / 2);
       } else if (sleeperAdp !== undefined) {
@@ -379,10 +398,28 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
   // keeperCost.ts's round-mode keeper bargains rank against (see
   // valueRank.ts) - draftValues already excludes kept players from its pool
   // the same way RecommendedKeepers.tsx's availableValues does.
+  //
+  // Restricted to premier positions (K/DST vs-ADP is never a useful
+  // takeaway) with a real, non-sentinel ADP - draftValues itself has no ADP
+  // filtering at all (every rostered-relevant player per position, easily
+  // several hundred total), so without this, "our rank" is computed over a
+  // much bigger/deeper pool than blended ADP realistically covers, which
+  // can make a legitimately late-round player's vs-ADP diff read as a wild
+  // multi-hundred-spot number that isn't a real signal - just an artifact
+  // of the two sides being pooled at very different depths. Same
+  // PREMIER_POSITIONS/RELEVANT_ADP_CEILING gate
+  // convex/gemini/preDraftInsights.ts's own relevantValues applies
+  // server-side for the AI Insights version of this same signal.
   const ourRankByFpid = useMemo(() => {
     if (!draftValues) return new Map<number, number>();
-    return rankByDollarValue(sortValuesDescending(draftValues));
-  }, [draftValues]);
+    const relevantValues = draftValues.filter((row) => {
+      if (!PREMIER_POSITIONS.includes(row.position)) return false;
+      const adpRow = adpByFpid.get(row.fpid);
+      const sleeperAdp = adpRow ? adpForScoring(adpRow, scoring) : undefined;
+      return sleeperAdp !== undefined && sleeperAdp < RELEVANT_ADP_CEILING;
+    });
+    return rankByDollarValue(sortValuesDescending(relevantValues));
+  }, [draftValues, adpByFpid, scoring]);
 
   const relevantProjections = useMemo(() => {
     if (!allProjections) return [];
