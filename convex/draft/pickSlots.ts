@@ -353,7 +353,13 @@ export const getSnakeBoardPublic = query({
             !pick &&
             onClock !== null &&
             onClock.round === round &&
-            onClock.position === position;
+            onClock.position === position &&
+            // No team is "on the clock" until the host actually starts the
+            // draft (or a live draft integration flips it) - onClock itself
+            // stays meaningful pre-draft (see the comment above), but the
+            // TEAM assignment shouldn't display until then, and reverting to
+            // pre-draft (reopenPreDraft) should immediately clear it too.
+            draft.startedAt !== undefined;
           if (isOnClock) onClockTeamId = currentTeamId;
 
           return {

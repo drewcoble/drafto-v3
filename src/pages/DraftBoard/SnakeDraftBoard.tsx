@@ -70,8 +70,13 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
   }, [allProjections]);
 
   const lastPick = useMemo(() => {
-    if (!picks || picks.length === 0) return undefined;
-    return [...picks].sort((a, b) => b.sequence - a.sequence)[0];
+    // Keepers are draftPicks rows too (isKeeper: true), locked in during
+    // setup rather than "just drafted" live - without this filter, a
+    // keeper-only draft that hasn't started yet would show its
+    // most-recently-saved keeper as the ticker's "LAST PICK".
+    const realPicks = (picks ?? []).filter((pick) => !pick.isKeeper);
+    if (realPicks.length === 0) return undefined;
+    return [...realPicks].sort((a, b) => b.sequence - a.sequence)[0];
   }, [picks]);
 
   // Flashes "JUST DRAFTED" for ANNOUNCE_MS whenever the most recent pick's

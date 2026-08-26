@@ -15,6 +15,14 @@ export const getCurrentNominator = query({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
     const { draft } = await requireDraftOwner(ctx, args.seasonId);
+    // setNominationOrder/setDraftOrder seed this row's currentTeamId as soon
+    // as an order is configured, which normally happens pre-draft - without
+    // this check, that seeded team would show as "on the clock"/"currently
+    // nominating" before the host has actually clicked Start Draft (or a
+    // live draft integration has flipped the draft's status). Gating here
+    // (rather than in every frontend consumer) also means reopenPreDraft
+    // clears the displayed turn "for free," just by unsetting startedAt.
+    if (draft.startedAt === undefined) return null;
     return await ctx.db
       .query("draftNominationTurns")
       .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
@@ -45,6 +53,8 @@ export const getCurrentNominatorPublic = query({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
     const draft = await requireRealDraft(ctx, args.seasonId);
+    // See getCurrentNominator's comment above - same pre-start gating.
+    if (draft.startedAt === undefined) return null;
     return await ctx.db
       .query("draftNominationTurns")
       .withIndex("by_draft", (q) => q.eq("draftId", draft._id))

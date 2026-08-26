@@ -17,6 +17,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
+import { useDraftPhase } from "../../hooks/useDraftPhase";
 import { getErrorMessage } from "../../lib/errors";
 import { positionColorOrDefault } from "../../lib/positionColors";
 import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
@@ -48,6 +49,7 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
   const thisSeason = settings?.year ?? String(new Date().getFullYear());
+  const phase = useDraftPhase(seasonId);
   const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const currentTurn = useQuery(api.draft.nominationOrder.getCurrentNominator, {
     seasonId,
@@ -164,7 +166,7 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
         <Group justify="space-between" align="center" wrap="wrap" gap="sm">
           <Stack gap={0}>
             <Text size="sm" c="dimmed">
-              On the clock
+              {phase?.isStarted ? "On the clock" : "Draft not started"}
             </Text>
             <Text size="lg" fw={700}>
               {currentTeamId ? (teamNameById.get(currentTeamId) ?? "—") : "—"}
