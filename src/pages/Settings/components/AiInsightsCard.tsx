@@ -6,6 +6,7 @@ import {
   Card,
   Group,
   Loader,
+  Modal,
   Stack,
   Text,
   Title,
@@ -57,6 +58,7 @@ export function AiInsightsCard({
   );
   const regenerate = useMutation(api.draft.insights.regenerateInsights);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [upgradeModalOpened, setUpgradeModalOpened] = useState(false);
 
   // Fires once per (season, week, scoring) combo whenever there's no cached
   // row yet - same "auto-backfill on view" pattern as DraftReportCard.tsx's
@@ -85,16 +87,33 @@ export function AiInsightsCard({
 
   if (report.status === "requires_upgrade") {
     return (
-      <Card withBorder padding="md">
-        <UpgradePrompt
+      <>
+        <Card withBorder padding="md">
+          <Stack gap="sm">
+            <Group gap={6}>
+              <Sparkles size={18} />
+              <Title order={4}>AI Insights</Title>
+            </Group>
+            <Anchor size="sm" onClick={() => setUpgradeModalOpened(true)}>
+              Go Pro for AI insights
+            </Anchor>
+          </Stack>
+        </Card>
+        <Modal
+          opened={upgradeModalOpened}
+          onClose={() => setUpgradeModalOpened(false)}
           title="AI Insights is a Pro feature"
-          message={
-            isAuction
-              ? "Get an AI-written briefing on where your league's $ values diverge from the market and how your keepers should shape draft-day strategy."
-              : "Get an AI-written briefing on where your league's rankings diverge from ADP and how your keepers should shape draft-day strategy."
-          }
-        />
-      </Card>
+        >
+          <UpgradePrompt
+            bare
+            message={
+              isAuction
+                ? "Get an AI-written briefing on where your league's $ values diverge from the market and how your keepers should shape draft-day strategy."
+                : "Get an AI-written briefing on where your league's rankings diverge from ADP and how your keepers should shape draft-day strategy."
+            }
+          />
+        </Modal>
+      </>
     );
   }
 
