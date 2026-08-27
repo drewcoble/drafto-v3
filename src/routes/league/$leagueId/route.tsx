@@ -1,4 +1,4 @@
-import { Box, Center, Loader, Stack, Tabs } from "@mantine/core";
+import { Box, Center, Group, Loader, Stack, Tabs } from "@mantine/core";
 import {
   createFileRoute,
   Link,
@@ -28,6 +28,7 @@ import {
 import { useDraftPhase } from "../../../hooks/useDraftPhase";
 import { useSelfTeam } from "../../../hooks/useSelfTeam";
 import { DraftTopBar } from "../../../pages/DraftRoom/DraftTopBar";
+import { MobileSnakeDraft } from "../../../pages/DraftRoom/components/MobileSnakeDraft";
 
 export const Route = createFileRoute("/league/$leagueId")({
   component: LeagueLayout,
@@ -207,6 +208,41 @@ function LeagueLayout() {
     .slice(directCount)
     .map(toBottomNavItem);
 
+  // pos="relative" + zIndex needed so this outranks the Keepers route's
+  // non-dismissible free-plan upgrade Modal (zIndex 190, see keepers.tsx) -
+  // without a positioned ancestor here, this Box has no stacking context of
+  // its own and renders underneath the modal's fixed overlay, same
+  // reasoning as BottomNav's zIndex below, so a free-plan visitor could
+  // open Keepers but never click back out to another tab on desktop.
+  const mainColumn = (
+    <>
+      <Box visibleFrom="sm" pos="relative" style={{ zIndex: 200 }}>
+        <Tabs value={activeTab ?? null}>
+          <Tabs.List>
+            {visibleTabs.map((tab) => (
+              <Tabs.Tab
+                key={tab.value}
+                value={tab.value}
+                renderRoot={(props) => (
+                  <Link to={tab.to} params={{ leagueId }} {...props} />
+                )}
+              >
+                {tab.label}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs>
+      </Box>
+      <BottomNav
+        items={bottomNavItems}
+        more={{ label: "More", items: bottomNavMoreItems }}
+        leagueId={leagueId}
+        hasFab={isStarted}
+      />
+      <Outlet />
+    </>
+  );
+
   return (
     <PageContainer
       pt={{
@@ -220,47 +256,40 @@ function LeagueLayout() {
     >
       <Stack gap="md">
         <AppHeader />
-        {/* Auction-only (SNAKE_DRAFT.md §3.4/§5.2) - nominate/bid/budget
-            stats have no snake/linear equivalent. The snake Draft tab
-            (SnakeDraftTab) is self-contained instead of leaning on this
-            persistent top bar the way auction's DraftTab does. */}
-        {isStarted && isAuction && selfTeamResult?.selfTeam && seasonId && (
-          <DraftTopBar
+        {/* Started auction drafts dock the nominate/bid/stats sidebar
+            (DraftTopBar) beside the tab content, not above it (see the
+            Draft Bar Sidebar Redesign mockup, "Infinidraft UX review"
+            Claude Design project) - so it stays visible while scrolling a
+            long Players/League table instead of scrolling away with the
+            page. Auction-only (AUCTION.md) - snake/linear has no
+            nominate/bid/budget-stats concept, so those leagues (and
+            pre-draft leagues) keep the plain single-column layout below. */}
+        {isStarted && isAuction && selfTeamResult?.selfTeam && seasonId ? (
+          <Group align="flex-start" gap="lg" wrap="nowrap">
+            <DraftTopBar
+              seasonId={seasonId}
+              selfTeamId={selfTeamResult.selfTeam._id}
+            />
+            <Stack gap="md" style={{ flex: 1, minWidth: 0 }}>
+              {mainColumn}
+            </Stack>
+          </Group>
+        ) : (
+          mainColumn
+        )}
+        {/* Snake/linear's mobile counterpart to the auction FAB above -
+            BottomNav already reserves its center notch for any started
+            draft (hasFab={isStarted}), but until now only auction actually
+            filled it. Mounted at the layout level, like DraftTopBar, so a
+            pick can be made from any tab rather than only the Draft one
+            (SnakeDraftTab's inline table remains the desktop path - this
+            component hides itself above "sm"). */}
+        {isStarted && !isAuction && !!selfTeamResult?.teams.length && seasonId && (
+          <MobileSnakeDraft
             seasonId={seasonId}
-            selfTeamId={selfTeamResult.selfTeam._id}
+            teams={selfTeamResult.teams}
           />
         )}
-        {/* pos="relative" + zIndex needed so this outranks the Keepers
-            route's non-dismissible free-plan upgrade Modal (zIndex 190,
-            see keepers.tsx) - without a positioned ancestor here, this Box
-            has no stacking context of its own and renders underneath the
-            modal's fixed overlay, same reasoning as BottomNav's zIndex
-            below, so a free-plan visitor could open Keepers but never
-            click back out to another tab on desktop. */}
-        <Box visibleFrom="sm" pos="relative" style={{ zIndex: 200 }}>
-          <Tabs value={activeTab ?? null}>
-            <Tabs.List>
-              {visibleTabs.map((tab) => (
-                <Tabs.Tab
-                  key={tab.value}
-                  value={tab.value}
-                  renderRoot={(props) => (
-                    <Link to={tab.to} params={{ leagueId }} {...props} />
-                  )}
-                >
-                  {tab.label}
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs>
-        </Box>
-        <BottomNav
-          items={bottomNavItems}
-          more={{ label: "More", items: bottomNavMoreItems }}
-          leagueId={leagueId}
-          hasFab={isStarted}
-        />
-        <Outlet />
       </Stack>
     </PageContainer>
   );

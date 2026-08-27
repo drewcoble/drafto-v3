@@ -149,7 +149,7 @@ export function NominationPanel({
     : undefined;
 
   return (
-    <Card withBorder padding="sm" style={{ flex: "1 1 380px" }}>
+    <Card withBorder padding="sm">
       <Stack gap={6}>
         <Group justify="space-between" gap="xs" wrap="wrap">
           <Group gap={4} wrap="nowrap">

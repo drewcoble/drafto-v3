@@ -27,11 +27,11 @@ Format is resolved via `resolveDraftType(season, draft)` in `convex/draftType.ts
 
 - `/league/$leagueId/budget` → `src/components/BudgetTab.tsx` — tab hidden entirely for snake/linear by `route.tsx`
 - `/league/$leagueId/draft` → `src/pages/DraftRoom/DraftTab.tsx` (dispatched only when `draftType === "auction"`) — recommended-nominations panel + Recent Picks / Targets tables
-- `DraftTopBar.tsx` — persistent nominate/bid/resolve bar, mounted only `isStarted && isAuction`
-- `NominationPanel.tsx` / `MobileNomination.tsx` — desktop card / mobile sheet nominate+bid UI
-- `RecommendedNominations.tsx` — bidding-strategy suggestions (`src/lib/nominationStrategies.ts`)
+- `DraftTopBar.tsx` — persistent nominate/bid/resolve UI, mounted only `isStarted && isAuction`. On desktop (`route.tsx`'s `LeagueLayout`), renders as a sticky left sidebar docked beside the tab content rather than a bar above it (`NominationPanel` + a vertical `StatTile` stack), per the Draft Bar Sidebar Redesign mockup ("Infinidraft UX review" Claude Design project) — stays visible while scrolling a long Players/League table. On mobile it's unchanged: `MobileNomination`'s bottom sheet + `MobileStatsRow`'s fixed stat bar, both self-hiding on desktop internally.
+- `NominationPanel.tsx` / `MobileNomination.tsx` — sidebar card / mobile sheet nominate+bid UI. `MobileNomination`'s FAB + bottom-sheet chrome comes from `components/mobileDraftSheet.tsx` (`DraftFab`/`BottomSheet`/`TeamChipRow`), shared with snake/linear's `MobileSnakeDraft` — see [SNAKE.md](SNAKE.md).
+- `RecommendedNominations.tsx` — bidding-strategy suggestions (`src/lib/nominationStrategies.ts`), lives in the Draft tab body (`DraftTab.tsx`), not the sidebar
 - `RecentPicksTable.tsx`, `ShortlistTable.tsx` — show `pick.price` directly
-- `StatTile.tsx`, `MobileStatsRow.tsx` — $ stat cards (Remaining/Max Bid/Budget±/Empty Spots)
+- `StatTile.tsx`, `MobileStatsRow.tsx` — $ stat cards (Remaining/Max Bid/Budget±/Empty Spots), stacked vertically in the sidebar on desktop / one row on mobile
 - `BudgetStats.tsx` (in `DraftBoard.tsx`'s auction branch) — max bid / empty spots stat block on the TV board
 - `src/hooks/useTeamBudget.ts`, `usePlanSlots.ts`; `src/lib/teamBudget.ts`, `budgetCategories.ts`, `budgetPresets.ts`, `unallocatedBadge.ts`; `src/constants/budget.ts` — $ budget math/UI plumbing
 

@@ -1,4 +1,4 @@
-import { Box, Group, SimpleGrid } from "@mantine/core";
+import { Box, SimpleGrid, Stack } from "@mantine/core";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
 import { api } from "../../../convex/_generated/api";
@@ -407,65 +407,113 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
   };
 
   return (
-    <Group align="flex-start" gap="sm" wrap="wrap">
-      <Box visibleFrom="sm" style={{ flex: "1 1 380px" }}>
-        <NominationPanel
-          nextPickNumber={nextPickNumber}
-          totalPicks={totalPicks}
-          teams={orderedTeams}
-          nominationOrderEnabled={!!nominationConfig?.nominationOrder}
-          turnTeamId={currentNominator?.currentTeamId}
-          onSetTurnTeam={(teamId) =>
-            runAction(() => setCurrentNominator({ seasonId, teamId }))
-          }
-          activeNomination={activeNomination ?? undefined}
-          nominatedPlayer={nominatedPlayer}
-          nominatedValue={nominatedValue}
-          nominatedStandardValue={nominatedStandardValue}
-          planMatch={planMatch}
-          winnerTeamId={winnerTeamId}
-          onWinnerTeamIdChange={setWinnerTeamId}
-          onBumpBid={(delta) =>
-            runAction(() => bumpNominationBid({ seasonId, delta }))
-          }
-          onSetBid={(amount) =>
-            runAction(() => setNominationBid({ seasonId, amount }))
-          }
-          onLogWin={() => assignWinner(selfTeamId)}
-          onLogWinner={() =>
-            runAction(async () => {
-              if (!activeNomination || !winnerTeamId) return;
-              await resolvePick({
-                seasonId,
-                fpid: activeNomination.fpid,
-                teamId: winnerTeamId as Id<"seasonTeams">,
-                price: activeNomination.currentBid,
-              });
-              setWinnerTeamId(null);
-            })
-          }
-          onPass={() => runAction(() => passNomination({ seasonId }))}
-          search={search}
-          onSearchChange={setSearch}
-          searchResults={searchResults}
-          activePositions={activePositions}
-          draftValueByFpid={draftValueByFpid}
-          onNominate={(fpid) => {
-            runAction(() =>
-              nominate({
-                seasonId,
-                fpid,
-                ...(nominatingTeamId ? { nominatingTeamId } : {}),
-                openingBid: 1,
-              }),
-            );
-            setSearch("");
-          }}
-          onAddCustomPlayer={onAddCustomPlayer}
-          usingGenericValues={usingGenericValues}
-          actionError={actionError}
-          onSelectPlayer={setSelectedFpid}
-        />
+    <>
+      {/* Persistent sidebar (route.tsx docks this beside the tab content,
+          not above it) - sticky so the nominate/bid card and budget stats
+          stay visible while scrolling a long Players/League table. Fixed
+          340px width to match the Draft Bar Sidebar Redesign mockup
+          ("Infinidraft UX review" Claude Design project). maxHeight +
+          overflowY so a tall sidebar (e.g. many stat tiles) scrolls
+          internally instead of pushing past the viewport. */}
+      <Box
+        visibleFrom="sm"
+        style={{
+          width: 340,
+          flexShrink: 0,
+          position: "sticky",
+          top: 16,
+          maxHeight: "calc(100vh - 32px)",
+          overflowY: "auto",
+        }}
+      >
+        <Stack gap="sm">
+          <NominationPanel
+            nextPickNumber={nextPickNumber}
+            totalPicks={totalPicks}
+            teams={orderedTeams}
+            nominationOrderEnabled={!!nominationConfig?.nominationOrder}
+            turnTeamId={currentNominator?.currentTeamId}
+            onSetTurnTeam={(teamId) =>
+              runAction(() => setCurrentNominator({ seasonId, teamId }))
+            }
+            activeNomination={activeNomination ?? undefined}
+            nominatedPlayer={nominatedPlayer}
+            nominatedValue={nominatedValue}
+            nominatedStandardValue={nominatedStandardValue}
+            planMatch={planMatch}
+            winnerTeamId={winnerTeamId}
+            onWinnerTeamIdChange={setWinnerTeamId}
+            onBumpBid={(delta) =>
+              runAction(() => bumpNominationBid({ seasonId, delta }))
+            }
+            onSetBid={(amount) =>
+              runAction(() => setNominationBid({ seasonId, amount }))
+            }
+            onLogWin={() => assignWinner(selfTeamId)}
+            onLogWinner={() =>
+              runAction(async () => {
+                if (!activeNomination || !winnerTeamId) return;
+                await resolvePick({
+                  seasonId,
+                  fpid: activeNomination.fpid,
+                  teamId: winnerTeamId as Id<"seasonTeams">,
+                  price: activeNomination.currentBid,
+                });
+                setWinnerTeamId(null);
+              })
+            }
+            onPass={() => runAction(() => passNomination({ seasonId }))}
+            search={search}
+            onSearchChange={setSearch}
+            searchResults={searchResults}
+            activePositions={activePositions}
+            draftValueByFpid={draftValueByFpid}
+            onNominate={(fpid) => {
+              runAction(() =>
+                nominate({
+                  seasonId,
+                  fpid,
+                  ...(nominatingTeamId ? { nominatingTeamId } : {}),
+                  openingBid: 1,
+                }),
+              );
+              setSearch("");
+            }}
+            onAddCustomPlayer={onAddCustomPlayer}
+            usingGenericValues={usingGenericValues}
+            actionError={actionError}
+            onSelectPlayer={setSelectedFpid}
+          />
+          <SimpleGrid cols={1} spacing="sm">
+            <StatTile label="Remaining" value={`$${stats.remaining}`} />
+            <StatTile
+              label="Max Bid"
+              value={`$${Math.max(stats.maxBid, 0)}`}
+            />
+            {stats.planSafe !== null && (
+              <StatTile
+                label="Budget +/-"
+                value={
+                  stats.planSafe > 0
+                    ? `+$${stats.planSafe}`
+                    : `-$${Math.abs(stats.planSafe)}`
+                }
+                valueColor={
+                  stats.planSafe > 0
+                    ? "green"
+                    : stats.planSafe < 0
+                      ? "red"
+                      : "inherit"
+                }
+              />
+            )}
+            <StatTile label="Empty Spots" value={stats.openSlots.toString()} />
+            <StatTile
+              label="Per Open Slot"
+              value={`$${stats.perOpenSlot.toFixed(1)}`}
+            />
+          </SimpleGrid>
+        </Stack>
       </Box>
 
       <MobileNomination
@@ -528,39 +576,6 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
         onSelectPlayer={setSelectedFpid}
       />
 
-      <Box visibleFrom="sm">
-        <SimpleGrid
-          cols={stats.planSafe !== null ? 5 : 4}
-          spacing="sm"
-          h="100%"
-        >
-          <StatTile label="Remaining" value={`$${stats.remaining}`} />
-          <StatTile label="Max Bid" value={`$${Math.max(stats.maxBid, 0)}`} />
-          {stats.planSafe !== null && (
-            <StatTile
-              label="Budget +/-"
-              value={
-                stats.planSafe > 0
-                  ? `+$${stats.planSafe}`
-                  : `-$${Math.abs(stats.planSafe)}`
-              }
-              valueColor={
-                stats.planSafe > 0
-                  ? "green"
-                  : stats.planSafe < 0
-                    ? "red"
-                    : "inherit"
-              }
-            />
-          )}
-          <StatTile label="Empty Spots" value={stats.openSlots.toString()} />
-          <StatTile
-            label="Per Open Slot"
-            value={`$${stats.perOpenSlot.toFixed(1)}`}
-          />
-        </SimpleGrid>
-      </Box>
-
       <MobileStatsRow
         maxBid={stats.maxBid}
         planSafe={stats.planSafe}
@@ -576,6 +591,6 @@ export function DraftTopBar({ seasonId, selfTeamId }: DraftTopBarProps) {
         season={thisSeason}
         seasonId={seasonId}
       />
-    </Group>
+    </>
   );
 }

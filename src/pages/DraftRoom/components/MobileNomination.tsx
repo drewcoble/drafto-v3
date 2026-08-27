@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import {
   ActionIcon,
   Badge,
   Box,
   Button,
-  Drawer,
   Group,
   NumberInput,
   Stack,
@@ -13,7 +12,6 @@ import {
   ThemeIcon,
   Tooltip,
 } from "@mantine/core";
-import { useMediaQuery } from "@mantine/hooks";
 import {
   BanknoteArrowDown,
   BatteryLow,
@@ -48,6 +46,7 @@ import {
 } from "../../../constants/general";
 import { useHoldRepeat } from "../../../hooks/useHoldRepeat";
 import { SearchBody, type SearchResult } from "./NominationPanel";
+import { BottomSheet, DraftFab, TeamChipRow } from "./mobileDraftSheet";
 
 interface MobileNominationProps {
   nominationOrderEnabled: boolean;
@@ -102,9 +101,6 @@ const CONSISTENCY_ICON: Record<ConsistencyLabel, typeof ShieldCheck> = {
 
 type SheetMode = "closed" | "search" | "assign";
 
-// The nominate FAB's own circle size (see its ActionIcon below).
-const NOMINATE_FAB_SIZE = 56;
-
 // Bottom offset for both minimized "peek" cards below - overlaps
 // BottomNav's top edge by exactly its own "xl" corner radius (BottomNav
 // always keeps that radius, on every corner, whether or not a peek card is
@@ -121,60 +117,6 @@ const PEEK_BOTTOM_OFFSET = `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HE
 // padding, never the card's actual name/price/etc. row - the +6px is just
 // breathing room past the exact radius depth.
 const PEEK_BOTTOM_PADDING = "calc(var(--mantine-radius-xl) + 6px)";
-
-// Bottom padding reserved inside the Drawer's own scrollable content - its
-// background now runs all the way to the screen's bottom edge (behind
-// BottomNav, which stays reachable via its own higher z-index below), but
-// nothing scrollable should actually render underneath BottomNav's real
-// tappable area, so the content stops that much earlier than its
-// background does.
-const DRAWER_CONTENT_BOTTOM_PADDING = `calc(var(--mantine-spacing-md) + ${BOTTOM_NAV_BOTTOM_OFFSET}px + ${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`;
-
-// Caps how tall the Drawer can grow (see its own size="auto" comment for
-// why a cap is what actually controls its rendered height) - generous
-// enough for the tallest body (the assign state, with its team chips row)
-// while leaving a sliver of the page visible/scrollable above it on tall
-// viewports.
-const DRAWER_MAX_HEIGHT = "90vh";
-
-// How far down the drag handle has to travel before release counts as a
-// swipe-to-dismiss rather than a tap or an aborted drag.
-const DRAG_DISMISS_THRESHOLD = 80;
-
-// Lets the small handle bar at the top of the Drawer double as a
-// swipe-down-to-dismiss target, the native bottom-sheet convention. `dragY`
-// tracks the pointer 1:1 (for the content below to visually follow the
-// finger) and past DRAG_DISMISS_THRESHOLD on release, `onDismiss` fires -
-// same as tapping the scrim or pressing Escape.
-function useSwipeToDismiss(onDismiss: () => void) {
-  const [dragY, setDragY] = useState(0);
-  const draggingRef = useRef(false);
-  const startYRef = useRef(0);
-
-  const endDrag = () => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    if (dragY > DRAG_DISMISS_THRESHOLD) onDismiss();
-    setDragY(0);
-  };
-
-  return {
-    dragY,
-    dragHandleProps: {
-      onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => {
-        draggingRef.current = true;
-        startYRef.current = event.clientY;
-        event.currentTarget.setPointerCapture(event.pointerId);
-      },
-      onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => {
-        if (!draggingRef.current) return;
-        setDragY(Math.max(0, event.clientY - startYRef.current));
-      },
-      onPointerUp: endDrag,
-      onPointerCancel: endDrag,
-    },
-  };
-}
 
 // Mobile replacement for the desktop NominationPanel card (hidden below the
 // "sm" breakpoint via visibleFrom="sm" on that component - see
@@ -217,14 +159,6 @@ export function MobileNomination({
   const [mode, setMode] = useState<SheetMode>("closed");
   const [minimized, setMinimized] = useState(false);
   const hasActiveNomination = !!activeNomination;
-  // hiddenFrom="sm" below only hides the Drawer visually - Mantine's Modal/
-  // Drawer internals (body scroll lock, focus trap) still run whenever
-  // `opened` is true regardless of that CSS class, which was locking page
-  // scroll on desktop the whole time a nomination was active even though
-  // this sheet was never actually shown there. Gating `opened` itself on
-  // the same breakpoint (matches route.tsx's Tabs visibleFrom="sm") keeps
-  // the Drawer from ever truly opening on desktop.
-  const isDesktop = useMediaQuery("(min-width: 48em)");
 
   // Mirrors the server: once a nomination lands (whether this device made it
   // or another team's client did), the sheet takes over in the expanded
@@ -259,7 +193,6 @@ export function MobileNomination({
       setMinimized(true);
     }
   };
-  const { dragY, dragHandleProps } = useSwipeToDismiss(dismiss);
 
   const currentTeamName =
     teams.find((team) => team._id === turnTeamId)?.name ?? null;
@@ -290,159 +223,9 @@ export function MobileNomination({
 
   return (
     <>
-      {/* Height-matched to BottomNav's own pill (BOTTOM_NAV_HEIGHT) and
-          flex-centered, rather than just sharing its bottom offset, so the
-          56px circle's vertical center always lines up with the bar's
-          regardless of small differences between the two elements' natural
-          heights - see BOTTOM_NAV_HEIGHT's comment. */}
-      <Box
-        hiddenFrom="sm"
-        pos="fixed"
-        left="50%"
-        style={{
-          bottom: `calc(${BOTTOM_NAV_BOTTOM_OFFSET}px + env(safe-area-inset-bottom))`,
-          height: BOTTOM_NAV_HEIGHT,
-          display: "flex",
-          alignItems: "center",
-          transform: "translateX(-50%)",
-          zIndex: 210,
-        }}
-      >
-        <ActionIcon
-          radius="xl"
-          size={NOMINATE_FAB_SIZE}
-          color="saddlebrown"
-          variant="filled"
-          aria-label={fabLabel}
-          onClick={fabAction}
-          style={{
-            boxShadow: "var(--mantine-shadow-lg)",
-            border: "none",
-            // A saddlebrown gradient (lighter shade 3 to darker shade 7)
-            // instead of a flat fill, each stop still mixed with
-            // transparent at the same 65% as before so it stays
-            // translucent against the frosted bar underneath it (see
-            // BottomNav.tsx).
-            background:
-              "linear-gradient(135deg, color-mix(in srgb, var(--mantine-color-saddlebrown-3) 65%, transparent), color-mix(in srgb, var(--mantine-color-saddlebrown-7) 65%, transparent))",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-          }}
-        >
-          {fabIcon}
-        </ActionIcon>
-      </Box>
+      <DraftFab icon={fabIcon} label={fabLabel} onClick={fabAction} />
 
-      <Drawer
-        hiddenFrom="sm"
-        opened={sheetOpen && !isDesktop}
-        onClose={dismiss}
-        position="bottom"
-        withCloseButton={false}
-        // "auto" rather than a fixed fraction of the screen (e.g. "50%") -
-        // Mantine's Drawer always renders at its styles.content maxHeight
-        // cap regardless of the size prop (its internal scroll wrapper
-        // forces near-viewport height, which "auto" then sizes to), so this
-        // and the maxHeight below together give a tall-enough, capped sheet
-        // no matter which body is showing - the assign state got
-        // noticeably taller with the team chips row, and a fixed 50% wasn't
-        // tall enough to show all of it without scrolling.
-        size="auto"
-        // Below BottomNav's own 200 (and the FAB's 210) - so the nav bar,
-        // and the FAB sitting in its notch, render on top of both the sheet
-        // and its scrim instead of being covered by them, keeping in-app
-        // navigation reachable while the sheet's open (the sheet's own
-        // background runs behind BottomNav all the way to the screen's
-        // bottom edge - see DRAWER_CONTENT_BOTTOM_PADDING below for why its
-        // content doesn't - so this is what keeps BottomNav paintable on
-        // top of that background too). Above AppHeader's own 195 (see its
-        // zIndex comment) so a tall sheet - the assign state's grown a lot -
-        // draws in front of the fixed header/stats-row instead of behind
-        // them, without needing BottomNav to outrank those bars too.
-        zIndex={197}
-        // A slight blur on the scrim itself (not just the sheet's own
-        // background above), matching the frosted-glass treatment used
-        // everywhere else in the app (BottomNav.tsx, AppHeader.tsx, the
-        // sheet's own background) - the rest of the page behind it reads as
-        // softened, not just dimmed.
-        overlayProps={{ blur: 2 }}
-        styles={{
-          // Left visually bare (no background/radius/shadow of its own) -
-          // see the draggable div just below for why: Mantine's own open/
-          // close Transition sets this exact node's `transform` on every
-          // render (even once "entered"), so our own drag transform can't
-          // live here without the two fighting each other every frame.
-          content: {
-            maxWidth: 480,
-            maxHeight: DRAWER_MAX_HEIGHT,
-            margin: "0 auto",
-            background: "transparent",
-            boxShadow: "none",
-          },
-          body: {
-            height: "100%",
-            padding: 0,
-            display: "flex",
-            flexDirection: "column",
-          },
-        }}
-      >
-        {/* Owns the sheet's actual background/radius/blur (not Content
-            above) specifically so dragging moves the whole visible card -
-            chrome included - together with the finger, rather than just the
-            handle/content sliding inside a background that stays put. */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            minHeight: 0,
-            borderTopLeftRadius: "var(--mantine-radius-xl)",
-            borderTopRightRadius: "var(--mantine-radius-xl)",
-            overflow: "hidden",
-            // The "surface" shade Card/Popover use (dark-6 - see
-            // BottomNav.tsx's own comment on dark-5 vs dark-6) rather than
-            // BottomNav's lighter dark-5, and noticeably less transparent
-            // than BottomNav's own 65%/50% - a full sheet reading through
-            // to the page behind it looks murky over this much area, where
-            // BottomNav's translucency works at its own much smaller size.
-            background:
-              "light-dark(color-mix(in srgb, var(--mantine-color-body) 85%, transparent), color-mix(in srgb, var(--mantine-color-dark-6) 85%, transparent))",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-            transform: `translateY(${dragY}px)`,
-            transition: dragY === 0 ? "transform 200ms ease" : "none",
-          }}
-        >
-          <div
-            {...dragHandleProps}
-            aria-hidden
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              padding: "10px 0 6px",
-              flexShrink: 0,
-              touchAction: "none",
-              cursor: "grab",
-            }}
-          >
-            <div
-              style={{
-                width: 36,
-                height: 4,
-                borderRadius: 999,
-                background: "var(--mantine-color-default-border)",
-              }}
-            />
-          </div>
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-              padding: `0 var(--mantine-spacing-md) ${DRAWER_CONTENT_BOTTOM_PADDING}`,
-            }}
-          >
+      <BottomSheet opened={sheetOpen} onDismiss={dismiss}>
             {effectiveMode === "search" && (
               <Stack gap={10}>
                 <Group justify="space-between" wrap="nowrap">
@@ -544,9 +327,7 @@ export function MobileNomination({
                 onMinimize={() => setMinimized(true)}
               />
             )}
-          </div>
-        </div>
-      </Drawer>
+      </BottomSheet>
 
       {peeking && effectiveMode === "search" && (
         <SearchPeekCard
@@ -882,37 +663,6 @@ function AssignDrawerBody({
         </Button>
       </Group>
     </Stack>
-  );
-}
-
-interface TeamChipRowProps {
-  teams: { id: Id<"seasonTeams"> | null; label: string }[];
-  selectedId: Id<"seasonTeams"> | null;
-  onSelect: (id: Id<"seasonTeams"> | null) => void;
-}
-
-// Wrapping row of team pills, shared by the search state's "Nominating
-// team" selector and the assign state's "Winning team" one - tap a team
-// directly rather than stepping through them or picking from a dropdown.
-function TeamChipRow({ teams, selectedId, onSelect }: TeamChipRowProps) {
-  return (
-    <Group gap={8} wrap="wrap">
-      {teams.map((team) => {
-        const active = team.id === selectedId;
-        return (
-          <Button
-            key={team.id ?? "__manual__"}
-            size="xs"
-            radius="xl"
-            variant={active ? "filled" : "default"}
-            {...(active ? { color: "saddlebrown" } : {})}
-            onClick={() => onSelect(team.id)}
-          >
-            {team.label}
-          </Button>
-        );
-      })}
-    </Group>
   );
 }
 
