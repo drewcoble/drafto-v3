@@ -10,10 +10,11 @@ import { Link } from "@tanstack/react-router";
 export function GenericValuesNotice() {
   return (
     <Text size="xs" c="dimmed">
-      Showing estimated values.{" "}
+      Showing default values.{" "}
       <Anchor component={Link} to="/billing" size="xs">
         Upgrade to Pro
-      </Anchor>
+      </Anchor>{" "}
+      to see custom values for your league's settings and scoring.
     </Text>
   );
 }

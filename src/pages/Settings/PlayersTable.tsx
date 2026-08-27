@@ -1,6 +1,3 @@
-import { useMemo, useState, type CSSProperties } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { useQuery as useTanStackQuery } from "@tanstack/react-query";
 import { convexQuery } from "@convex-dev/react-query";
 import {
   Box,
@@ -13,9 +10,36 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { useQuery as useTanStackQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "convex/react";
 import { Search } from "lucide-react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
+import { GenericValuesNotice } from "../../components/GenericValuesNotice";
+import { PlayerDetailModal } from "../../components/PlayerDetailModal";
+import { PositionFilterBar } from "../../components/PositionFilterBar";
+import { SortArrow } from "../../components/SortArrow";
+import {
+  MOBILE_HEADER_HEIGHT,
+  POSITION_FILTER_BAR_HEIGHT,
+} from "../../constants/general";
+import { useRookieFpids } from "../../hooks/useRookieFpids";
+import {
+  computeConsistencyThresholds,
+  getConsistencyLabel,
+  type ConsistencyLabel,
+} from "../../lib/consistency";
+import {
+  adpForScoring,
+  filterRelevantPlayers,
+  pointsForScoringConfig,
+  RELEVANT_ADP_CEILING,
+  scoringConfigFromSeason,
+} from "../../lib/relevantPlayers";
+import { buildStandardValueByFpid } from "../../lib/standardValues";
+import { compareSortValues, type SortDir } from "../../lib/tableSort";
+import { rankByDollarValue, sortValuesDescending } from "../../lib/valueRank";
 import {
   POSITIONS,
   type DraftTierRow,
@@ -24,33 +48,9 @@ import {
   type ScoringConfig,
   type ValueGap,
 } from "../../types";
-import {
-  adpForScoring,
-  filterRelevantPlayers,
-  pointsForScoringConfig,
-  RELEVANT_ADP_CEILING,
-  scoringConfigFromSeason,
-} from "../../lib/relevantPlayers";
-import { compareSortValues, type SortDir } from "../../lib/tableSort";
-import { rankByDollarValue, sortValuesDescending } from "../../lib/valueRank";
-import { PlayerDetailModal } from "../../components/PlayerDetailModal";
-import { PositionFilterBar } from "../../components/PositionFilterBar";
-import { GenericValuesNotice } from "../../components/GenericValuesNotice";
-import { SortArrow } from "../../components/SortArrow";
-import { buildStandardValueByFpid } from "../../lib/standardValues";
-import {
-  MOBILE_HEADER_HEIGHT,
-  POSITION_FILTER_BAR_HEIGHT,
-} from "../../constants/general";
-import {
-  computeConsistencyThresholds,
-  getConsistencyLabel,
-  type ConsistencyLabel,
-} from "../../lib/consistency";
+import { AiInsightsCard } from "./components/AiInsightsCard";
 import { PlayerRow, type KeeperInfo } from "./components/PlayerRow";
 import { PlayerRowMobile } from "./components/PlayerRowMobile";
-import { AiInsightsCard } from "./components/AiInsightsCard";
-import { useRookieFpids } from "../../hooks/useRookieFpids";
 
 interface PlayersTableProps {
   week: string;
@@ -614,8 +614,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
         </Group>
         {allProjections && (
           <Text size="xs" c="dimmed">
-            Showing {relevantProjections.length} draft-relevant players (of{" "}
-            {allProjections.length} total fetched)
+            Showing {relevantProjections.length} draft-relevant players.
           </Text>
         )}
         <Group gap="xs">
@@ -623,7 +622,10 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
             <Loader size="xs" />
           )}
           <Text size="sm" c="dimmed">
-            Scoring: {scoring} (set on League Details)
+            Scoring: {scoring}
+            {selectedSettings?.teScoring &&
+              selectedSettings?.teScoring !== "NONE" &&
+              `, TE premium: ${selectedSettings?.teScoring}`}
           </Text>
         </Group>
       </Group>
