@@ -24,6 +24,7 @@ import {
   requireRealDraft,
   requireDraftNotStarted,
 } from "./draft/auth";
+import { insertSeasonTeams } from "./draft/teams";
 import {
   countFreeLeagueGrantsForYear,
   FREE_LEAGUES_PER_YEAR,
@@ -191,8 +192,13 @@ export const createLeague = mutation({
       throw new Error("Keepers is a Pro feature. Upgrade to enable it.");
     }
 
-    const { name, sleeperLeagueId, yahooLeagueKey, useKeepers, ...seasonFields } =
-      args;
+    const {
+      name,
+      sleeperLeagueId,
+      yahooLeagueKey,
+      useKeepers,
+      ...seasonFields
+    } = args;
 
     const leagueId = await ctx.db.insert("leagues", {
       ownerId: userId,
@@ -221,6 +227,24 @@ export const createLeague = mutation({
       status: "pre_draft",
       createdAt: now,
     });
+
+    // Seed default "Team 1".."Team N" rows immediately so every tab has
+    // content right after creation instead of gating on a separate "Save
+    // Teams" step. Skipped for the Sleeper/Yahoo import wizards (they pass
+    // sleeperLeagueId/yahooLeagueKey and call initializeSeasonTeams
+    // themselves afterward with the real imported team names/links -
+    // calling it twice would throw "Teams have already been set up").
+    if (!sleeperLeagueId && !yahooLeagueKey) {
+      await insertSeasonTeams(ctx, {
+        seasonId,
+        draftId,
+        selfName: "Team 1",
+        opponentNames: Array.from(
+          { length: seasonFields.teamCount - 1 },
+          (_, i) => `Team ${i + 2}`,
+        ),
+      });
+    }
 
     // Record the free-tier grant only once creation actually succeeds, and
     // only for free users - a Pro user creating a league never consumes a
