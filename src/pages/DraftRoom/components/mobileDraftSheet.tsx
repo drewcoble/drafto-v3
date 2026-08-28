@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { ActionIcon, Box, Button, Drawer, Group } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
@@ -83,8 +84,19 @@ interface DraftFabProps {
 // center always lines up with the bar's regardless of small differences
 // between the two elements' natural heights - see BOTTOM_NAV_HEIGHT's own
 // comment.
+//
+// Portaled straight to document.body rather than rendered inline - this is
+// a pos="fixed" element (not one of Mantine's own Portal-backed overlays
+// like Drawer/Modal, which already escape their ancestry by default), so
+// wherever its caller happens to be mounted in the tree - the auction
+// sidebar's Group column, some future wrapper, whatever - it always
+// resolves `bottom`/`left` against the viewport instead of a positioned/
+// transformed/filtered ancestor. Route.tsx's BottomNav hit exactly this
+// (a Group ancestor made it float mid-page on WebKit/iOS instead of
+// pinning to the bottom); portaling here fixes it at the source instead of
+// relying on every caller to remember not to nest it under one.
 export function DraftFab({ icon, label, onClick }: DraftFabProps) {
-  return (
+  return createPortal(
     <Box
       hiddenFrom="sm"
       pos="fixed"
@@ -120,7 +132,8 @@ export function DraftFab({ icon, label, onClick }: DraftFabProps) {
       >
         {icon}
       </ActionIcon>
-    </Box>
+    </Box>,
+    document.body,
   );
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import {
   ActionIcon,
@@ -672,6 +673,12 @@ function AssignDrawerBody({
 // PEEK_BOTTOM_OFFSET's own amount - deliberately behind BottomNav in
 // z-index (see below), which is what makes that overlap safe (see
 // PEEK_BOTTOM_PADDING for how it stays clear of this card's own content).
+//
+// Portaled to document.body - same reasoning as DraftFab/MobileStatsRow:
+// a plain pos="fixed" Box, not one of Mantine's Portal-backed overlays, so
+// it needs to escape MobileNomination's own mount point (the auction
+// sidebar's Group column) to resolve `bottom` against the viewport rather
+// than that ancestor.
 function PeekCard({
   children,
   onClick,
@@ -681,7 +688,7 @@ function PeekCard({
   onClick: () => void;
   ariaLabel: string;
 }) {
-  return (
+  return createPortal(
     <Box
       hiddenFrom="sm"
       pos="fixed"
@@ -723,7 +730,8 @@ function PeekCard({
       }}
     >
       {children}
-    </Box>
+    </Box>,
+    document.body,
   );
 }
 

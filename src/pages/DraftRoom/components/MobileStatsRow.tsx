@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { Box, Group, Text } from "@mantine/core";
 import {
   MOBILE_HEADER_HEIGHT,
@@ -12,12 +13,19 @@ interface MobileStatsRowProps {
 }
 
 // Condensed, single-row version of the desktop stat tiles (see StatTile.tsx
-// / the SimpleGrid in DraftTopBar.tsx) - docked directly under the fixed
-// AppHeader on mobile (top: MOBILE_HEADER_HEIGHT, no gap) so budget context
-// stays visible without scrolling, and reads as one continuous fixed header
-// block rather than a separate floating piece. Every mobile layout that
-// renders this must also reserve MOBILE_STATS_ROW_HEIGHT of top padding, on
-// top of MOBILE_HEADER_HEIGHT (see draft route layout).
+// / the vertical SimpleGrid in DraftTopBar.tsx) - docked directly under the
+// fixed AppHeader on mobile (top: MOBILE_HEADER_HEIGHT, no gap) so budget
+// context stays visible without scrolling, and reads as one continuous
+// fixed header block rather than a separate floating piece. Every mobile
+// layout that renders this must also reserve MOBILE_STATS_ROW_HEIGHT of top
+// padding, on top of MOBILE_HEADER_HEIGHT (see draft route layout).
+//
+// Portaled to document.body rather than rendered inline - same reasoning as
+// DraftFab's own comment: this is a plain pos="fixed" Box (not one of
+// Mantine's Portal-backed overlays), so it needs to escape whatever
+// ancestor DraftTopBar happens to be mounted under (the auction sidebar's
+// Group column, in particular) to reliably resolve `top` against the
+// viewport rather than that ancestor on WebKit/iOS.
 export function MobileStatsRow({
   maxBid,
   planSafe,
@@ -47,7 +55,7 @@ export function MobileStatsRow({
     { label: "/Slot", value: `$${perOpenSlot.toFixed(1)}`, color: "inherit" },
   ];
 
-  return (
+  return createPortal(
     <Box
       hiddenFrom="sm"
       pos="fixed"
@@ -85,6 +93,7 @@ export function MobileStatsRow({
           </Group>
         ))}
       </Group>
-    </Box>
+    </Box>,
+    document.body,
   );
 }
