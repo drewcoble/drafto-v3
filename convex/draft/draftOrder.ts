@@ -6,6 +6,9 @@ import {
   requireDraftNotStarted,
   requireRealDraft,
 } from "./auth";
+import { resolveTeamPositionInRound } from "./pickOrder";
+import { countForfeitedByRound, countRealSlotsThroughRound } from "./pickSlots";
+import { resolveDraftType } from "../draftType";
 
 // Snake/linear counterpart to nominationOrder.ts's setNominationOrder/
 // getNominationConfig - same validation shape (teamIds must be exactly the
@@ -27,7 +30,10 @@ export const getDraftOrderConfig = query({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
     const { draft } = await requireDraftOwner(ctx, args.seasonId);
-    return { draftOrder: draft.draftOrder, reversalRounds: draft.reversalRounds };
+    return {
+      draftOrder: draft.draftOrder,
+      reversalRounds: draft.reversalRounds,
+    };
   },
 });
 
@@ -37,7 +43,10 @@ export const getDraftOrderConfigPublic = query({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args) => {
     const draft = await requireRealDraft(ctx, args.seasonId);
-    return { draftOrder: draft.draftOrder, reversalRounds: draft.reversalRounds };
+    return {
+      draftOrder: draft.draftOrder,
+      reversalRounds: draft.reversalRounds,
+    };
   },
 });
 
@@ -56,28 +65,106 @@ export const setReversalRounds = mutation({
     reversalRounds: v.array(v.number()),
   },
   handler: async (ctx, args) => {
-    const { draft } = await requireDraftNotStarted(ctx, args.seasonId);
-    if (args.reversalRounds.some((round) => !Number.isInteger(round) || round < 2)) {
-      throw new Error("Reversal rounds must be whole numbers, round 2 or later.");
+    const { season, draft } = await requireDraftNotStarted(ctx, args.seasonId);
+    if (
+      args.reversalRounds.some((round) => !Number.isInteger(round) || round < 2)
+    ) {
+      throw new Error(
+        "Reversal rounds must be whole numbers, round 2 or later.",
+      );
     }
     const deduped = [...new Set(args.reversalRounds)].sort((a, b) => a - b);
     await ctx.db.patch(draft._id, { reversalRounds: deduped });
+    // Reversal rounds feed resolveTeamPositionInRound exactly like
+    // draftOrder does (they flip which round-boundaries bounce vs. repeat),
+    // so an existing keeper's pickInRound/overallPick goes just as stale
+    // here as it would from a draftOrder change - same reconciliation.
+    await reconcileKeeperSlots(
+      ctx,
+      season,
+      draft,
+      draft.draftOrder ?? [],
+      deduped,
+    );
     return null;
   },
 });
 
+// Recomputes pickInRound/overallPick for every existing round-based keeper
+// after draftOrder or reversalRounds changes. A keeper's `round` is chosen
+// by the cost formula (addKeeper's resolveRoundConflict) and never depends
+// on team order, but pickInRound (this team's position *within* that
+// round) and overallPick (a denormalization of it) both come from
+// resolveTeamPositionInRound(draftOrder, ...) at the moment the keeper was
+// set - so left untouched, they'd silently point at the wrong slot (and
+// potentially the wrong team's column on the board) the instant the order
+// changes under them. Safe to recompute pickInRound alone without rerunning
+// resolveRoundConflict: for a fixed round, resolveTeamPositionInRound is a
+// bijection between teams and positions, so reordering can never create a
+// *new* same-round collision between two teams - only a same-team,
+// same-round collision could do that, and that's determined by `round`
+// itself, which this leaves untouched.
+async function reconcileKeeperSlots(
+  ctx: MutationCtx,
+  season: Doc<"seasons">,
+  draft: Doc<"drafts">,
+  draftOrder: readonly Id<"seasonTeams">[],
+  reversalRounds: readonly number[],
+): Promise<void> {
+  const draftType = resolveDraftType(season, draft);
+  if (draftType === "auction" || draftOrder.length === 0) return;
+
+  const picks = await ctx.db
+    .query("draftPicks")
+    .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+    .collect();
+  const roundBasedKeepers = picks.filter(
+    (p) => p.isKeeper && p.round !== undefined,
+  );
+  if (roundBasedKeepers.length === 0) return;
+
+  const forfeitedByRound = await countForfeitedByRound(ctx, draft._id);
+  const teamCount = draftOrder.length;
+  for (const pick of roundBasedKeepers) {
+    const round = pick.round!;
+    const position = resolveTeamPositionInRound(
+      draftOrder,
+      draftType,
+      reversalRounds,
+      round,
+      pick.teamId,
+    );
+    if (position === null) continue;
+    const overallPick =
+      countRealSlotsThroughRound(round - 1, teamCount, forfeitedByRound) +
+      position;
+    if (pick.pickInRound !== position || pick.overallPick !== overallPick) {
+      await ctx.db.patch(pick._id, { pickInRound: position, overallPick });
+    }
+  }
+}
+
 // Shared by setDraftOrder and randomizeDraftOrder below - both end up
-// wanting the exact same "persist the order, seed/reset the turn pointer"
-// steps, just from a different source for teamIds (host-supplied vs.
-// shuffled). Starts the turn pointer at the order's first team only the
-// very first time an order is set for this draft (re-randomizing after an
-// edit shouldn't reset whose turn it is, mirroring setNominationOrder).
+// wanting the exact same "persist the order, seed/reset the turn pointer,
+// reconcile existing keepers" steps, just from a different source for
+// teamIds (host-supplied vs. shuffled). Starts the turn pointer at the
+// order's first team only the very first time an order is set for this
+// draft (re-randomizing after an edit shouldn't reset whose turn it is,
+// mirroring setNominationOrder).
 async function applyDraftOrder(
   ctx: MutationCtx,
+  season: Doc<"seasons">,
   draft: Doc<"drafts">,
   teamIds: Id<"seasonTeams">[],
 ): Promise<void> {
   await ctx.db.patch(draft._id, { draftOrder: teamIds });
+  await reconcileKeeperSlots(
+    ctx,
+    season,
+    draft,
+    teamIds,
+    draft.reversalRounds ?? [],
+  );
 
   const uniqueGiven = new Set(teamIds);
   const existingTurn = await ctx.db
@@ -131,13 +218,13 @@ export const setDraftOrder = mutation({
     teamIds: v.array(v.id("seasonTeams")),
   },
   handler: async (ctx, args) => {
-    const { draft } = await requireDraftNotStarted(ctx, args.seasonId);
+    const { season, draft } = await requireDraftNotStarted(ctx, args.seasonId);
     const teams = await ctx.db
       .query("seasonTeams")
       .withIndex("by_season", (q) => q.eq("seasonId", args.seasonId))
       .collect();
     validateTeamIds(teams, args.teamIds);
-    await applyDraftOrder(ctx, draft, args.teamIds);
+    await applyDraftOrder(ctx, season, draft, args.teamIds);
     return null;
   },
 });
@@ -150,13 +237,15 @@ export const setDraftOrder = mutation({
 export const randomizeDraftOrder = mutation({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx, args): Promise<Id<"seasonTeams">[]> => {
-    const { draft } = await requireDraftNotStarted(ctx, args.seasonId);
+    const { season, draft } = await requireDraftNotStarted(ctx, args.seasonId);
     const teams = await ctx.db
       .query("seasonTeams")
       .withIndex("by_season", (q) => q.eq("seasonId", args.seasonId))
       .collect();
     if (teams.length === 0) {
-      throw new Error("Add at least one team before randomizing the draft order.");
+      throw new Error(
+        "Add at least one team before randomizing the draft order.",
+      );
     }
 
     const shuffled = teams.map((t) => t._id);
@@ -165,7 +254,7 @@ export const randomizeDraftOrder = mutation({
       [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
     }
 
-    await applyDraftOrder(ctx, draft, shuffled);
+    await applyDraftOrder(ctx, season, draft, shuffled);
     return shuffled;
   },
 });
