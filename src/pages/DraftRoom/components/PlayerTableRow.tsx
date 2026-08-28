@@ -32,10 +32,12 @@ import {
 } from "../../../lib/consistency";
 import { injuryColor } from "../../../lib/playerFormatting";
 import { playerTagStyle } from "../../../lib/playerTagStyle";
+import { POSITION_COLORS } from "../../../lib/positionColors";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
 import type { StandardValueRow } from "../../../lib/standardValues";
 import { RookieBadge } from "../../../components/RookieBadge";
 import { StandardValueLabel } from "../../../components/StandardValueLabel";
+import { AdpValueLabel } from "../../../components/AdpValueLabel";
 
 // Matches the icon choices PlayerBar.tsx/PlayerBarDetails.tsx use for the
 // same consistency ratings - kept in sync there rather than imported, same
@@ -50,6 +52,12 @@ interface PlayerTableRowProps {
   row: DraftBoardRow;
   tag: PlayerTag | undefined;
   standardValue: StandardValueRow | undefined;
+  // Auction: $ / vs. market (standardValue above). Snake/linear: ADP / vs
+  // ADP (adp/ourRank below) - same isAuction branch PlayerRow.tsx (the
+  // pre-draft table's desktop row) already uses.
+  isAuction: boolean;
+  adp: number | undefined;
+  ourRank: number | undefined;
   valueGap: ValueGap | undefined;
   consistency: ConsistencyLabel | undefined;
   injury: { status: string; statusShort: string } | undefined;
@@ -60,22 +68,26 @@ interface PlayerTableRowProps {
   // of the team's still-open roster slots eligible for their position (see
   // fitsAnyOpenSlot in lib/planRecommendation.ts) - colors the $ figure
   // green when true, orange when not (only once budgetAmount is defined,
-  // i.e. there's an actual plan to compare against).
+  // i.e. there's an actual plan to compare against). Auction-only - there's
+  // no $ budget concept for a snake/linear league (see SnakeDraftTab.tsx's
+  // own no-dollarValue rule).
   budgetMatch: boolean;
   isExpanded: boolean;
   onSetTag: (tag: PlayerTag) => void;
   onNominate: () => void;
+  onDraft: () => void;
   onSelectPlayer: (fpid: number) => void;
   onToggleExpand: () => void;
 }
 
-// Player, Tier, $, vs. market, Pts, status-icon flags, chevron - kept in
-// sync with the header column count in PlayersLeftTab.tsx so the expanded
-// actions row's colSpan always spans the full table width.
-const COLUMN_COUNT = 7;
+// Player, Pos, Tier, $/ADP, vs. market/vs ADP, Pts, status-icon flags,
+// chevron - kept in sync with the header column count in
+// PlayersLeftTab.tsx so the expanded actions row's colSpan always spans the
+// full table width.
+const COLUMN_COUNT = 8;
 
 // Table-view alternative to PlayerBar.tsx for the same DraftBoardRow data -
-// same status icons/actions (nominate, target/avoid), but as a plain
+// same status icons/actions (nominate/draft, target/avoid), but as a plain
 // scannable row instead of a cost-proportional bar with the name hidden
 // until hover. Toggled via PlayersLeftTab's view switch; consistency here
 // intentionally deep-links the same icon/color choices PlayerBar and
@@ -84,6 +96,9 @@ export function PlayerTableRow({
   row,
   tag,
   standardValue,
+  isAuction,
+  adp,
+  ourRank,
   valueGap,
   consistency,
   injury,
@@ -94,6 +109,7 @@ export function PlayerTableRow({
   isExpanded,
   onSetTag,
   onNominate,
+  onDraft,
   onSelectPlayer,
   onToggleExpand,
 }: PlayerTableRowProps) {
@@ -102,8 +118,9 @@ export function PlayerTableRow({
   // price is close to an open slot's budget), not a default. Out-of-range
   // values used to render orange as a warning, but that read as more
   // alarming than intended - default text now covers both "no plan yet"
-  // and "not close to one".
-  const priceColor = budgetMatch ? "green.6" : "inherit";
+  // and "not close to one". Always "inherit" for snake/linear - budgetMatch
+  // is a $-plan concept that doesn't exist there.
+  const priceColor = isAuction && budgetMatch ? "green.6" : "inherit";
   const ConsistencyIcon = consistency
     ? CONSISTENCY_ICON[consistency]
     : undefined;
@@ -207,6 +224,12 @@ export function PlayerTableRow({
           </Group>
         </Table.Td>
         <Table.Td>
+          <Text size="xs" fw={700} c={POSITION_COLORS[row.position]}>
+            {row.position}
+            {row.positionRank}
+          </Text>
+        </Table.Td>
+        <Table.Td>
           {/* Bare tier number rather than the "Tier N" label used
               elsewhere (e.g. bar-view section headers) - keeps this
               column narrow enough that the trailing chevron stays on
@@ -219,15 +242,23 @@ export function PlayerTableRow({
         </Table.Td>
         <Table.Td>
           <Text size="sm" c={priceColor} fw={600}>
-            ${Math.round(row.dollarValue)}
+            {isAuction
+              ? `$${Math.round(row.dollarValue)}`
+              : adp !== undefined
+                ? Math.round(adp)
+                : "—"}
           </Text>
         </Table.Td>
         <Table.Td visibleFrom="sm">
-          <StandardValueLabel
-            draftValue={row.dollarValue}
-            standardValue={standardValue}
-            showLabel={false}
-          />
+          {isAuction ? (
+            <StandardValueLabel
+              draftValue={row.dollarValue}
+              standardValue={standardValue}
+              showLabel={false}
+            />
+          ) : (
+            <AdpValueLabel ourRank={ourRank} adp={adp} showLabel={false} />
+          )}
         </Table.Td>
         <Table.Td visibleFrom="sm">
           <Text size="sm" c="dimmed">
@@ -271,14 +302,25 @@ export function PlayerTableRow({
                   Avoid
                 </Button>
               </Group>
-              {!hasActiveNomination && (
+              {isAuction ? (
+                !hasActiveNomination && (
+                  <Button
+                    variant="light"
+                    size="xs"
+                    leftSection={<UserRoundPlus size={14} />}
+                    onClick={onNominate}
+                  >
+                    Nominate
+                  </Button>
+                )
+              ) : (
                 <Button
                   variant="light"
                   size="xs"
                   leftSection={<UserRoundPlus size={14} />}
-                  onClick={onNominate}
+                  onClick={onDraft}
                 >
-                  Nominate
+                  Draft
                 </Button>
               )}
             </Group>

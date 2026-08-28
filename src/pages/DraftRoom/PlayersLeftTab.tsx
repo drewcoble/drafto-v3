@@ -38,6 +38,7 @@ import { recommendationFor, groupByTier } from "../../lib/draftRecommendation";
 import { POSITION_COLORS } from "../../lib/positionColors";
 import { buildStandardValueByFpid } from "../../lib/standardValues";
 import { compareSortValues, type SortDir } from "../../lib/tableSort";
+import { buildBlendedAdpByFpid, buildOurRankByFpid } from "../../lib/valueRank";
 import { SortArrow } from "../../components/SortArrow";
 import {
   MOBILE_HEADER_HEIGHT,
@@ -89,6 +90,15 @@ const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
   pts: "desc",
 };
 
+// "dollar" is auction's $ value (highest first) but snake/linear's ADP
+// (lowest/earliest number first) - same format-aware flip PlayersTable.tsx's
+// own defaultSortDirFor uses. "market"/vs-ADP both want "best value first"
+// (highest positive diff), so that one doesn't need a format-aware override.
+function defaultSortDirFor(key: SortKey, isAuction: boolean): SortDir {
+  if (key === "dollar" && !isAuction) return "asc";
+  return DEFAULT_SORT_DIR[key];
+}
+
 interface PlayersLeftTabProps {
   seasonId: Id<"seasons">;
   selfTeamId: Id<"seasonTeams">;
@@ -97,13 +107,18 @@ interface PlayersLeftTabProps {
 export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
+  // AUCTION.md/SNAKE.md's standard `(settings.draftType ?? "auction") ===
+  // "auction"` frontend pattern - determines whether the value column/
+  // primary action show $/Nominate (auction) or ADP/Draft (snake/linear).
+  const isAuction = (settings?.draftType ?? "auction") === "auction";
+  const isSuperflex = (settings?.rosterSlots.SUPERFLEX ?? 0) > 0;
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   // Restored from localStorage (see getStoredView) rather than always
   // starting on "bar" - reselecting "Bars"/"Table" every time you come back
   // to this tab (or reload mid-draft) got old fast.
   const [view, setView] = useState<BoardView>(getStoredView);
-  // Which table-view rows' nominate/target/avoid actions are showing -
+  // Which table-view rows' nominate/draft/target/avoid actions are showing -
   // dropped from the main row to fit mobile widths, same click-to-expand
   // pattern PlayersTable.tsx/PlayerRow.tsx uses.
   const [expandedFpids, setExpandedFpids] = useState<Set<number>>(new Set());
@@ -122,9 +137,10 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   // Target/Avoid actions are ever swiped open at a time (see
   // PlayerTableRowMobile.tsx), rather than each row tracking its own.
   const [swipedFpid, setSwipedFpid] = useState<number | null>(null);
-  // null until a column header's been clicked in Table view - the default
-  // tier order (see rowsByPosition's tierRank sort) holds until then, and
-  // is what Bar view always uses regardless of this state.
+  // null until a column header's been clicked in Table view - defaults to
+  // best-value-first (see tableRows below) until then, same convention
+  // PlayersTable.tsx's own sortedRows uses. Bar view always uses tier order
+  // regardless of this state.
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const handleSort = (key: SortKey) => {
@@ -132,7 +148,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
       setSortDir((current) => (current === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir(DEFAULT_SORT_DIR[key]);
+      setSortDir(defaultSortDirFor(key, isAuction));
     }
   };
   // Narrows which position sections render, in both bar and table view -
@@ -182,6 +198,15 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
     api.draft.nominationOrder.getCurrentNominator,
     nominationConfig?.nominationOrder ? { seasonId } : "skip",
   );
+  // Snake/linear only - who's actually on the clock right now, same
+  // authoritative resolution the TV board and SnakeDraftTab.tsx use
+  // (findNextOpenSlot, keeper-aware). Only fetched for a snake/linear
+  // league - meaningless for auction (see getSnakeBoardPublic's own
+  // `mode === "auction" ? null` short-circuit).
+  const snakeBoard = useQuery(
+    api.draft.pickSlots.getSnakeBoardPublic,
+    isAuction ? "skip" : { seasonId },
+  );
   // Same "stable for the live draft" reasoning as tieredValues/allRankings
   // above - last season's stats and this season's projections don't change
   // mid-draft, so this is its own subscription rather than folded into
@@ -218,6 +243,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   );
   const setPlayerTag = useMutation(api.draft.tags.setPlayerTag);
   const nominate = useMutation(api.draft.picks.nominate);
+  const draftPick = useMutation(api.draft.picks.draftPick);
   const stats = useTeamBudget(seasonId, selfTeamId);
   const planSlots = usePlanSlots(seasonId, selfTeamId);
 
@@ -230,6 +256,14 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   const nominatingTeamId = nominationConfig?.nominationOrder
     ? (currentNominator?.currentTeamId ?? undefined)
     : selfTeamId;
+  // Snake/linear equivalent of nominatingTeamId above - a direct pick is
+  // always "for" whoever's actually on the clock, falling back to the
+  // viewer's own team before the board resolves (same fallback shape as
+  // nominatingTeamId, just sourced from getSnakeBoardPublic instead of
+  // getCurrentNominator since snake has no separate nomination order to
+  // consult). Picking "as" a different team is still possible from the
+  // dedicated Draft tab (SnakeDraftTab.tsx) if a commissioner needs it.
+  const draftingTeamId = snakeBoard?.onClockTeamId ?? selfTeamId;
 
   const consistencyByFpid = useMemo(() => {
     const map = new Map<number, ConsistencyLabel>();
@@ -294,9 +328,30 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
       buildStandardValueByFpid(
         standardValues,
         settings?.scoring ?? "PPR",
-        (settings?.rosterSlots.SUPERFLEX ?? 0) > 0,
+        isSuperflex,
       ),
-    [standardValues, settings],
+    [standardValues, settings, isSuperflex],
+  );
+
+  // Snake/linear's "ADP" and "our rank" columns - shared with
+  // PlayersTable.tsx (pre-draft) via lib/valueRank.ts's
+  // buildBlendedAdpByFpid/buildOurRankByFpid, so the two never compute a
+  // different number for the same player. See those functions' own
+  // comments for the full reasoning.
+  const blendedAdpByFpid = useMemo(
+    () =>
+      buildBlendedAdpByFpid(
+        adpByFpid,
+        standardValueByFpid,
+        isSuperflex,
+        settings?.scoring ?? "PPR",
+      ),
+    [adpByFpid, standardValueByFpid, isSuperflex, settings?.scoring],
+  );
+  const ourRankByFpid = useMemo(
+    () =>
+      buildOurRankByFpid(tieredValues, adpByFpid, settings?.scoring ?? "PPR"),
+    [tieredValues, adpByFpid, settings?.scoring],
   );
 
   // The cheap join: re-runs on every pick, but only touches the small
@@ -394,7 +449,9 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   // rather than WR1's $40, even though WR1 is the "first" open WR slot) -
   // drives fitsBudget and the plan-slot line in each bar's tooltip. Only
   // ever populated when a budget plan has been saved; without one there's
-  // nothing to match against.
+  // nothing to match against. Auction-only in practice - a snake/linear
+  // league never has a saved $ budget plan, so planSlots stays undefined and
+  // this map stays empty for it.
   const planMatchByFpid = useMemo(() => {
     const map = new Map<number, PlanSlotMatch>();
     if (!planSlots) return map;
@@ -420,7 +477,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
   // narrows to - drives the highlight called out in the legend text below.
   // A window (not "at or under") on purpose - the goal is a small,
   // glanceable set of players worth bidding on right now, not everything
-  // technically affordable.
+  // technically affordable. Same auction-only caveat as planMatchByFpid.
   const budgetMatchByFpid = useMemo(() => {
     const map = new Map<number, boolean>();
     if (!planSlots) return map;
@@ -452,10 +509,21 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
       (pos) => !search.trim() || (rowsByPosition.get(pos)?.length ?? 0) > 0,
     );
 
+  // Table view's combined, all-positions row list (the pre-draft
+  // PlayersTable.tsx layout this mirrors) - unlike bar view, which stays
+  // grouped into its own per-position tier sections below, table view flat-
+  // tens every visible position into one sortable list, since a "Tier 3 QB"
+  // and "Tier 3 RB" sitting in separate tables never actually meant they
+  // were comparable picks anyway.
+  const combinedRows = useMemo(
+    () => visiblePositions.flatMap((pos) => rowsByPosition.get(pos) ?? []),
+    [visiblePositions, rowsByPosition],
+  );
+
   // Value for whichever column is currently sorted in Table view (see
-  // handleSort/tableRows below) - "market" mirrors StandardValueLabel's own
-  // diff formula so the sort always agrees with what the vs. market column
-  // actually displays.
+  // handleSort/tableRows below) - "market"/"dollar" mirror
+  // PlayerTableRow.tsx's own isAuction branch so the sort always agrees
+  // with what that column actually displays.
   const sortValueFor = (
     row: DraftBoardRow,
     key: SortKey,
@@ -466,16 +534,82 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
       case "tier":
         return row.tier;
       case "dollar":
-        return row.dollarValue;
+        return isAuction ? row.dollarValue : blendedAdpByFpid.get(row.fpid);
       case "market": {
-        const standardValue = standardValueByFpid.get(row.fpid);
-        return standardValue
-          ? Math.round(row.dollarValue) - Math.round(standardValue.auctionValue)
+        if (isAuction) {
+          const standardValue = standardValueByFpid.get(row.fpid);
+          return standardValue
+            ? Math.round(row.dollarValue) -
+                Math.round(standardValue.auctionValue)
+            : undefined;
+        }
+        const adp = blendedAdpByFpid.get(row.fpid);
+        const ourRank = ourRankByFpid.get(row.fpid);
+        return adp !== undefined && ourRank !== undefined
+          ? Math.round(adp) - ourRank
           : undefined;
       }
       case "pts":
         return row.points;
     }
+  };
+
+  // Defaults to best-value-first (dollar/ADP) rather than raw tier order -
+  // meaningful for a single combined cross-position list the way per-
+  // position tier order no longer is (tier numbers reset per position, so
+  // adjacent rows from different positions at "their own" tier 1 aren't
+  // actually comparable). Falls back to tierRank, then name, for a fully
+  // deterministic order once the primary sort value ties.
+  const tableRows = useMemo(() => {
+    const key: SortKey = sortKey ?? "dollar";
+    const dir: SortDir = sortKey ? sortDir : defaultSortDirFor(key, isAuction);
+    return [...combinedRows].sort((a, b) => {
+      const primary = compareSortValues(
+        sortValueFor(a, key),
+        sortValueFor(b, key),
+        dir,
+      );
+      if (primary !== 0) return primary;
+      const tierDiff = a.tierRank - b.tierRank;
+      if (tierDiff !== 0) return tierDiff;
+      return a.name.localeCompare(b.name);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    combinedRows,
+    sortKey,
+    sortDir,
+    isAuction,
+    blendedAdpByFpid,
+    ourRankByFpid,
+    standardValueByFpid,
+  ]);
+
+  const handleSetTag = (fpid: number, nextTag: PlayerTag) => {
+    setActionError(null);
+    setSwipedFpid((current) => (current === fpid ? null : current));
+    setPlayerTag({ seasonId, fpid, tag: nextTag }).catch((err) => {
+      setActionError(getErrorMessage(err, "Failed to update tag."));
+    });
+  };
+
+  const handleNominate = (fpid: number) => {
+    setActionError(null);
+    nominate({
+      seasonId,
+      fpid,
+      ...(nominatingTeamId ? { nominatingTeamId } : {}),
+      openingBid: 1,
+    }).catch((err) => {
+      setActionError(getErrorMessage(err, "Failed to nominate."));
+    });
+  };
+
+  const handleDraft = (fpid: number) => {
+    setActionError(null);
+    draftPick({ seasonId, fpid, teamId: draftingTeamId }).catch((err) => {
+      setActionError(getErrorMessage(err, "Failed to draft player."));
+    });
   };
 
   const renderSortableTh = (label: string, key: SortKey) => (
@@ -537,7 +671,9 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
         <Text size="xs" c="dimmed" maw={640}>
           {view === "bar"
             ? "Length = cost · color = consistency · outline = target/avoid · faded = over budget · gold = on the block"
-            : "$ = cost · green = fits budget · gold row = on the block"}
+            : isAuction
+              ? "$ = cost · green = fits budget · gold row = on the block"
+              : "ADP = market consensus · vs ADP = your rank vs market"}
         </Text>
         <SegmentedControl
           size="sm"
@@ -596,97 +732,61 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
           {actionError}
         </Text>
       )}
-      {/* A few px of horizontal padding keeps the leftmost/rightmost bars'
-          outlines from being clipped by the scroll container's edge -
-          without it, an outlined bar sitting flush against x=0 has its
-          outline cut off since outline paint is subject to the ancestor's
-          overflow clip region. */}
-      <Box style={{ overflowX: view === "bar" ? "auto" : "visible" }} px={4}>
-        <Stack gap="lg" miw={view === "bar" ? "max-content" : undefined}>
-          {visiblePositions.length === 0 && (
-            <Text c="dimmed" px={4}>
-              No players match your search.
-            </Text>
-          )}
-          {visiblePositions.map((pos) => {
-            const rows = rowsByPosition.get(pos) ?? [];
-            const remainingTopTiers = rows.filter(
-              (row) => row.tier <= 2,
-            ).length;
-            const openSlots = openSlotsByPosition.get(pos) ?? 0;
-            const recommendation = recommendationFor(
-              remainingTopTiers,
-              openSlots,
-            );
-            const tierGroups = groupByTier(rows);
-            // Table view only - Bar view always renders tierGroups above
-            // untouched by any column sort. Falls back to tierRank on a
-            // tie, same composite order rows already arrive in by default.
-            const tableRows = sortKey
-              ? [...rows].sort((a, b) => {
-                  const primary = compareSortValues(
-                    sortValueFor(a, sortKey),
-                    sortValueFor(b, sortKey),
-                    sortDir,
-                  );
-                  return primary !== 0 ? primary : a.tierRank - b.tierRank;
-                })
-              : rows;
+      {view === "bar" ? (
+        // A few px of horizontal padding keeps the leftmost/rightmost bars'
+        // outlines from being clipped by the scroll container's edge -
+        // without it, an outlined bar sitting flush against x=0 has its
+        // outline cut off since outline paint is subject to the ancestor's
+        // overflow clip region.
+        <Box style={{ overflowX: "auto" }} px={4}>
+          <Stack gap="lg" miw="max-content">
+            {visiblePositions.length === 0 && (
+              <Text c="dimmed" px={4}>
+                No players match your search.
+              </Text>
+            )}
+            {visiblePositions.map((pos) => {
+              const rows = rowsByPosition.get(pos) ?? [];
+              const remainingTopTiers = rows.filter(
+                (row) => row.tier <= 2,
+              ).length;
+              const openSlots = openSlotsByPosition.get(pos) ?? 0;
+              const recommendation = recommendationFor(
+                remainingTopTiers,
+                openSlots,
+              );
+              const tierGroups = groupByTier(rows);
 
-            const handleSetTag = (fpid: number, nextTag: PlayerTag) => {
-              setActionError(null);
-              setSwipedFpid((current) => (current === fpid ? null : current));
-              setPlayerTag({ seasonId, fpid, tag: nextTag }).catch((err) => {
-                setActionError(getErrorMessage(err, "Failed to update tag."));
-              });
-            };
-
-            const handleNominate = (fpid: number) => {
-              setActionError(null);
-              nominate({
-                seasonId,
-                fpid,
-                ...(nominatingTeamId ? { nominatingTeamId } : {}),
-                openingBid: 1,
-              }).catch((err) => {
-                setActionError(getErrorMessage(err, "Failed to nominate."));
-              });
-            };
-
-            return (
-              <Stack key={pos} gap={6}>
-                <Group
-                  gap="sm"
-                  wrap="nowrap"
-                  style={{
-                    position: "sticky",
-                    left: 0,
-                    width: "fit-content",
-                    backgroundColor: "var(--mantine-color-body)",
-                    zIndex: 1,
-                  }}
-                  py={2}
-                  pr="md"
-                >
-                  <Badge size="lg" variant="light" color={POSITION_COLORS[pos]}>
-                    {pos}
-                  </Badge>
-                  <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                    {remainingTopTiers} left in tiers 1-2 - {openSlots} slot
-                    {openSlots === 1 ? "" : "s"} to fill
-                  </Text>
-                  <Badge color={recommendation.color} variant="light">
-                    {recommendation.label}
-                  </Badge>
-                </Group>
-                {view === "table" && (
-                  <Box hiddenFrom="sm">
-                    <Text size="xs" c="dimmed">
-                      Swipe a row left for Target/Avoid
+              return (
+                <Stack key={pos} gap={6}>
+                  <Group
+                    gap="sm"
+                    wrap="nowrap"
+                    style={{
+                      position: "sticky",
+                      left: 0,
+                      width: "fit-content",
+                      backgroundColor: "var(--mantine-color-body)",
+                      zIndex: 1,
+                    }}
+                    py={2}
+                    pr="md"
+                  >
+                    <Badge
+                      size="lg"
+                      variant="light"
+                      color={POSITION_COLORS[pos]}
+                    >
+                      {pos}
+                    </Badge>
+                    <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                      {remainingTopTiers} left in tiers 1-2 - {openSlots} slot
+                      {openSlots === 1 ? "" : "s"} to fill
                     </Text>
-                  </Box>
-                )}
-                {view === "bar" ? (
+                    <Badge color={recommendation.color} variant="light">
+                      {recommendation.label}
+                    </Badge>
+                  </Group>
                   <Group gap="lg" align="flex-end" wrap="nowrap">
                     {tierGroups.map((group) => (
                       <Stack key={group.tier} gap={4} style={{ flexShrink: 0 }}>
@@ -738,133 +838,145 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                       </Stack>
                     ))}
                   </Group>
-                ) : (
-                  <>
-                    <Box visibleFrom="sm">
-                      <Table.ScrollContainer minWidth={300}>
-                        <Table
-                          verticalSpacing={4}
-                          horizontalSpacing="xs"
-                          highlightOnHover
-                        >
-                          <Table.Thead>
-                            <Table.Tr>
-                              <Table.Th></Table.Th>
-                              {renderSortableTh("Player", "player")}
-                              {renderSortableTh("Tier", "tier")}
-                              {renderSortableTh("$", "dollar")}
-                              {renderSortableTh("vs. market", "market")}
-                              {renderSortableTh("Pts", "pts")}
-                              <Table.Th></Table.Th>
-                            </Table.Tr>
-                          </Table.Thead>
-                          <Table.Tbody>
-                            {tableRows.map((row) => (
-                              <PlayerTableRow
-                                key={row.fpid}
-                                row={row}
-                                tag={tagByFpid.get(row.fpid)}
-                                standardValue={standardValueByFpid.get(
-                                  row.fpid,
-                                )}
-                                valueGap={valueGapByFpid.get(row.fpid)}
-                                consistency={consistencyByFpid.get(row.fpid)}
-                                injury={injuriesByFpid.get(row.fpid)}
-                                isRookie={rookieFpids.has(row.fpid)}
-                                isNominated={
-                                  activeNomination?.fpid === row.fpid
-                                }
-                                hasActiveNomination={!!activeNomination}
-                                budgetMatch={
-                                  budgetMatchByFpid.get(row.fpid) ?? false
-                                }
-                                isExpanded={expandedFpids.has(row.fpid)}
-                                onSetTag={(nextTag) =>
-                                  handleSetTag(row.fpid, nextTag)
-                                }
-                                onNominate={() => handleNominate(row.fpid)}
-                                onSelectPlayer={setSelectedFpid}
-                                onToggleExpand={() => toggleExpanded(row.fpid)}
-                              />
-                            ))}
-                          </Table.Tbody>
-                        </Table>
-                      </Table.ScrollContainer>
-                    </Box>
+                </Stack>
+              );
+            })}
+          </Stack>
+        </Box>
+      ) : (
+        <Box px={4}>
+          {combinedRows.length === 0 && (
+            <Text c="dimmed" px={4} mb="sm">
+              No players match your search.
+            </Text>
+          )}
+          <Box hiddenFrom="sm" mb="xs">
+            <Text size="xs" c="dimmed">
+              Swipe a row left for Target/Avoid
+            </Text>
+          </Box>
 
-                    <Box hiddenFrom="sm">
-                      <Box
-                        style={{
-                          border:
-                            "1px solid var(--mantine-color-default-border)",
-                          borderRadius: "var(--mantine-radius-sm)",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <Group
-                          gap={8}
-                          wrap="nowrap"
-                          px={6}
-                          py={4}
-                          style={{
-                            borderBottom:
-                              "1px solid var(--mantine-color-default-border)",
-                          }}
-                        >
-                          {renderSortableLabel("Player", "player", {
-                            flex: 1,
-                          })}
-                          {renderSortableLabel("$", "dollar", {
-                            width: 36,
-                            flexShrink: 0,
-                          })}
-                          {renderSortableLabel("vs Mkt", "market", {
-                            width: 36,
-                            flexShrink: 0,
-                          })}
-                          <Text
-                            size="10px"
-                            c="dimmed"
-                            tt="uppercase"
-                            style={{ width: 40, flexShrink: 0 }}
-                          >
-                            Pos
-                          </Text>
-                          {renderSortableLabel("Pts", "pts", {
-                            width: 34,
-                            flexShrink: 0,
-                            justifyContent: "flex-end",
-                          })}
-                        </Group>
-                        {tableRows.map((row) => (
-                          <PlayerTableRowMobile
-                            key={row.fpid}
-                            row={row}
-                            tag={tagByFpid.get(row.fpid)}
-                            standardValue={standardValueByFpid.get(row.fpid)}
-                            valueGap={valueGapByFpid.get(row.fpid)}
-                            consistency={consistencyByFpid.get(row.fpid)}
-                            injury={injuriesByFpid.get(row.fpid)}
-                            isRookie={rookieFpids.has(row.fpid)}
-                            isNominated={activeNomination?.fpid === row.fpid}
-                            isSwiped={swipedFpid === row.fpid}
-                            onSwipeOpen={() => setSwipedFpid(row.fpid)}
-                            onSetTag={(nextTag) =>
-                              handleSetTag(row.fpid, nextTag)
-                            }
-                            onCloseSwipe={() => setSwipedFpid(null)}
-                            onSelectPlayer={setSelectedFpid}
-                          />
-                        ))}
-                      </Box>
-                    </Box>
-                  </>
+          <Box visibleFrom="sm">
+            <Table.ScrollContainer minWidth={480}>
+              <Table
+                verticalSpacing={4}
+                horizontalSpacing="xs"
+                highlightOnHover
+              >
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th></Table.Th>
+                    {renderSortableTh("Player", "player")}
+                    <Table.Th>Pos</Table.Th>
+                    {renderSortableTh("Tier", "tier")}
+                    {renderSortableTh(isAuction ? "$" : "ADP", "dollar")}
+                    {renderSortableTh(
+                      isAuction ? "vs. market" : "vs ADP",
+                      "market",
+                    )}
+                    {renderSortableTh("Pts", "pts")}
+                    <Table.Th></Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {tableRows.map((row) => (
+                    <PlayerTableRow
+                      key={row.fpid}
+                      row={row}
+                      tag={tagByFpid.get(row.fpid)}
+                      standardValue={standardValueByFpid.get(row.fpid)}
+                      isAuction={isAuction}
+                      adp={blendedAdpByFpid.get(row.fpid)}
+                      ourRank={ourRankByFpid.get(row.fpid)}
+                      valueGap={valueGapByFpid.get(row.fpid)}
+                      consistency={consistencyByFpid.get(row.fpid)}
+                      injury={injuriesByFpid.get(row.fpid)}
+                      isRookie={rookieFpids.has(row.fpid)}
+                      isNominated={activeNomination?.fpid === row.fpid}
+                      hasActiveNomination={!!activeNomination}
+                      budgetMatch={budgetMatchByFpid.get(row.fpid) ?? false}
+                      isExpanded={expandedFpids.has(row.fpid)}
+                      onSetTag={(nextTag) => handleSetTag(row.fpid, nextTag)}
+                      onNominate={() => handleNominate(row.fpid)}
+                      onDraft={() => handleDraft(row.fpid)}
+                      onSelectPlayer={setSelectedFpid}
+                      onToggleExpand={() => toggleExpanded(row.fpid)}
+                    />
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          </Box>
+
+          <Box hiddenFrom="sm">
+            <Box
+              style={{
+                border: "1px solid var(--mantine-color-default-border)",
+                borderRadius: "var(--mantine-radius-sm)",
+                overflow: "hidden",
+              }}
+            >
+              <Group
+                gap={8}
+                wrap="nowrap"
+                px={6}
+                py={4}
+                style={{
+                  borderBottom: "1px solid var(--mantine-color-default-border)",
+                }}
+              >
+                {renderSortableLabel("Player", "player", { flex: 1 })}
+                {renderSortableLabel(isAuction ? "$" : "ADP", "dollar", {
+                  width: 36,
+                  flexShrink: 0,
+                })}
+                {renderSortableLabel(
+                  isAuction ? "vs Mkt" : "vs ADP",
+                  "market",
+                  {
+                    width: 36,
+                    flexShrink: 0,
+                  },
                 )}
-              </Stack>
-            );
-          })}
-        </Stack>
-      </Box>
+                <Text
+                  size="10px"
+                  c="dimmed"
+                  tt="uppercase"
+                  style={{ width: 40, flexShrink: 0 }}
+                >
+                  Pos
+                </Text>
+                {renderSortableLabel("Pts", "pts", {
+                  width: 34,
+                  flexShrink: 0,
+                  justifyContent: "flex-end",
+                })}
+              </Group>
+              {tableRows.map((row) => (
+                <PlayerTableRowMobile
+                  key={row.fpid}
+                  row={row}
+                  tag={tagByFpid.get(row.fpid)}
+                  standardValue={standardValueByFpid.get(row.fpid)}
+                  isAuction={isAuction}
+                  adp={blendedAdpByFpid.get(row.fpid)}
+                  ourRank={ourRankByFpid.get(row.fpid)}
+                  valueGap={valueGapByFpid.get(row.fpid)}
+                  consistency={consistencyByFpid.get(row.fpid)}
+                  injury={injuriesByFpid.get(row.fpid)}
+                  isRookie={rookieFpids.has(row.fpid)}
+                  isNominated={activeNomination?.fpid === row.fpid}
+                  isSwiped={swipedFpid === row.fpid}
+                  onSwipeOpen={() => setSwipedFpid(row.fpid)}
+                  onSetTag={(nextTag) => handleSetTag(row.fpid, nextTag)}
+                  onCloseSwipe={() => setSwipedFpid(null)}
+                  onSelectPlayer={setSelectedFpid}
+                />
+              ))}
+            </Box>
+          </Box>
+        </Box>
+      )}
 
       <PlayerDetailModal
         fpid={selectedFpid}

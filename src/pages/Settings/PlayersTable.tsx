@@ -31,15 +31,13 @@ import {
   type ConsistencyLabel,
 } from "../../lib/consistency";
 import {
-  adpForScoring,
   filterRelevantPlayers,
   pointsForScoringConfig,
-  RELEVANT_ADP_CEILING,
   scoringConfigFromSeason,
 } from "../../lib/relevantPlayers";
 import { buildStandardValueByFpid } from "../../lib/standardValues";
 import { compareSortValues, type SortDir } from "../../lib/tableSort";
-import { rankByDollarValue, sortValuesDescending } from "../../lib/valueRank";
+import { buildBlendedAdpByFpid, buildOurRankByFpid } from "../../lib/valueRank";
 import {
   POSITIONS,
   type DraftTierRow,
@@ -59,13 +57,6 @@ interface PlayersTableProps {
 
 type SortKey =
   "player" | "team" | "tier" | "dollar" | "market" | "pts" | "rank";
-
-// Same "premier positions" list convex/valueGaps.ts's VALUE_GAP_POSITIONS
-// and convex/gemini/preDraftInsights.ts's own PREMIER_POSITIONS already
-// establish - used here to keep "our rank" (the snake/linear vs-ADP diff's
-// internal ranking key, see ourRankByFpid below) scoped to the same
-// meaningfully-comparable population blended ADP covers.
-const PREMIER_POSITIONS: Position[] = ["QB", "RB", "WR", "TE"];
 
 // Direction a column sorts to the first time it's clicked - numeric value
 // columns default to "best first" (highest $/points, lowest/best tier),
@@ -340,89 +331,25 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     return map;
   }, [draftValues]);
 
-  // Snake/linear's "ADP" column: Sleeper ADP (adpByFpid, scoring-matched)
-  // averaged with ESPN's own overall draft-kit rank (standardValueByFpid -
-  // already fetched for auction's "vs market" column) - two independently-
-  // sourced market consensus numbers agreeing is a stronger signal than
-  // either alone, same reasoning convex/valueGaps.ts's buildEspnRankByFpid
-  // already uses. Falls back to whichever one exists if only one does.
-  // Superflex leagues use ESPN's superflex rank alone - Sleeper has no
-  // superflex-aware ADP field at all (see schema.ts's rankings table), so
-  // blending it in would water down/mislead the superflex signal (it
-  // understates QBs relative to how a real superflex draft actually goes),
-  // same "superflex overrides scoring-format nuance" precedent
-  // buildStandardValueByFpid already sets for the auction $-vs-market column.
-  const blendedAdpByFpid = useMemo(() => {
-    const map = new Map<number, number>();
-    const fpids = new Set<number>([
-      ...adpByFpid.keys(),
-      ...standardValueByFpid.keys(),
-    ]);
-    for (const fpid of fpids) {
-      const espnRank = standardValueByFpid.get(fpid)?.rank;
-      if (isSuperflex) {
-        if (espnRank !== undefined) map.set(fpid, espnRank);
-        continue;
-      }
-      const sleeperRow = adpByFpid.get(fpid);
-      const rawSleeperAdp = sleeperRow
-        ? adpForScoring(sleeperRow, scoring)
-        : undefined;
-      // A player with no real ADP (Sleeper's own sentinel, or a long tail
-      // of technically-non-sentinel-but-still-noise values - same
-      // RELEVANT_ADP_CEILING cutoff filterRelevantPlayers uses) can't be
-      // trusted as a genuine market opinion - dropped rather than blended
-      // in, so a deep/marginal player never shows a wildly misleading
-      // vs-ADP diff built from comparing against a number that was never a
-      // real draft position.
-      const sleeperAdp =
-        rawSleeperAdp !== undefined && rawSleeperAdp < RELEVANT_ADP_CEILING
-          ? rawSleeperAdp
-          : undefined;
-      if (sleeperAdp !== undefined && espnRank !== undefined) {
-        map.set(fpid, (sleeperAdp + espnRank) / 2);
-      } else if (sleeperAdp !== undefined) {
-        map.set(fpid, sleeperAdp);
-      } else if (espnRank !== undefined) {
-        map.set(fpid, espnRank);
-      }
-    }
-    return map;
-  }, [adpByFpid, standardValueByFpid, isSuperflex, scoring]);
-
-  // Snake/linear's "our rank" for the vs-ADP diff: every active-position
-  // player pooled by dollarValue descending, the one number that's already
-  // normalized VOR to be comparable across positions (see PlayersTable.tsx's
-  // earlier $-vs-market column and convex/draftValues.ts's
-  // FALLOFF_EXPONENT curve) - raw valueOverReplacement isn't directly
-  // comparable position to position, so this reuses $ purely as an internal
-  // cross-position ranking key. $ itself is never displayed for a
-  // snake/linear league. Same pooled-dollarValue-rank primitive
-  // keeperCost.ts's round-mode keeper bargains rank against (see
-  // valueRank.ts) - draftValues already excludes kept players from its pool
-  // the same way RecommendedKeepers.tsx's availableValues does.
-  //
-  // Restricted to premier positions (K/DST vs-ADP is never a useful
-  // takeaway) with a real, non-sentinel ADP - draftValues itself has no ADP
-  // filtering at all (every rostered-relevant player per position, easily
-  // several hundred total), so without this, "our rank" is computed over a
-  // much bigger/deeper pool than blended ADP realistically covers, which
-  // can make a legitimately late-round player's vs-ADP diff read as a wild
-  // multi-hundred-spot number that isn't a real signal - just an artifact
-  // of the two sides being pooled at very different depths. Same
-  // PREMIER_POSITIONS/RELEVANT_ADP_CEILING gate
-  // convex/gemini/preDraftInsights.ts's own relevantValues applies
-  // server-side for the AI Insights version of this same signal.
-  const ourRankByFpid = useMemo(() => {
-    if (!draftValues) return new Map<number, number>();
-    const relevantValues = draftValues.filter((row) => {
-      if (!PREMIER_POSITIONS.includes(row.position)) return false;
-      const adpRow = adpByFpid.get(row.fpid);
-      const sleeperAdp = adpRow ? adpForScoring(adpRow, scoring) : undefined;
-      return sleeperAdp !== undefined && sleeperAdp < RELEVANT_ADP_CEILING;
-    });
-    return rankByDollarValue(sortValuesDescending(relevantValues));
-  }, [draftValues, adpByFpid, scoring]);
+  // Snake/linear's "ADP" and "our rank" columns - shared with
+  // PlayersLeftTab.tsx (in-draft) via lib/valueRank.ts's
+  // buildBlendedAdpByFpid/buildOurRankByFpid, so the two never compute a
+  // different number for the same player. See those functions' own
+  // comments for the full reasoning.
+  const blendedAdpByFpid = useMemo(
+    () =>
+      buildBlendedAdpByFpid(
+        adpByFpid,
+        standardValueByFpid,
+        isSuperflex,
+        scoring,
+      ),
+    [adpByFpid, standardValueByFpid, isSuperflex, scoring],
+  );
+  const ourRankByFpid = useMemo(
+    () => buildOurRankByFpid(draftValues, adpByFpid, scoring),
+    [draftValues, adpByFpid, scoring],
+  );
 
   const relevantProjections = useMemo(() => {
     if (!allProjections) return [];
