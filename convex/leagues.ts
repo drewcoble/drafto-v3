@@ -238,6 +238,7 @@ export const createLeague = mutation({
       await insertSeasonTeams(ctx, {
         seasonId,
         draftId,
+        draftType: seasonFields.draftType ?? "auction",
         selfName: "Team 1",
         opponentNames: Array.from(
           { length: seasonFields.teamCount - 1 },

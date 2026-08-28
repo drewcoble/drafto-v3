@@ -12,6 +12,7 @@ import {
   requireDraftNotStarted,
 } from "./auth";
 import { invalidateDraftValues } from "../draftValues";
+import { resolveDraftType, type DraftType } from "../draftType";
 
 export const listSeasonTeams = query({
   args: { seasonId: v.id("seasons") },
@@ -81,6 +82,10 @@ export async function insertSeasonTeams(
   args: {
     seasonId: Id<"seasons">;
     draftId: Id<"drafts">;
+    // Determines whether draftOrder gets seeded below - callers pass this
+    // in rather than insertSeasonTeams re-fetching season/draft docs, since
+    // both current callers already have what resolveDraftType needs on hand.
+    draftType: DraftType;
     selfName: string;
     opponentNames: string[];
     selfSleeperLink?:
@@ -119,9 +124,22 @@ export async function insertSeasonTeams(
     );
   }
 
+  // nominationOrder is set unconditionally - it's meaningless outside a
+  // live auction (see schema.ts), so leaving it populated for snake/linear
+  // is harmless. draftOrder is the opposite: several pickSlots.ts mutations
+  // (tradePickSlot, forfeitPickSlot, restorePickSlot) rely on it being
+  // *unset* for auction leagues as their only guard against running there,
+  // so it must stay gated on draftType rather than also being unconditional.
+  // For snake/linear, draftOrder is a hard precondition rather than a soft
+  // suggestion - picks.ts's draftPick throws "Set the draft order before
+  // picking" without it - so leaving it unset there would make a freshly
+  // created snake/linear league undraftable until a host visited TeamsPanel
+  // and saved an order by hand.
+  const isAuction = args.draftType === "auction";
   await ctx.db.patch(args.draftId, {
     nominationOrder: teamIds,
     nominationOrderMode: "linear",
+    ...(isAuction ? {} : { draftOrder: teamIds }),
   });
   await ctx.db.insert("draftNominationTurns", {
     draftId: args.draftId,
@@ -177,6 +195,7 @@ export const initializeSeasonTeams = mutation({
     return await insertSeasonTeams(ctx, {
       seasonId: args.seasonId,
       draftId: draft._id,
+      draftType: resolveDraftType(season, draft),
       selfName: args.selfName,
       opponentNames: args.opponentNames,
       selfSleeperLink: args.selfSleeperLink,
@@ -222,6 +241,11 @@ export const addSeasonTeam = mutation({
     if (draft.nominationOrder) {
       await ctx.db.patch(draft._id, {
         nominationOrder: [...draft.nominationOrder, teamId],
+      });
+    }
+    if (draft.draftOrder) {
+      await ctx.db.patch(draft._id, {
+        draftOrder: [...draft.draftOrder, teamId],
       });
     }
 
@@ -294,6 +318,11 @@ export const removeSeasonTeam = mutation({
         nominationOrder: draft.nominationOrder.filter(
           (id) => id !== args.teamId,
         ),
+      });
+    }
+    if (draft.draftOrder?.includes(args.teamId)) {
+      await ctx.db.patch(draft._id, {
+        draftOrder: draft.draftOrder.filter((id) => id !== args.teamId),
       });
     }
     const turn = await ctx.db
