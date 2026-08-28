@@ -76,8 +76,10 @@ interface PlayerRowMobileProps {
   tag: PlayerTag | undefined;
   // undefined (rather than a no-op) when no league's selected - swipe still
   // opens, but the buttons themselves are disabled, same as PlayerRow.tsx's
-  // desktop ActionIcon ("Select a league to mark targets/avoids").
-  onCycleTag: (() => void) | undefined;
+  // desktop ActionIcon ("Select a league to mark targets/avoids"). Direct
+  // set (not cycle) since Target/Avoid are separate buttons here, same as
+  // PlayerTableRowMobile.tsx's onSetTag.
+  onSetTag: ((tag: PlayerTag) => void) | undefined;
   onSelectPlayer: (fpid: number) => void;
   consistency: ConsistencyLabel | undefined;
   showConsistencyColumn: boolean;
@@ -108,7 +110,7 @@ export function PlayerRowMobile({
   valueGap,
   showValueColumn,
   tag,
-  onCycleTag,
+  onSetTag,
   onSelectPlayer,
   consistency,
   showConsistencyColumn,
@@ -143,9 +145,9 @@ export function PlayerRowMobile({
           fz="xs"
           px={4}
           color="green"
-          disabled={!onCycleTag}
+          disabled={!onSetTag}
           leftSection={<Crosshair size={12} />}
-          onClick={onCycleTag}
+          onClick={() => onSetTag?.("target")}
         >
           Target
         </Button>
@@ -157,9 +159,9 @@ export function PlayerRowMobile({
           fz="xs"
           px={4}
           color="red"
-          disabled={!onCycleTag}
+          disabled={!onSetTag}
           leftSection={<CircleSlash size={12} />}
-          onClick={onCycleTag}
+          onClick={() => onSetTag?.("avoid")}
         >
           Avoid
         </Button>

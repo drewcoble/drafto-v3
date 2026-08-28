@@ -209,6 +209,7 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     seasonId ? { seasonId } : "skip",
   );
   const cyclePlayerTag = useMutation(api.draft.tags.cyclePlayerTag);
+  const setPlayerTag = useMutation(api.draft.tags.setPlayerTag);
   const tagByFpid = useMemo(() => {
     const map = new Map<number, PlayerTag>();
     for (const row of playerTags ?? []) map.set(row.fpid, row.tag);
@@ -795,10 +796,10 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
                   valueGap={valueGapByFpid.get(row.fpid)}
                   showValueColumn={!!draftValues}
                   tag={tagByFpid.get(row.fpid)}
-                  onCycleTag={
+                  onSetTag={
                     seasonId
-                      ? () => {
-                          cyclePlayerTag({ seasonId, fpid: row.fpid });
+                      ? (tag) => {
+                          setPlayerTag({ seasonId, fpid: row.fpid, tag });
                           setSwipedId(null);
                         }
                       : undefined
