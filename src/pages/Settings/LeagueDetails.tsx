@@ -106,7 +106,7 @@ export function LeagueDetails({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [selfName, setSelfName] = useState("Me");
+  const [selfName, setSelfName] = useState("Team 1");
   const [opponentNames, setOpponentNames] = useState<string[]>([]);
   const [isSavingTeams, setIsSavingTeams] = useState(false);
   const [teamsError, setTeamsError] = useState<string | null>(null);
@@ -150,7 +150,7 @@ export function LeagueDetails({
     setOpponentNames((current) =>
       current.length === opponentCount
         ? current
-        : Array.from({ length: opponentCount }, () => ""),
+        : Array.from({ length: opponentCount }, (_, index) => `Team ${index + 2}`),
     );
   }, [settings, draftTeams]);
 
@@ -717,7 +717,7 @@ export function LeagueDetails({
               {opponentNames.map((name, index) => (
                 <TextInput
                   key={index}
-                  placeholder={`Team ${index + 1}`}
+                  placeholder={`Team ${index + 2}`}
                   value={name}
                   onChange={(event) => {
                     const next = [...opponentNames];
