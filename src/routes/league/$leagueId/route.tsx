@@ -233,12 +233,6 @@ function LeagueLayout() {
           </Tabs.List>
         </Tabs>
       </Box>
-      <BottomNav
-        items={bottomNavItems}
-        more={{ label: "More", items: bottomNavMoreItems }}
-        leagueId={leagueId}
-        hasFab={isStarted}
-      />
       <Outlet />
     </>
   );
@@ -277,6 +271,19 @@ function LeagueLayout() {
         ) : (
           mainColumn
         )}
+        {/* Deliberately a direct child of this Stack rather than part of
+            mainColumn above - BottomNav is position: fixed chrome, not
+            column content, and nesting it inside the sidebar branch's
+            Group > Stack gives WebKit/iOS an ancestor box to resolve
+            `bottom` against instead of the viewport, which floats the bar
+            partway up the page. Being out of flow, it costs no flex gap
+            here. */}
+        <BottomNav
+          items={bottomNavItems}
+          more={{ label: "More", items: bottomNavMoreItems }}
+          leagueId={leagueId}
+          hasFab={isStarted}
+        />
         {/* Snake/linear's mobile counterpart to the auction FAB above -
             BottomNav already reserves its center notch for any started
             draft (hasFab={isStarted}), but until now only auction actually
