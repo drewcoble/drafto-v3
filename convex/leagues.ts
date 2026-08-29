@@ -58,6 +58,14 @@ export interface SeasonWithLeagueName extends Doc<"seasons"> {
   // league grid (src/routes/index.tsx), which needs every league to render
   // even if one row is in a bad state.
   draftStatus: "pre_draft" | "in_progress" | "complete";
+  // Live-sync-from-Sleeper fields, joined from the same real draft doc (see
+  // schema.ts's drafts.sleeper* fields and convex/sleeper/draftSync.ts) -
+  // lets SeasonSettingsTab and the Draft Room read sync state off the same
+  // `settings` query they already subscribe to, instead of a second query.
+  sleeperDraftId?: string;
+  sleeperSyncEnabled?: boolean;
+  sleeperLastSyncedAt?: number;
+  sleeperSyncError?: string;
 }
 
 // Every season across every league this user owns, each carrying its
@@ -93,6 +101,18 @@ export const listSeasons = query({
           ...season,
           name: league.name,
           draftStatus: draft?.status ?? "pre_draft",
+          ...(draft?.sleeperDraftId !== undefined
+            ? { sleeperDraftId: draft.sleeperDraftId }
+            : {}),
+          ...(draft?.sleeperSyncEnabled !== undefined
+            ? { sleeperSyncEnabled: draft.sleeperSyncEnabled }
+            : {}),
+          ...(draft?.sleeperLastSyncedAt !== undefined
+            ? { sleeperLastSyncedAt: draft.sleeperLastSyncedAt }
+            : {}),
+          ...(draft?.sleeperSyncError !== undefined
+            ? { sleeperSyncError: draft.sleeperSyncError }
+            : {}),
         });
       }
     }
@@ -122,6 +142,18 @@ export const getSeasonPublic = query({
       ...season,
       name: league.name,
       draftStatus: draft?.status ?? "pre_draft",
+      ...(draft?.sleeperDraftId !== undefined
+        ? { sleeperDraftId: draft.sleeperDraftId }
+        : {}),
+      ...(draft?.sleeperSyncEnabled !== undefined
+        ? { sleeperSyncEnabled: draft.sleeperSyncEnabled }
+        : {}),
+      ...(draft?.sleeperLastSyncedAt !== undefined
+        ? { sleeperLastSyncedAt: draft.sleeperLastSyncedAt }
+        : {}),
+      ...(draft?.sleeperSyncError !== undefined
+        ? { sleeperSyncError: draft.sleeperSyncError }
+        : {}),
     };
   },
 });

@@ -181,6 +181,15 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
   return (
     <Stack gap="md" py="sm">
       {draftBoardResult?.isGeneric && <GenericValuesNotice />}
+      {settings?.sleeperSyncEnabled && (
+        <Text size="xs" c={settings.sleeperSyncError ? "yellow.7" : "dimmed"}>
+          {settings.sleeperSyncError
+            ? `Sleeper sync: ${settings.sleeperSyncError}`
+            : settings.sleeperLastSyncedAt
+              ? `Synced from Sleeper - last checked ${new Date(settings.sleeperLastSyncedAt).toLocaleTimeString()}`
+              : "Sleeper sync starting up..."}
+        </Text>
+      )}
       {actionError && (
         <Text c="red" size="sm">
           {actionError}

@@ -257,6 +257,15 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
           {actionError}
         </Text>
       )}
+      {settings?.sleeperSyncEnabled && (
+        <Text size="xs" c={settings.sleeperSyncError ? "yellow.7" : "dimmed"}>
+          {settings.sleeperSyncError
+            ? `Sleeper sync: ${settings.sleeperSyncError}`
+            : settings.sleeperLastSyncedAt
+              ? `Synced from Sleeper - last checked ${new Date(settings.sleeperLastSyncedAt).toLocaleTimeString()}`
+              : "Sleeper sync starting up..."}
+        </Text>
+      )}
       {usingGenericValues && <GenericValuesNotice />}
       {isStarted && nominationResults && (
         <RecommendedNominations

@@ -30,7 +30,7 @@ interface SleeperRoster {
   };
 }
 
-async function fetchSleeperJson<T>(path: string): Promise<T> {
+export async function fetchSleeperJson<T>(path: string): Promise<T> {
   const response = await fetch(`${LEAGUE_API_BASE_URL}${path}`);
   if (!response.ok) {
     const body = await response.text().catch(() => "");
@@ -55,7 +55,7 @@ async function fetchSleeperLeagueJson<T>(
 // team, e.g. "SF") - translate those through the same synthetic ids
 // DEF_TEAM_FPIDS uses for our own DST rows (see ./client.ts). Anything that's
 // neither (a bye-week/practice-squad id we don't track) maps to null.
-function sleeperPlayerIdToFpid(playerId: string): number | null {
+export function sleeperPlayerIdToFpid(playerId: string): number | null {
   if (DEF_TEAM_FPIDS[playerId] !== undefined) {
     return DEF_TEAM_FPIDS[playerId];
   }
@@ -294,7 +294,7 @@ interface SleeperLeagueSettings {
   draft_id?: string | null;
 }
 
-async function fetchSleeperLeagueSettings(
+export async function fetchSleeperLeagueSettings(
   sleeperLeagueId: string,
 ): Promise<SleeperLeagueSettings> {
   return await fetchSleeperLeagueJson<SleeperLeagueSettings>(
@@ -303,12 +303,26 @@ async function fetchSleeperLeagueSettings(
   );
 }
 
-interface SleeperDraft {
+// Extended (status/start_time) for convex/sleeper/draftSync.ts's live
+// poller - fetchPreviousSeasonPreview below only ever needed draft_id/type,
+// but the live poller needs status ("pre_draft"/"drafting"/"paused"/
+// "complete", per Sleeper's docs - kept as a plain string here rather than a
+// literal union since Sleeper doesn't formally enumerate every value) to
+// know when to stop, and start_time (unix ms) to auto-start the in-app
+// draft ~10 minutes ahead of the real thing.
+export interface SleeperDraft {
   draft_id: string;
   type: "snake" | "auction" | "linear";
+  status: string;
+  start_time?: number;
 }
 
-interface SleeperDraftPick {
+// Extended (pick_no/roster_id/picked_by) for the live poller -
+// fetchPreviousSeasonPreview below only ever needed player_id/metadata.
+// amount/round for a completed draft's keeper-price/keeper-round seeding,
+// but live sync needs pick order and which roster/owner made the pick to
+// map it to a seasonTeams row.
+export interface SleeperDraftPick {
   player_id: string;
   // Only meaningful for an auction draft.
   metadata?: { amount?: string };
@@ -316,6 +330,9 @@ interface SleeperDraftPick {
   // top-level field on every pick regardless of format, just unused by
   // Sleeper's own UI for an auction draft.
   round?: number;
+  pick_no: number;
+  roster_id: number | null;
+  picked_by: string | null;
 }
 
 // Best-effort: the current league's own draft type (SNAKE_DRAFT.md §6) -

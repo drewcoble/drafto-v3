@@ -71,6 +71,7 @@ import type * as scoring from "../scoring.js";
 import type * as season_faabValues from "../season/faabValues.js";
 import type * as season_rosterPlayers from "../season/rosterPlayers.js";
 import type * as sleeper_client from "../sleeper/client.js";
+import type * as sleeper_draftSync from "../sleeper/draftSync.js";
 import type * as sleeper_league from "../sleeper/league.js";
 import type * as sleeper_leagueSettingsMapping from "../sleeper/leagueSettingsMapping.js";
 import type * as sleeper_playerLinks from "../sleeper/playerLinks.js";
@@ -155,6 +156,7 @@ declare const fullApi: ApiFromModules<{
   "season/faabValues": typeof season_faabValues;
   "season/rosterPlayers": typeof season_rosterPlayers;
   "sleeper/client": typeof sleeper_client;
+  "sleeper/draftSync": typeof sleeper_draftSync;
   "sleeper/league": typeof sleeper_league;
   "sleeper/leagueSettingsMapping": typeof sleeper_leagueSettingsMapping;
   "sleeper/playerLinks": typeof sleeper_playerLinks;

@@ -55,6 +55,8 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
     api.sleeper.league.listSleeperLeaguesForUsername,
   );
   const syncLeagueRoster = useAction(api.sleeper.league.syncLeagueRoster);
+  const linkSleeperDraft = useAction(api.sleeper.draftSync.linkSleeperDraft);
+  const disableLiveSync = useMutation(api.sleeper.draftSync.disableLiveSync);
   const startYahooAuth = useAction(api.yahoo.oauth.startYahooAuth);
   const listMyYahooLeagues = useAction(api.yahoo.league.listMyYahooLeagues);
   const fetchYahooLeagueTeams = useAction(api.yahoo.league.fetchYahooLeagueTeams);
@@ -79,6 +81,7 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
   const [loadingYahooLeagues, setLoadingYahooLeagues] = useState(false);
   const [connectingYahoo, setConnectingYahoo] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [linkingLiveSync, setLinkingLiveSync] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -282,6 +285,31 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
     }
   };
 
+  const handleEnableLiveSync = async () => {
+    setError(null);
+    setStatus(null);
+    setLinkingLiveSync(true);
+    try {
+      await linkSleeperDraft({ seasonId });
+      setStatus("Live sync enabled - watching for the Sleeper draft to start.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to enable live sync."));
+    } finally {
+      setLinkingLiveSync(false);
+    }
+  };
+
+  const handleDisableLiveSync = async () => {
+    setError(null);
+    setStatus(null);
+    try {
+      await disableLiveSync({ seasonId });
+      setStatus("Live sync disabled.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to disable live sync."));
+    }
+  };
+
   const linkedTeamKey = (team: (typeof teams)[number]) =>
     provider === "sleeper" ? team.sleeperRosterId : team.yahooTeamKey;
   const mappedCount = teams.filter((t) => linkedTeamKey(t)).length;
@@ -447,6 +475,61 @@ export function SeasonSettingsTab({ seasonId }: SeasonSettingsTabProps) {
                   </Group>
                 ))}
               </Stack>
+            )}
+          </Stack>
+        </Card>
+      )}
+
+      {provider === "sleeper" && isLinked && (
+        <Card withBorder padding="md">
+          <Stack gap="sm">
+            <Group justify="space-between">
+              <Text fw={500}>Live sync from Sleeper</Text>
+              {settings.sleeperSyncEnabled && (
+                <Badge variant="light" color={settings.sleeperSyncError ? "yellow" : "teal"}>
+                  {settings.sleeperSyncError ? "Sync issue" : "Live"}
+                </Badge>
+              )}
+            </Group>
+            <Text size="sm" c="dimmed">
+              Mirror picks from your league's actual Sleeper draft into this
+              board as they happen - no webhooks exist on Sleeper's side, so
+              this polls in the background. Requires every team above to be
+              mapped, and the Sleeper draft's format (auction/snake/linear)
+              to match this league's configured draft type. For a snake or
+              linear draft, also set the Draft Order in League Settings to
+              match Sleeper's real draft order first.
+            </Text>
+            {settings.sleeperSyncEnabled ? (
+              <>
+                <Text size="sm">
+                  {settings.sleeperLastSyncedAt
+                    ? `Last checked ${new Date(settings.sleeperLastSyncedAt).toLocaleTimeString()}`
+                    : "Starting up..."}
+                </Text>
+                <Button
+                  variant="default"
+                  color="red"
+                  onClick={() => void handleDisableLiveSync()}
+                  w="fit-content"
+                >
+                  Disable Live Sync
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={() => void handleEnableLiveSync()}
+                loading={linkingLiveSync}
+                disabled={mappedCount !== teams.length}
+                w="fit-content"
+              >
+                Enable Live Sync from Sleeper
+              </Button>
+            )}
+            {settings.sleeperSyncError && (
+              <Text size="xs" c="yellow.7">
+                {settings.sleeperSyncError}
+              </Text>
             )}
           </Stack>
         </Card>
