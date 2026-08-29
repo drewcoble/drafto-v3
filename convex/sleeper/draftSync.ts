@@ -52,6 +52,65 @@ export const loadRealDraftForLink = internalQuery({
   },
 });
 
+// Caches Sleeper's own draft_id/start_time on the real draft doc, entirely
+// independent of sleeperSyncEnabled - lets the Dashboard/Settings/Draft tab
+// show a scheduled draft time as soon as a season is Sleeper-linked, well
+// before the host is ready to turn on live sync (or for a league that never
+// will, e.g. one still drafting manually alongside the real Sleeper draft).
+export const recordSleeperDraftSchedule = internalMutation({
+  args: {
+    draftId: v.id("drafts"),
+    sleeperDraftId: v.string(),
+    scheduledAt: v.union(v.number(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.draftId, {
+      sleeperDraftId: args.sleeperDraftId,
+      ...(args.scheduledAt !== null
+        ? { sleeperDraftScheduledAt: args.scheduledAt }
+        : {}),
+    });
+    return null;
+  },
+});
+
+// Best-effort refresh, called from the frontend on mount wherever the
+// scheduled time is shown (Dashboard reads the cached value only, to avoid
+// hammering Sleeper once per league on every page load) - silently no-ops
+// (rather than throwing) for a season with no Sleeper link or no draft set
+// up yet, since this runs passively rather than from a user-clicked button.
+export const fetchSleeperDraftSchedule = action({
+  args: { seasonId: v.id("seasons") },
+  handler: async (ctx, args): Promise<{ scheduledAt: number | null }> => {
+    const { season } = await ctx.runQuery(
+      internal.season.rosterPlayers.requireOwnedSeasonForSync,
+      { seasonId: args.seasonId },
+    );
+    if (!season.sleeperLeagueId) return { scheduledAt: null };
+
+    const draft = await ctx.runQuery(
+      internal.sleeper.draftSync.loadRealDraftForLink,
+      { seasonId: args.seasonId },
+    );
+
+    try {
+      const settings = await fetchSleeperLeagueSettings(season.sleeperLeagueId);
+      if (!settings.draft_id) return { scheduledAt: null };
+      const sleeperDraft = await fetchSleeperJson<SleeperDraft>(
+        `/draft/${settings.draft_id}`,
+      );
+      const scheduledAt = sleeperDraft.start_time ?? null;
+      await ctx.runMutation(
+        internal.sleeper.draftSync.recordSleeperDraftSchedule,
+        { draftId: draft._id, sleeperDraftId: settings.draft_id, scheduledAt },
+      );
+      return { scheduledAt };
+    } catch {
+      return { scheduledAt: null };
+    }
+  },
+});
+
 // Bumps sleeperSyncGeneration and flips the draft into sync-enabled state -
 // the generation bump is what lets a stale poll chain (from a prior enable/
 // disable/enable cycle) recognize on its next hop that it's been superseded

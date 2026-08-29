@@ -20,6 +20,8 @@ import { GenericValuesNotice } from "../../components/GenericValuesNotice";
 import { getErrorMessage } from "../../lib/errors";
 import { positionColorOrDefault } from "../../lib/positionColors";
 import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
+import { formatSleeperDraftSchedule } from "../../lib/sleeperDraftSchedule";
+import { useSleeperDraftScheduleRefresh } from "../../hooks/useSleeperDraftScheduleRefresh";
 import { WEEK } from "../../constants/general";
 import { POSITIONS, type DraftTierRow, type Position } from "../../types";
 
@@ -47,6 +49,11 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
 
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
+  useSleeperDraftScheduleRefresh(
+    seasonId,
+    settings?.sleeperLeagueId,
+    settings?.draftStatus === "pre_draft",
+  );
   const thisSeason = settings?.year ?? String(new Date().getFullYear());
   const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   // Same authoritative on-the-clock resolution the TV board uses
@@ -170,6 +177,14 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
   if (draftOrderConfig && !draftOrderConfig.draftOrder) {
     return (
       <Stack gap="md" py="sm">
+        {settings?.sleeperDraftScheduledAt !== undefined && (
+          <Text size="sm">
+            Sleeper draft scheduled for{" "}
+            <Text component="span" fw={600}>
+              {formatSleeperDraftSchedule(settings.sleeperDraftScheduledAt)}
+            </Text>
+          </Text>
+        )}
         <Text c="dimmed" size="sm">
           Set the draft order in the Teams panel (League Settings) before
           picking.
@@ -181,6 +196,15 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
   return (
     <Stack gap="md" py="sm">
       {draftBoardResult?.isGeneric && <GenericValuesNotice />}
+      {settings?.draftStatus === "pre_draft" &&
+        settings.sleeperDraftScheduledAt !== undefined && (
+          <Text size="sm">
+            Sleeper draft scheduled for{" "}
+            <Text component="span" fw={600}>
+              {formatSleeperDraftSchedule(settings.sleeperDraftScheduledAt)}
+            </Text>
+          </Text>
+        )}
       {settings?.sleeperSyncEnabled && (
         <Text size="xs" c={settings.sleeperSyncError ? "yellow.7" : "dimmed"}>
           {settings.sleeperSyncError

@@ -22,6 +22,7 @@ import { PageContainer } from "../components/PageContainer";
 import { DRAFT_STATUS_META, type DraftStatus } from "../lib/draftStatus";
 import { groupSeasonsByLeague } from "../lib/leagueGroups";
 import { DRAFT_TYPE_OPTIONS } from "../constants/leagueSettings";
+import { formatSleeperDraftSchedule } from "../lib/sleeperDraftSchedule";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -162,6 +163,15 @@ function Dashboard() {
                             )?.label ?? "Auction"}{" "}
                             · {latest.scoring}
                           </Text>
+                          {latest.draftStatus === "pre_draft" &&
+                            latest.sleeperDraftScheduledAt !== undefined && (
+                              <Text size="xs" c="dimmed">
+                                Draft:{" "}
+                                {formatSleeperDraftSchedule(
+                                  latest.sleeperDraftScheduledAt,
+                                )}
+                              </Text>
+                            )}
                         </Stack>
                         <Button component="span" variant="light" fullWidth>
                           {ENTER_ACTION[latest.draftStatus].label}

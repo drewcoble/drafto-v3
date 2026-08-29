@@ -17,6 +17,8 @@ import { RecentPicksTable } from "./components/RecentPicksTable";
 import { TargetsTable } from "./components/ShortlistTable";
 import { RecommendedNominations } from "./components/RecommendedNominations";
 import { getErrorMessage } from "../../lib/errors";
+import { useSleeperDraftScheduleRefresh } from "../../hooks/useSleeperDraftScheduleRefresh";
+import { formatSleeperDraftSchedule } from "../../lib/sleeperDraftSchedule";
 
 interface DraftTabProps {
   seasonId: Id<"seasons">;
@@ -35,6 +37,11 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
 
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
+  useSleeperDraftScheduleRefresh(
+    seasonId,
+    settings?.sleeperLeagueId,
+    settings?.draftStatus === "pre_draft",
+  );
   const thisSeason = settings?.year ?? String(new Date().getFullYear());
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
@@ -255,6 +262,14 @@ export function DraftTab({ seasonId, teams }: DraftTabProps) {
       {actionError && (
         <Text c="red" size="sm">
           {actionError}
+        </Text>
+      )}
+      {!isStarted && settings?.sleeperDraftScheduledAt !== undefined && (
+        <Text size="sm">
+          Sleeper draft scheduled for{" "}
+          <Text component="span" fw={600}>
+            {formatSleeperDraftSchedule(settings.sleeperDraftScheduledAt)}
+          </Text>
         </Text>
       )}
       {settings?.sleeperSyncEnabled && (

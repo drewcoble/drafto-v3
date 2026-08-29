@@ -42,7 +42,9 @@ import { YahooLeagueImportWizard } from "./components/YahooLeagueImportWizard";
 import { UpgradePrompt } from "../../components/UpgradePrompt";
 import { LockedNotice } from "../../components/LockedNotice";
 import { useDraftPhase } from "../../hooks/useDraftPhase";
+import { useSleeperDraftScheduleRefresh } from "../../hooks/useSleeperDraftScheduleRefresh";
 import { getErrorMessage } from "../../lib/errors";
+import { formatSleeperDraftSchedule } from "../../lib/sleeperDraftSchedule";
 
 interface LeagueDetailsProps {
   selectedLeagueId: Id<"seasons"> | undefined;
@@ -143,6 +145,11 @@ export function LeagueDetails({
 
   const settings = settingsList?.find(
     (league) => league._id === selectedLeagueId,
+  );
+  useSleeperDraftScheduleRefresh(
+    settings?._id,
+    settings?.sleeperLeagueId,
+    settings?.draftStatus === "pre_draft",
   );
 
   // Size the opponent-name inputs to this league's team count once it's
@@ -819,6 +826,14 @@ export function LeagueDetails({
                 </Badge>
               )}
             </Group>
+            {!isStarted && settings.sleeperDraftScheduledAt !== undefined && (
+              <Text size="sm">
+                Scheduled for{" "}
+                <Text component="span" fw={600}>
+                  {formatSleeperDraftSchedule(settings.sleeperDraftScheduledAt)}
+                </Text>
+              </Text>
+            )}
             <Text size="sm" c="dimmed">
               Mirror picks from your league's actual Sleeper draft into this
               board as they happen - no webhooks exist on Sleeper's side, so

@@ -63,6 +63,7 @@ export interface SeasonWithLeagueName extends Doc<"seasons"> {
   // lets SeasonSettingsTab and the Draft Room read sync state off the same
   // `settings` query they already subscribe to, instead of a second query.
   sleeperDraftId?: string;
+  sleeperDraftScheduledAt?: number;
   sleeperSyncEnabled?: boolean;
   sleeperLastSyncedAt?: number;
   sleeperSyncError?: string;
@@ -104,6 +105,9 @@ export const listSeasons = query({
           ...(draft?.sleeperDraftId !== undefined
             ? { sleeperDraftId: draft.sleeperDraftId }
             : {}),
+          ...(draft?.sleeperDraftScheduledAt !== undefined
+            ? { sleeperDraftScheduledAt: draft.sleeperDraftScheduledAt }
+            : {}),
           ...(draft?.sleeperSyncEnabled !== undefined
             ? { sleeperSyncEnabled: draft.sleeperSyncEnabled }
             : {}),
@@ -144,6 +148,9 @@ export const getSeasonPublic = query({
       draftStatus: draft?.status ?? "pre_draft",
       ...(draft?.sleeperDraftId !== undefined
         ? { sleeperDraftId: draft.sleeperDraftId }
+        : {}),
+      ...(draft?.sleeperDraftScheduledAt !== undefined
+        ? { sleeperDraftScheduledAt: draft.sleeperDraftScheduledAt }
         : {}),
       ...(draft?.sleeperSyncEnabled !== undefined
         ? { sleeperSyncEnabled: draft.sleeperSyncEnabled }

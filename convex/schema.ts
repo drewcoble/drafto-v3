@@ -627,8 +627,13 @@ export default defineSchema({
     // cycle) recognizes it's superseded and stops instead of running
     // alongside a fresh chain. sleeperLastSyncedAt/sleeperSyncError(Count)
     // drive the UI's live status readout and the auto-disable-after-
-    // repeated-failures behavior.
+    // repeated-failures behavior. sleeperDraftScheduledAt (Sleeper's own
+    // start_time) is cached independently of sleeperSyncEnabled -
+    // fetchSleeperDraftSchedule refreshes it just from a Sleeper league
+    // link, pre-draft, so the host can see the scheduled time on the
+    // Dashboard/Settings/Draft tab without turning live sync on.
     sleeperDraftId: v.optional(v.string()),
+    sleeperDraftScheduledAt: v.optional(v.number()),
     sleeperSyncEnabled: v.optional(v.boolean()),
     sleeperSyncGeneration: v.optional(v.number()),
     sleeperLastSyncedAt: v.optional(v.number()),
