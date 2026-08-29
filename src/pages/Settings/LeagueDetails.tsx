@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { Link } from "@tanstack/react-router";
 import { Play, Trophy, Undo2 } from "lucide-react";
 import {
@@ -81,6 +81,8 @@ export function LeagueDetails({
   const isStarted = phase?.isStarted ?? false;
   const startDraft = useMutation(api.draft.lifecycle.startDraft);
   const reopenPreDraft = useMutation(api.draft.lifecycle.reopenPreDraft);
+  const linkSleeperDraft = useAction(api.sleeper.draftSync.linkSleeperDraft);
+  const disableLiveSync = useMutation(api.sleeper.draftSync.disableLiveSync);
   const seasonLineage = useQuery(
     api.draft.history.listSeasonLineage,
     selectedLeagueId ? { seasonId: selectedLeagueId } : "skip",
@@ -125,6 +127,9 @@ export function LeagueDetails({
   const [startError, setStartError] = useState<string | null>(null);
   const [isReopening, setIsReopening] = useState(false);
   const [reopenError, setReopenError] = useState<string | null>(null);
+  const [liveSyncError, setLiveSyncError] = useState<string | null>(null);
+  const [liveSyncStatus, setLiveSyncStatus] = useState<string | null>(null);
+  const [linkingLiveSync, setLinkingLiveSync] = useState(false);
 
   // Triggered by the "+ New League" option in the header dropdown, which can
   // fire regardless of which tab is currently active.
@@ -337,6 +342,35 @@ export function LeagueDetails({
       setReopenError(getErrorMessage(err, "Failed to reopen pre-draft."));
     } finally {
       setIsReopening(false);
+    }
+  };
+
+  const handleEnableLiveSync = async () => {
+    if (!settings) return;
+    setLiveSyncError(null);
+    setLiveSyncStatus(null);
+    setLinkingLiveSync(true);
+    try {
+      await linkSleeperDraft({ seasonId: settings._id });
+      setLiveSyncStatus(
+        "Live sync enabled - watching for the Sleeper draft to start.",
+      );
+    } catch (err) {
+      setLiveSyncError(getErrorMessage(err, "Failed to enable live sync."));
+    } finally {
+      setLinkingLiveSync(false);
+    }
+  };
+
+  const handleDisableLiveSync = async () => {
+    if (!settings) return;
+    setLiveSyncError(null);
+    setLiveSyncStatus(null);
+    try {
+      await disableLiveSync({ seasonId: settings._id });
+      setLiveSyncStatus("Live sync disabled.");
+    } catch (err) {
+      setLiveSyncError(getErrorMessage(err, "Failed to disable live sync."));
     }
   };
 
@@ -772,6 +806,67 @@ export function LeagueDetails({
           maxRounds={totalRounds}
           isDraftStarted={isStarted}
         />
+      )}
+
+      {settings.sleeperLeagueId && (
+        <Card withBorder padding="md">
+          <Stack gap="sm">
+            <Group justify="space-between">
+              <Text fw={500}>Live sync from Sleeper</Text>
+              {settings.sleeperSyncEnabled && (
+                <Badge variant="light" color={settings.sleeperSyncError ? "yellow" : "teal"}>
+                  {settings.sleeperSyncError ? "Sync issue" : "Live"}
+                </Badge>
+              )}
+            </Group>
+            <Text size="sm" c="dimmed">
+              Mirror picks from your league's actual Sleeper draft into this
+              board as they happen - no webhooks exist on Sleeper's side, so
+              this polls in the background. Requires every team to be mapped
+              to a Sleeper roster (Season Settings, after import), and the
+              Sleeper draft's format (auction/snake/linear) to match this
+              league's configured draft type above. For a snake or linear
+              draft, also set the Draft Order below to match Sleeper's real
+              draft order first.
+            </Text>
+            {settings.sleeperSyncEnabled ? (
+              <>
+                <Text size="sm">
+                  {settings.sleeperLastSyncedAt
+                    ? `Last checked ${new Date(settings.sleeperLastSyncedAt).toLocaleTimeString()}`
+                    : "Starting up..."}
+                </Text>
+                <Button
+                  variant="default"
+                  color="red"
+                  onClick={() => void handleDisableLiveSync()}
+                  w="fit-content"
+                >
+                  Disable Live Sync
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={() => void handleEnableLiveSync()}
+                loading={linkingLiveSync}
+                disabled={!draftTeams?.length || draftTeams.some((t) => !t.sleeperRosterId)}
+                w="fit-content"
+              >
+                Enable Live Sync from Sleeper
+              </Button>
+            )}
+            {liveSyncStatus && (
+              <Text size="xs" c="teal">
+                {liveSyncStatus}
+              </Text>
+            )}
+            {(settings.sleeperSyncError || liveSyncError) && (
+              <Text size="xs" c={liveSyncError ? "red" : "yellow.7"}>
+                {liveSyncError ?? settings.sleeperSyncError}
+              </Text>
+            )}
+          </Stack>
+        </Card>
       )}
 
       <Modal
