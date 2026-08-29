@@ -634,7 +634,11 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
             much simpler math than compensating width/height to match. */}
         <div
           style={{
-            padding: "14px 20px",
+            // Mobile gets a snug horizontal inset instead of desktop's 20px
+            // - the round-label column (and, mirroring it, the last team
+            // column) otherwise sits with a visibly wide gap from the
+            // screen edge, wasted space on an already-cramped phone width.
+            padding: isDesktop ? "14px 20px" : "14px 8px",
             ...(!isDesktop
               ? { transform: "scale(0.8)", transformOrigin: "top left" }
               : {}),
