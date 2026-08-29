@@ -724,7 +724,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
           positions={activePositions}
           selected={selectedPositions}
           onChange={setSelectedPositions}
-          top={MOBILE_HEADER_HEIGHT + MOBILE_STATS_ROW_HEIGHT}
+          top={MOBILE_HEADER_HEIGHT + (isAuction ? MOBILE_STATS_ROW_HEIGHT : 0)}
         />
       </Box>
       {actionError && (
