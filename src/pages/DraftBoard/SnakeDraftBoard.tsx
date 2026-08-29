@@ -623,15 +623,19 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
         @keyframes snakeLandFlash { 0% { background: rgba(90,160,111,0.18); } 100% { background: rgba(90,160,111,0.07); } }
         @keyframes snakeTickerIn { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
       `}</style>
-        {/* Board body - scaled down on mobile only (transform-origin top
-            left, outside the fixed header/ticker/footer entirely - they're
-            siblings of this scroll area, not descendants, so they're
-            untouched) to fit more of the grid in view at a glance without
-            shrinking the fixed chrome around it. Scaling doesn't shrink this
-            div's own layout box, so the scrollable area below still extends
-            to the pre-scale (larger) size - a bit of extra blank scroll
-            space past the visually-scaled content on mobile, traded for
-            much simpler math than compensating width/height to match. */}
+        {/* Board body - scaled down on mobile only, outside the fixed
+            header/ticker/footer entirely (they're siblings of this scroll
+            area, not descendants, so they're untouched) to fit more of the
+            grid in view at a glance without shrinking the fixed chrome
+            around it. Uses `zoom`, not `transform: scale` - a transform on
+            an ancestor creates a new containing block for `position:
+            sticky` descendants (the round-label column and team-header row
+            below), so their sticky offsets end up resolved against the
+            transformed box instead of the true scroll viewport - visually
+            a slow drift instead of a hard pin. `zoom` actually resizes the
+            layout box rather than just repainting it, so sticky keeps
+            working, and as a bonus the scrollable area's extent shrinks to
+            match instead of leaving blank space past the scaled content. */}
         <div
           style={{
             // Mobile gets a snug horizontal inset instead of desktop's 20px
@@ -639,9 +643,7 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
             // column) otherwise sits with a visibly wide gap from the
             // screen edge, wasted space on an already-cramped phone width.
             padding: isDesktop ? "14px 20px" : "14px 8px",
-            ...(!isDesktop
-              ? { transform: "scale(0.8)", transformOrigin: "top left" }
-              : {}),
+            ...(!isDesktop ? { zoom: 0.8 } : {}),
           }}
         >
           {!board ? (
