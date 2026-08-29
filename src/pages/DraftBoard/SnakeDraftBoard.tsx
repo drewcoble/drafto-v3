@@ -642,7 +642,13 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
             // - the round-label column (and, mirroring it, the last team
             // column) otherwise sits with a visibly wide gap from the
             // screen edge, wasted space on an already-cramped phone width.
-            padding: isDesktop ? "14px 20px" : "14px 8px",
+            // Bottom is generously padded instead (140px raw, ~112px once
+            // zoomed below) - the last round was otherwise clipped by half
+            // under the fixed footer, mobile browsers apparently not quite
+            // agreeing with the zoomed content's true scrollHeight down to
+            // the pixel, so this trades a bit of extra scroll-past-the-end
+            // for guaranteeing the final round always fully clears it.
+            padding: isDesktop ? "14px 20px" : "14px 8px 140px",
             ...(!isDesktop ? { zoom: 0.8 } : {}),
           }}
         >
