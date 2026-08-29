@@ -623,8 +623,23 @@ export function SnakeDraftBoard({ seasonId }: SnakeDraftBoardProps) {
         @keyframes snakeLandFlash { 0% { background: rgba(90,160,111,0.18); } 100% { background: rgba(90,160,111,0.07); } }
         @keyframes snakeTickerIn { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
       `}</style>
-        {/* Board body */}
-        <div style={{ padding: "14px 20px" }}>
+        {/* Board body - scaled down on mobile only (transform-origin top
+            left, outside the fixed header/ticker/footer entirely - they're
+            siblings of this scroll area, not descendants, so they're
+            untouched) to fit more of the grid in view at a glance without
+            shrinking the fixed chrome around it. Scaling doesn't shrink this
+            div's own layout box, so the scrollable area below still extends
+            to the pre-scale (larger) size - a bit of extra blank scroll
+            space past the visually-scaled content on mobile, traded for
+            much simpler math than compensating width/height to match. */}
+        <div
+          style={{
+            padding: "14px 20px",
+            ...(!isDesktop
+              ? { transform: "scale(0.8)", transformOrigin: "top left" }
+              : {}),
+          }}
+        >
           {!board ? (
             <div
               style={{
