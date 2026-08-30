@@ -16,7 +16,10 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { TeamSlotDetail } from "../../components/TeamSlotDetail";
-import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
+import {
+  pointsForScoringConfig,
+  scoringConfigFromSeason,
+} from "../../lib/relevantPlayers";
 import { WEEK } from "../../constants/general";
 import {
   POSITION_ORDER,
@@ -60,16 +63,6 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
-  const draftValues = useQuery(
-    api.draftValues.getDraftValues,
-    settings
-      ? {
-          seasonId,
-          week: WEEK,
-          scoringConfig: scoringConfigFromSeason(settings),
-        }
-      : "skip",
-  );
   const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(
     new Set(),
   );
@@ -92,13 +85,24 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
     return map;
   }, [allProjections]);
 
+  // Sourced from raw projections (every player, keeper or not), NOT the $
+  // value engine's `values` - that pool deliberately excludes keepers
+  // (they're off the auction board before it even starts), which silently
+  // fell back to 0 points for every keeper here and pushed them all to the
+  // bottom of the bench regardless of their real projection (user report,
+  // 2026-08-30). Numerically identical to the $ engine's own points for
+  // anyone who IS in that pool - same pointsForScoringConfig computation
+  // over the same projections rows, just not gated on "was this player
+  // ever auctionable."
   const pointsByFpid = useMemo(() => {
     const map = new Map<number, number>();
-    for (const row of draftValues?.values ?? []) {
-      map.set(row.fpid, row.points);
+    if (!settings) return map;
+    const scoringConfig = scoringConfigFromSeason(settings);
+    for (const row of allProjections ?? []) {
+      map.set(row.fpid, pointsForScoringConfig(row, scoringConfig));
     }
     return map;
-  }, [draftValues]);
+  }, [allProjections, settings]);
 
   const teamSummaries = useMemo(() => {
     if (!settings || !picks) return [];

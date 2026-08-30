@@ -9,7 +9,10 @@ import { useTeamBudget } from "../../hooks/useTeamBudget";
 import { positionColorOrDefault } from "../../lib/positionColors";
 import { WEEK } from "../../constants/general";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
-import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
+import {
+  pointsForScoringConfig,
+  scoringConfigFromSeason,
+} from "../../lib/relevantPlayers";
 import { SlotTable } from "./components/SlotTable";
 import { getErrorMessage } from "../../lib/errors";
 
@@ -34,16 +37,6 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
   // leakage" gap) - a snake/linear team's page showed "$0 of $200 spent"
   // and a wall of "plan $0" rows for every slot (user report, 2026-08-30).
   const isAuction = (settings?.draftType ?? "auction") === "auction";
-  const draftValues = useQuery(
-    api.draftValues.getDraftValues,
-    settings
-      ? {
-          seasonId,
-          week: WEEK,
-          scoringConfig: scoringConfigFromSeason(settings),
-        }
-      : "skip",
-  );
   const stats = useTeamBudget(seasonId, selfTeamId);
   const removePick = useMutation(api.draft.picks.removePick);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -71,13 +64,24 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
     [picks, selfTeamId],
   );
 
+  // Sourced from raw projections (every player, keeper or not), NOT the $
+  // value engine's `values` - that pool deliberately excludes keepers
+  // (they're off the auction board before it even starts), which silently
+  // fell back to 0 points for every keeper here and pushed them all to the
+  // bottom of the bench regardless of their real projection (user report,
+  // 2026-08-30). Numerically identical to the $ engine's own points for
+  // anyone who IS in that pool - same pointsForScoringConfig computation
+  // over the same projections rows, just not gated on "was this player
+  // ever auctionable."
   const pointsByFpid = useMemo(() => {
     const map = new Map<number, number>();
-    for (const row of draftValues?.values ?? []) {
-      map.set(row.fpid, row.points);
+    if (!settings) return map;
+    const scoringConfig = scoringConfigFromSeason(settings);
+    for (const row of allProjections ?? []) {
+      map.set(row.fpid, pointsForScoringConfig(row, scoringConfig));
     }
     return map;
-  }, [draftValues]);
+  }, [allProjections, settings]);
 
   const slots = useMemo(
     () => (settings ? expandRosterSlots(settings.rosterSlots) : []),
@@ -138,8 +142,8 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
                 </Text>
               )}
               <Text size="sm" c="dimmed">
-                {stats.totalSlots - stats.openSlots} of {stats.totalSlots}{" "}
-                slots filled
+                {stats.totalSlots - stats.openSlots} of {stats.totalSlots} slots
+                filled
               </Text>
             </Group>
           )}

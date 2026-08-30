@@ -29,7 +29,10 @@ import {
 } from "../../lib/positionColors";
 import { expandRosterSlots } from "../../lib/rosterSlots";
 import { optimalAssignPicksToSlots } from "../../lib/slotAssignment";
-import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
+import {
+  pointsForScoringConfig,
+  scoringConfigFromSeason,
+} from "../../lib/relevantPlayers";
 import {
   computeTeamBudgetStats,
   resolveTeamSalaryCap,
@@ -98,16 +101,6 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
-  const draftValues = useQuery(
-    api.draftValues.getDraftValuesPublic,
-    settings
-      ? {
-          seasonId,
-          week: WEEK,
-          scoringConfig: scoringConfigFromSeason(settings),
-        }
-      : "skip",
-  );
   const rookieFpids = useRookieFpids();
 
   const playerByFpid = useMemo(() => {
@@ -116,13 +109,25 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
     return map;
   }, [allProjections]);
 
+  // Sourced from raw projections (every player, keeper or not), NOT the $
+  // value engine (`getDraftValuesPublic`'s `values`) - that pool
+  // deliberately excludes keepers (they're off the auction board before it
+  // even starts), which silently fell back to 0 points for every keeper
+  // here and pushed them all to the bottom of the bench regardless of
+  // their real projection (user report, 2026-08-30, same bug as
+  // LeagueTab.tsx/MyTeamTab.tsx/SeasonSummary.tsx). Also drops this board's
+  // only remaining dependency on the $ value engine, one step closer to
+  // this file's own stated "never reads $ values" design (see the file
+  // comment above) - it only ever needed `.points` off of it.
   const pointsByFpid = useMemo(() => {
     const map = new Map<number, number>();
-    for (const row of draftValues?.values ?? []) {
-      map.set(row.fpid, row.points);
+    if (!settings) return map;
+    const scoringConfig = scoringConfigFromSeason(settings);
+    for (const row of allProjections ?? []) {
+      map.set(row.fpid, pointsForScoringConfig(row, scoringConfig));
     }
     return map;
-  }, [draftValues]);
+  }, [allProjections, settings]);
 
   const teamSummaries = useMemo(() => {
     if (!settings || !teams || !picks) return [];
@@ -154,7 +159,10 @@ export function DraftBoard({ seasonId }: DraftBoardProps) {
           .sort((a, b) => a.sequence - b.sequence);
         // Budget stats are auction-only (SNAKE_DRAFT.md §3.4/§12 - the
         // board needs its own snake-format column set eventually).
-        const spent = teamPicks.reduce((sum, pick) => sum + (pick.price ?? 0), 0);
+        const spent = teamPicks.reduce(
+          (sum, pick) => sum + (pick.price ?? 0),
+          0,
+        );
         const stats = computeTeamBudgetStats(
           resolveTeamSalaryCap(team, settings.salaryCap),
           settings.rosterSlots,

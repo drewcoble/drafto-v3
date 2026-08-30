@@ -13,7 +13,10 @@ import { WEEK } from "../../constants/general";
 import { DRAFT_TYPE_OPTIONS } from "../../constants/leagueSettings";
 import { TeamSlotDetail } from "../../components/TeamSlotDetail";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
-import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
+import {
+  pointsForScoringConfig,
+  scoringConfigFromSeason,
+} from "../../lib/relevantPlayers";
 
 interface SeasonSummaryProps {
   seasonId: Id<"seasons">;
@@ -31,16 +34,6 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
   });
-  const draftValues = useQuery(
-    api.draftValues.getDraftValues,
-    settings
-      ? {
-          seasonId,
-          week: WEEK,
-          scoringConfig: scoringConfigFromSeason(settings),
-        }
-      : "skip",
-  );
   const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(
     new Set(),
   );
@@ -52,13 +45,21 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
     return map;
   }, [allProjections]);
 
+  // Sourced from raw projections (every player, keeper or not), NOT the $
+  // value engine's `values` - that pool deliberately excludes keepers
+  // (they're off the auction board before it even starts), which silently
+  // fell back to 0 points for every keeper here and pushed them all to the
+  // bottom of the bench regardless of their real projection (user report,
+  // 2026-08-30, same bug as LeagueTab.tsx/MyTeamTab.tsx).
   const pointsByFpid = useMemo(() => {
     const map = new Map<number, number>();
-    for (const row of draftValues?.values ?? []) {
-      map.set(row.fpid, row.points);
+    if (!settings) return map;
+    const scoringConfig = scoringConfigFromSeason(settings);
+    for (const row of allProjections ?? []) {
+      map.set(row.fpid, pointsForScoringConfig(row, scoringConfig));
     }
     return map;
-  }, [draftValues]);
+  }, [allProjections, settings]);
 
   const teamSummaries = useMemo(() => {
     if (!settings || !picks || !teams) return [];
