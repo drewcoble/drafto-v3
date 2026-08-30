@@ -449,7 +449,7 @@ function PickCallouts({
                 <Text size="sm" c="dimmed">
                   {isAuction
                     ? `$${pick.price} vs $${(value ?? 0).toFixed(0)}`
-                    : `Pick #${pick.slot} vs ADP ${value === null ? "—" : value.toFixed(1)}`}
+                    : `Pick #${pick.slot} vs ADP ${value == null ? "—" : value.toFixed(1)}`}
                 </Text>
                 <Text size="sm" fw={700} c={surplusColor(surplus ?? 0)}>
                   {isAuction
@@ -719,14 +719,14 @@ function TeamReportCard({
                         {isAuction ? `$${pick.price}` : `#${pick.slot}`}
                       </Table.Td>
                       <Table.Td>
-                        {value === null
+                        {value == null
                           ? "—"
                           : isAuction
                             ? `$${value.toFixed(0)}`
                             : value.toFixed(1)}
                       </Table.Td>
                       <Table.Td c={surplusColor(surplus ?? 0)}>
-                        {surplus === null ? "—" : formatValue(surplus)}
+                        {surplus == null ? "—" : formatValue(surplus)}
                       </Table.Td>
                     </Table.Tr>
                   );

@@ -740,7 +740,15 @@ async function readReportCardData(
         .eq("scoring", args.scoringConfig.scoring),
     )
     .unique();
-  if (snapshot) return snapshot.data as ReportCardData;
+  // A snapshot frozen before ResolvedPick grew its `isAuction`/`adp`/`slot`/
+  // `slotSurplus` fields (2026-08-29's snake/linear Report Card analog) is
+  // missing them entirely (undefined, not null) - stale shape, not just
+  // stale numbers. Falls through to a fresh live computation the same way
+  // "no snapshot yet" does, rather than serving an old-shape payload the
+  // frontend/Gemini prompt builder will crash reading `.toFixed()` off of.
+  if (snapshot && "isAuction" in (snapshot.data as object)) {
+    return snapshot.data as ReportCardData;
+  }
   return await computeReportCardData(ctx, draft, season, args);
 }
 
@@ -781,16 +789,25 @@ async function ensureReportCardSnapshot(
         .eq("scoring", args.scoringConfig.scoring),
     )
     .unique();
-  if (existing) return existing.data as ReportCardData;
+  // Same stale-shape check as readReportCardData above - an old snapshot
+  // missing `isAuction` gets recomputed and overwritten in place (not a
+  // second row) rather than served as-is.
+  if (existing && "isAuction" in (existing.data as object)) {
+    return existing.data as ReportCardData;
+  }
 
   const data = await computeReportCardData(ctx, draft, season, args);
-  await ctx.db.insert("draftReportCardSnapshots", {
-    draftId: args.draftId,
-    week: args.week,
-    scoring: args.scoringConfig.scoring,
-    data,
-    generatedAt: Date.now(),
-  });
+  if (existing) {
+    await ctx.db.patch(existing._id, { data, generatedAt: Date.now() });
+  } else {
+    await ctx.db.insert("draftReportCardSnapshots", {
+      draftId: args.draftId,
+      week: args.week,
+      scoring: args.scoringConfig.scoring,
+      data,
+      generatedAt: Date.now(),
+    });
+  }
   return data;
 }
 
