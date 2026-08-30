@@ -143,7 +143,7 @@ interface RosterAward {
 // fix with no shape change (e.g. v3: excluding K/DST from steals/reaches) -
 // otherwise an already-completed draft's frozen snapshot would keep serving
 // the old, wrong callouts until someone manually clicks Regenerate.
-const REPORT_CARD_VERSION = 3;
+const REPORT_CARD_VERSION = 4;
 
 // Value surplus, VOR, and starters strength are on different scales, so each
 // is percentile-ranked against the field before blending - see gradeTeams.
@@ -462,12 +462,20 @@ async function computeReportCardData(
       vorByPosition[p.position] += p.vor;
     }
 
-    const bestPick = nonKeeperPicks.reduce<ResolvedPick | undefined>(
+    // K/DST excluded from best/worst pick the same way (and for the same
+    // reason) they're excluded from the league-wide steals/reaches/keeper
+    // callouts - see CALLOUT_POSITIONS' comment. Doesn't affect
+    // surplusTotal/surplusByPosition above, which still grade every
+    // position.
+    const calloutEligiblePicks = nonKeeperPicks.filter((p) =>
+      CALLOUT_POSITIONS.includes(p.position),
+    );
+    const bestPick = calloutEligiblePicks.reduce<ResolvedPick | undefined>(
       (best, p) =>
         !best || (teamValueOf(p) ?? 0) > (teamValueOf(best) ?? 0) ? p : best,
       undefined,
     );
-    const worstPick = nonKeeperPicks.reduce<ResolvedPick | undefined>(
+    const worstPick = calloutEligiblePicks.reduce<ResolvedPick | undefined>(
       (worst, p) =>
         !worst || (teamValueOf(p) ?? 0) < (teamValueOf(worst) ?? 0)
           ? p
@@ -476,7 +484,10 @@ async function computeReportCardData(
     );
 
     const keeperPicks = teamPicks.filter(
-      (p) => p.isKeeper && keeperValueOf(p) !== null,
+      (p) =>
+        p.isKeeper &&
+        keeperValueOf(p) !== null &&
+        CALLOUT_POSITIONS.includes(p.position),
     );
     const bestKeeper = keeperPicks.reduce<ResolvedPick | undefined>(
       (best, p) =>
