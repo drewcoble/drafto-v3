@@ -46,6 +46,16 @@ const QB_SFLEX_COMBO: Record<string, string> = { QB: "SFLEX" };
 export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
+  // AUCTION.md/SNAKE.md's standard frontend pattern - gates the "can match
+  // your $X"/"max bid"/"max $/starter" $ stats and the $-based fill bar
+  // below, none of which have a snake/linear equivalent (SNAKE_DRAFT.md
+  // §3.4). Previously unguarded (SNAKE.md's documented "budget-stat
+  // leakage" gap, alongside MyTeamTab.tsx - see that fix) - a snake/linear
+  // league's League tab showed a "max bid: $200"-style figure computed off
+  // spent=$0 for every team (always meaningless, since price is never set),
+  // and a per-team progress bar driven by $ remaining/spent instead of
+  // actual roster fill (user report, 2026-08-30).
+  const isAuction = (settings?.draftType ?? "auction") === "auction";
   const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const allProjections = useQuery(api.projections.getAllProjections, {
     week: WEEK,
@@ -126,10 +136,14 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
         const group = slot.label.replace(/\d+$/, "");
         openCountByGroup.set(group, (openCountByGroup.get(group) ?? 0) + 1);
       }
-      const fillPct = (stats.remaining / (stats.remaining + stats.spent)) * 100;
-      // const fillPct = slots.length
-      //   ? ((slots.length - needs.length) / slots.length) * 100
-      //   : 0;
+      // Auction: % of budget remaining (a "financial health" bar, not a
+      // literal roster-fill one - a team that's spent little still reads as
+      // "full" here). Snake/linear has no $ concept at all, so this instead
+      // falls back to actual roster fill (picks made / total slots), which
+      // is also what the caption directly below the bar already says.
+      const fillPct = isAuction
+        ? (stats.remaining / (stats.remaining + stats.spent)) * 100
+        : (teamPicks.length / stats.totalSlots) * 100;
       const maxPerStarter = computeMaxPerStarter(stats.remaining, openSlots);
       return {
         team,
@@ -142,7 +156,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
         maxPerStarter,
       };
     });
-  }, [teams, settings, picks, pointsByFpid]);
+  }, [teams, settings, picks, pointsByFpid, isAuction]);
 
   // The full, fixed set of position groups a "needs" row could ever show for
   // this league (same roster shape for every team), and how many slots each
@@ -220,7 +234,7 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
 
   return (
     <Stack gap="md" py="sm">
-      {selfSummary && (
+      {isAuction && selfSummary && (
         <Text size="sm" c="dimmed">
           {teamsCanMatch} team{teamsCanMatch === 1 ? "" : "s"} can match your $
           {Math.max(selfSummary.stats.maxBid, 0)}
@@ -276,20 +290,27 @@ export function LeagueTab({ seasonId, teams, selfTeamId }: LeagueTabProps) {
                       )}
                     </ActionIcon>
                   </Group>
-                  <Text size="sm" style={{ whiteSpace: "nowrap" }}>
-                    max bid: <strong>${Math.max(stats.maxBid, 0)}</strong>
-                  </Text>
+                  {isAuction && (
+                    <Text size="sm" style={{ whiteSpace: "nowrap" }}>
+                      max bid: <strong>${Math.max(stats.maxBid, 0)}</strong>
+                    </Text>
+                  )}
                 </Group>
                 <Group justify="space-between">
                   <Text size="xs" c="dimmed">
-                    {/* Most aggressive per-starter estimate - reserves just
-                        $1 for bench/K/DST (a common punt strategy) instead
-                        of splitting evenly across every open slot the way
-                        maxBid above does. See computeMaxPerStarter. */}
-                    {maxPerStarter !== null
-                      ? `max $${Math.max(Math.round(maxPerStarter), 0)}/starter`
-                      : "no starter slots open"}
-                    {" - "}
+                    {isAuction && (
+                      <>
+                        {/* Most aggressive per-starter estimate - reserves
+                            just $1 for bench/K/DST (a common punt strategy)
+                            instead of splitting evenly across every open
+                            slot the way maxBid above does. See
+                            computeMaxPerStarter. */}
+                        {maxPerStarter !== null
+                          ? `max $${Math.max(Math.round(maxPerStarter), 0)}/starter`
+                          : "no starter slots open"}
+                        {" - "}
+                      </>
+                    )}
                     {teamPicks.length}/{stats.totalSlots} filled
                   </Text>
                 </Group>
