@@ -27,6 +27,13 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
     week: WEEK,
   });
   const settings = settingsList?.find((s) => s._id === seasonId);
+  // AUCTION.md/SNAKE.md's standard frontend pattern - gates the $-budget
+  // stat, SlotTable's Budget column, and the "Where the money went" card
+  // below, none of which have a snake/linear equivalent (SNAKE_DRAFT.md
+  // §3.4). Previously unguarded (SNAKE.md's documented "budget-stat
+  // leakage" gap) - a snake/linear team's page showed "$0 of $200 spent"
+  // and a wall of "plan $0" rows for every slot (user report, 2026-08-30).
+  const isAuction = (settings?.draftType ?? "auction") === "auction";
   const draftValues = useQuery(
     api.draftValues.getDraftValues,
     settings
@@ -125,9 +132,11 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
         <Stack gap="sm">
           {stats && (
             <Group gap="lg">
-              <Text size="sm" c="dimmed">
-                ${stats.spent} of ${stats.spent + stats.remaining} spent
-              </Text>
+              {isAuction && (
+                <Text size="sm" c="dimmed">
+                  ${stats.spent} of ${stats.spent + stats.remaining} spent
+                </Text>
+              )}
               <Text size="sm" c="dimmed">
                 {stats.totalSlots - stats.openSlots} of {stats.totalSlots}{" "}
                 slots filled
@@ -151,34 +160,39 @@ export function MyTeamTab({ seasonId, selfTeamId }: MyTeamTabProps) {
             trackConsecutiveYears={
               settings?.keeperRules?.maxConsecutiveYears !== undefined
             }
+            isAuction={isAuction}
           />
         </Stack>
       </Card>
 
-      <Card withBorder padding="md">
-        <Stack gap="sm">
-          <Text size="sm" fw={500}>
-            Where the money went
-          </Text>
-          {spendByGroup.map(([group, { plan: planTotal, actual }]) => (
-            <Group key={group} gap="sm" wrap="nowrap">
-              <Text size="sm" w={60}>
-                {group}
-              </Text>
-              <Progress
-                value={
-                  planTotal > 0 ? Math.min((actual / planTotal) * 100, 100) : 0
-                }
-                color={positionColorOrDefault(group)}
-                flex={1}
-              />
-              <Text size="sm" c="dimmed" w={90} ta="right">
-                ${actual} / ${planTotal}
-              </Text>
-            </Group>
-          ))}
-        </Stack>
-      </Card>
+      {isAuction && (
+        <Card withBorder padding="md">
+          <Stack gap="sm">
+            <Text size="sm" fw={500}>
+              Where the money went
+            </Text>
+            {spendByGroup.map(([group, { plan: planTotal, actual }]) => (
+              <Group key={group} gap="sm" wrap="nowrap">
+                <Text size="sm" w={60}>
+                  {group}
+                </Text>
+                <Progress
+                  value={
+                    planTotal > 0
+                      ? Math.min((actual / planTotal) * 100, 100)
+                      : 0
+                  }
+                  color={positionColorOrDefault(group)}
+                  flex={1}
+                />
+                <Text size="sm" c="dimmed" w={90} ta="right">
+                  ${actual} / ${planTotal}
+                </Text>
+              </Group>
+            ))}
+          </Stack>
+        </Card>
+      )}
 
       <Card withBorder padding="md">
         <Stack gap="sm">

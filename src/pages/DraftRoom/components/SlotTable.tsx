@@ -25,6 +25,12 @@ interface SlotTableProps {
   // league has a maxConsecutiveYears cap set (see schema.ts's
   // trackConsecutiveYears comment).
   trackConsecutiveYears: boolean;
+  // Auction: $ price/plan/diff in the second column, as before. Snake/
+  // linear: no budget concept at all (SNAKE_DRAFT.md §3.4), so that column
+  // shows when/where the pick was actually made (round.pickInRound) instead
+  // of a permanently-"$0" budget column - see MyTeamTab.tsx's own comment on
+  // why this needed a real branch rather than just hiding the column blank.
+  isAuction: boolean;
 }
 
 export function SlotTable({
@@ -35,6 +41,7 @@ export function SlotTable({
   onRemove,
   onSelectPlayer,
   trackConsecutiveYears,
+  isAuction,
 }: SlotTableProps) {
   const rookieFpids = useRookieFpids();
   return (
@@ -43,7 +50,7 @@ export function SlotTable({
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Player</Table.Th>
-            <Table.Th>Budget</Table.Th>
+            <Table.Th>{isAuction ? "Budget" : "Drafted"}</Table.Th>
             <Table.Th />
           </Table.Tr>
         </Table.Thead>
@@ -54,6 +61,12 @@ export function SlotTable({
             const planAmount = planAmounts[slot.key] ?? 0;
             // Budget planning is auction-only (SNAKE_DRAFT.md §3.4).
             const diff = pick ? planAmount - (pick.price ?? 0) : 0;
+            const draftedAt =
+              pick?.round !== undefined && pick.pickInRound !== undefined
+                ? `${pick.round}.${String(pick.pickInRound).padStart(2, "0")}`
+                : pick
+                  ? `#${pick.sequence}`
+                  : "—";
             return (
               <Table.Tr key={slot.key}>
                 {/* Slot badge + player name + keeper badge all in one cell
@@ -109,22 +122,32 @@ export function SlotTable({
                 </Table.Td>
                 {/* Plan/Paid/+- collapsed into one cell (was 3 separate
                     columns) - paid price up top, plan + the colored
-                    over/under diff as a smaller line underneath. */}
+                    over/under diff as a smaller line underneath. Snake/
+                    linear has no plan/price to collapse, so it's just the
+                    round.pick this slot was actually drafted at. */}
                 <Table.Td>
-                  <Stack gap={0}>
+                  {isAuction ? (
+                    <Stack gap={0}>
+                      <Text size="sm" fw={600}>
+                        {pick && pick.price !== undefined
+                          ? `$${pick.price}`
+                          : "—"}
+                      </Text>
+                      <Text
+                        size="xs"
+                        c={diff > 0 ? "green" : diff < 0 ? "red" : "dimmed"}
+                      >
+                        plan ${planAmount}
+                        {pick && diff !== 0
+                          ? ` (${diff > 0 ? `+${diff}` : diff})`
+                          : ""}
+                      </Text>
+                    </Stack>
+                  ) : (
                     <Text size="sm" fw={600}>
-                      {pick && pick.price !== undefined ? `$${pick.price}` : "—"}
+                      {draftedAt}
                     </Text>
-                    <Text
-                      size="xs"
-                      c={diff > 0 ? "green" : diff < 0 ? "red" : "dimmed"}
-                    >
-                      plan ${planAmount}
-                      {pick && diff !== 0
-                        ? ` (${diff > 0 ? `+${diff}` : diff})`
-                        : ""}
-                    </Text>
-                  </Stack>
+                  )}
                 </Table.Td>
                 <Table.Td>
                   {pick && (

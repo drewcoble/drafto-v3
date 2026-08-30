@@ -17,13 +17,33 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
+import { AdpValueLabel } from "../../components/AdpValueLabel";
+import { SortArrow } from "../../components/SortArrow";
 import { getErrorMessage } from "../../lib/errors";
 import { positionColorOrDefault } from "../../lib/positionColors";
 import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
 import { formatSleeperDraftSchedule } from "../../lib/sleeperDraftSchedule";
+import { buildStandardValueByFpid } from "../../lib/standardValues";
+import { compareSortValues, type SortDir } from "../../lib/tableSort";
+import { buildBlendedAdpByFpid, buildOurRankByFpid } from "../../lib/valueRank";
 import { useSleeperDraftScheduleRefresh } from "../../hooks/useSleeperDraftScheduleRefresh";
 import { WEEK } from "../../constants/general";
 import { POSITIONS, type DraftTierRow, type Position } from "../../types";
+
+// Available-players sort - "Rank" (this app's own cross-position rank, see
+// buildOurRankByFpid) is the default rather than raw points, since points
+// alone isn't comparable across positions (a top TE scores far fewer points
+// than a top WR, so a straight points-desc sort buried every TE below the
+// WR/RB pool - user report, 2026-08-30, alongside there being no way to
+// change the sort at all before this).
+type SortKey = "player" | "rank" | "adp" | "pts";
+
+const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
+  player: "asc",
+  rank: "asc",
+  adp: "asc",
+  pts: "desc",
+};
 
 interface SnakeDraftTabProps {
   seasonId: Id<"seasons">;
@@ -34,9 +54,10 @@ interface SnakeDraftTabProps {
 // instead of nominate/bid/resolve, so (unlike auction) this is self-
 // contained rather than leaning on the persistent DraftTopBar (which stays
 // auction-only - see route.tsx). No dollarValue anywhere here (SNAKE_DRAFT.md
-// §3.3) - available players are ranked by projected points/positionRank/ADP
-// instead, reusing the same getDraftBoard computation auction's board
-// already relies on for those same fields.
+// §3.3) - available players are sorted by this app's own cross-position Rank/
+// ADP/points instead (sortable, click a header - see SortKey), reusing the
+// same getDraftBoard computation auction's board already relies on for those
+// same fields.
 export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
   const [search, setSearch] = useState("");
   const [positionFilter, setPositionFilter] = useState<Position | null>(null);
@@ -46,9 +67,20 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("rank");
+  const [sortDir, setSortDir] = useState<SortDir>(DEFAULT_SORT_DIR.rank);
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(DEFAULT_SORT_DIR[key]);
+    }
+  };
 
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
+  const isSuperflex = (settings?.rosterSlots.SUPERFLEX ?? 0) > 0;
   useSleeperDraftScheduleRefresh(
     seasonId,
     settings?.sleeperLeagueId,
@@ -66,10 +98,9 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
   const board = useQuery(api.draft.pickSlots.getSnakeBoardPublic, {
     seasonId,
   });
-  const draftOrderConfig = useQuery(
-    api.draft.draftOrder.getDraftOrderConfig,
-    { seasonId },
-  );
+  const draftOrderConfig = useQuery(api.draft.draftOrder.getDraftOrderConfig, {
+    seasonId,
+  });
   const draftBoardResult = useQuery(
     api.draft.board.getDraftBoard,
     settings
@@ -81,6 +112,9 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
       : "skip",
   ) as { isGeneric: boolean; rows: DraftTierRow[] } | undefined;
   const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
+  const standardValues = useQuery(api.standardValues.getStandardValues, {
+    season: thisSeason,
+  });
 
   const draftPick = useMutation(api.draft.picks.draftPick);
   const undoLastPick = useMutation(api.draft.picks.undoLastPick);
@@ -115,31 +149,105 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
   );
 
   const adpByFpid = useMemo(() => {
-    const map = new Map<number, { adpStd: number; adpHalf: number; adpPpr: number }>();
+    const map = new Map<
+      number,
+      { adpStd: number; adpHalf: number; adpPpr: number }
+    >();
     for (const row of allRankings ?? []) map.set(row.fpid, row);
     return map;
   }, [allRankings]);
 
-  const adpForRow = (fpid: number): number | undefined => {
-    const row = adpByFpid.get(fpid);
-    if (!row || !settings) return undefined;
-    if (settings.scoring === "STD") return row.adpStd;
-    if (settings.scoring === "HALF") return row.adpHalf;
-    return row.adpPpr;
+  // Same blended ADP/our-rank this app uses everywhere else (PlayersTable.tsx
+  // pre-draft, PlayersLeftTab.tsx in-draft) via lib/valueRank.ts, so this
+  // tab's numbers never disagree with those - see buildBlendedAdpByFpid/
+  // buildOurRankByFpid's own comments for the full reasoning.
+  const standardValueByFpid = useMemo(
+    () =>
+      buildStandardValueByFpid(
+        standardValues,
+        settings?.scoring ?? "PPR",
+        isSuperflex,
+      ),
+    [standardValues, settings, isSuperflex],
+  );
+  const blendedAdpByFpid = useMemo(
+    () =>
+      buildBlendedAdpByFpid(
+        adpByFpid,
+        standardValueByFpid,
+        isSuperflex,
+        settings?.scoring ?? "PPR",
+      ),
+    [adpByFpid, standardValueByFpid, isSuperflex, settings?.scoring],
+  );
+  const ourRankByFpid = useMemo(
+    () =>
+      buildOurRankByFpid(
+        draftBoardResult?.rows,
+        adpByFpid,
+        settings?.scoring ?? "PPR",
+      ),
+    [draftBoardResult, adpByFpid, settings?.scoring],
+  );
+
+  const sortValueFor = (
+    row: DraftTierRow,
+    key: SortKey,
+  ): number | string | undefined => {
+    switch (key) {
+      case "player":
+        return row.name;
+      case "rank":
+        return ourRankByFpid.get(row.fpid);
+      case "adp":
+        return blendedAdpByFpid.get(row.fpid);
+      case "pts":
+        return row.points;
+    }
   };
 
   const availableRows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return (draftBoardResult?.rows ?? [])
+    const filtered = (draftBoardResult?.rows ?? [])
       .filter((row) => !pickedFpids.has(row.fpid))
       .filter((row) => !positionFilter || row.position === positionFilter)
-      .filter((row) => !term || row.name.toLowerCase().includes(term))
-      .sort((a, b) => b.points - a.points)
+      .filter((row) => !term || row.name.toLowerCase().includes(term));
+    // Capped to the top 100 by our own overall rank (not by whatever column
+    // is currently sorted) so switching sort columns reorders this same
+    // relevant pool instead of swapping in a different set of players - e.g.
+    // sorting "Pts" ascending shouldn't surface deep waiver fodder that was
+    // never in the pool to begin with.
+    const capped = [...filtered]
+      .sort(
+        (a, b) =>
+          (ourRankByFpid.get(a.fpid) ?? Infinity) -
+          (ourRankByFpid.get(b.fpid) ?? Infinity),
+      )
       .slice(0, 100);
-  }, [draftBoardResult, pickedFpids, positionFilter, search]);
+    return capped.sort((a, b) => {
+      const primary = compareSortValues(
+        sortValueFor(a, sortKey),
+        sortValueFor(b, sortKey),
+        sortDir,
+      );
+      if (primary !== 0) return primary;
+      return a.name.localeCompare(b.name);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    draftBoardResult,
+    pickedFpids,
+    positionFilter,
+    search,
+    sortKey,
+    sortDir,
+    ourRankByFpid,
+    blendedAdpByFpid,
+  ]);
 
   const recentPicks = useMemo(
-    () => [...(picks ?? [])].sort((a, b) => b.sequence - a.sequence).slice(0, 10),
+    () =>
+      [...(picks ?? [])].sort((a, b) => b.sequence - a.sequence).slice(0, 10),
     [picks],
   );
 
@@ -150,6 +258,17 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
     }
     return map;
   }, [draftBoardResult]);
+
+  const renderSortableTh = (label: string, key: SortKey) => (
+    <Table.Th onClick={() => handleSort(key)} style={{ cursor: "pointer" }}>
+      <Group gap={4} wrap="nowrap">
+        <Text size="sm" fw={sortKey === key ? 700 : undefined}>
+          {label}
+        </Text>
+        {sortKey === key && <SortArrow dir={sortDir} />}
+      </Group>
+    </Table.Th>
+  );
 
   const currentTeamId = board?.onClockTeamId ?? null;
   const effectivePickingTeamId =
@@ -290,15 +409,17 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
               <Table striped highlightOnHover verticalSpacing={4}>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Player</Table.Th>
-                    <Table.Th>Rk</Table.Th>
-                    <Table.Th>ADP</Table.Th>
+                    {renderSortableTh("Player", "player")}
+                    {renderSortableTh("Rank", "rank")}
+                    {renderSortableTh("ADP", "adp")}
+                    {renderSortableTh("Pts", "pts")}
                     <Table.Th />
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                   {availableRows.map((row) => {
-                    const adp = adpForRow(row.fpid);
+                    const adp = blendedAdpByFpid.get(row.fpid);
+                    const ourRank = ourRankByFpid.get(row.fpid);
                     return (
                       <Table.Tr key={row.fpid}>
                         <Table.Td>
@@ -326,9 +447,20 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
                             </Text>
                           </Group>
                         </Table.Td>
-                        <Table.Td>{row.positionRank}</Table.Td>
+                        <Table.Td>
+                          <AdpValueLabel
+                            ourRank={ourRank}
+                            adp={adp}
+                            showLabel={false}
+                          />
+                        </Table.Td>
                         <Table.Td>
                           {adp !== undefined ? adp.toFixed(1) : "—"}
+                        </Table.Td>
+                        <Table.Td>
+                          <Text size="sm" c="dimmed">
+                            {row.points.toFixed(1)}
+                          </Text>
                         </Table.Td>
                         <Table.Td>
                           <Button
@@ -371,7 +503,8 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
                     {recentPicks.map((pick) => (
                       <Table.Tr key={pick._id}>
                         <Table.Td>
-                          {pick.round !== undefined && pick.pickInRound !== undefined
+                          {pick.round !== undefined &&
+                          pick.pickInRound !== undefined
                             ? `${pick.round}.${String(pick.pickInRound).padStart(2, "0")}`
                             : `#${pick.sequence}`}
                         </Table.Td>

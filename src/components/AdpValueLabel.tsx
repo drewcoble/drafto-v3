@@ -1,4 +1,4 @@
-import { Text, Tooltip } from "@mantine/core";
+import { Stack, Text } from "@mantine/core";
 import { formatSignedNumber, keeperValueColor } from "../lib/keeperValue";
 
 interface AdpValueLabelProps {
@@ -21,6 +21,12 @@ interface AdpValueLabelProps {
 // Positive = ADP has this player going LATER than our own math ranks them -
 // a potential value if they last that long. Negative = ADP drafts them
 // EARLIER than our math justifies - a reach at ADP.
+//
+// The rank itself (`#N`) is real, always-visible text, not a hover Tooltip
+// like the diff-only version this replaced - a Tooltip is unreachable on a
+// touch device with no hover state, which made "what does our own math
+// actually rank this guy" invisible mid-draft on mobile, exactly when
+// someone's trying to decide on the clock (user report, 2026-08-30).
 export function AdpValueLabel({
   ourRank,
   adp,
@@ -29,11 +35,14 @@ export function AdpValueLabel({
   if (ourRank === undefined || adp === undefined) return null;
   const diff = Math.round(adp) - ourRank;
   return (
-    <Tooltip label={`Our rank #${ourRank} · ADP #${Math.round(adp)}`} withArrow>
-      <Text size="xs" fw={600} c={keeperValueColor(diff)} span>
+    <Stack gap={0} align="flex-start" style={{ lineHeight: 1.15 }}>
+      <Text size="xs" fw={700} span>
+        #{ourRank}
+      </Text>
+      <Text size="9px" fw={600} c={keeperValueColor(diff)} span>
         {showLabel ? "vs ADP " : ""}
         {formatSignedNumber(diff)}
       </Text>
-    </Tooltip>
+    </Stack>
   );
 }

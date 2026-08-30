@@ -13,11 +13,19 @@ import { useMutation, useQuery } from "convex/react";
 import { ListChecks, X } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { AdpValueLabel } from "../../../components/AdpValueLabel";
+import { SortArrow } from "../../../components/SortArrow";
 import { PlayerDetailModal } from "../../../components/PlayerDetailModal";
 import { WEEK } from "../../../constants/general";
 import { getErrorMessage } from "../../../lib/errors";
 import { positionColorOrDefault } from "../../../lib/positionColors";
 import { scoringConfigFromSeason } from "../../../lib/relevantPlayers";
+import { buildStandardValueByFpid } from "../../../lib/standardValues";
+import { compareSortValues, type SortDir } from "../../../lib/tableSort";
+import {
+  buildBlendedAdpByFpid,
+  buildOurRankByFpid,
+} from "../../../lib/valueRank";
 import { POSITIONS, type DraftTierRow, type Position } from "../../../types";
 import { BottomSheet, DraftFab, TeamChipRow } from "./mobileDraftSheet";
 
@@ -25,6 +33,21 @@ interface MobileSnakeDraftProps {
   seasonId: Id<"seasons">;
   teams: Doc<"seasonTeams">[];
 }
+
+// Same sort convention as SnakeDraftTab.tsx's own SortKey (the desktop
+// equivalent of this sheet) - "Rank" (this app's own cross-position rank)
+// defaults first rather than raw points, which isn't comparable across
+// positions. User report, 2026-08-30: this was the primary mobile drafting
+// surface, fixed-sorted by points with no way to change it, and showing
+// row.positionRank (e.g. "RB12") mislabeled "Rk" instead of the app's real
+// overall rank used everywhere else.
+type SortKey = "rank" | "adp" | "pts";
+
+const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
+  rank: "asc",
+  adp: "asc",
+  pts: "desc",
+};
 
 // Snake/linear counterpart to MobileNomination's nominate/assign FAB - the
 // mobile way to actually make a pick, reachable from every Draft Room tab
@@ -44,9 +67,20 @@ export function MobileSnakeDraft({ seasonId, teams }: MobileSnakeDraftProps) {
   const [selectedFpid, setSelectedFpid] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("rank");
+  const [sortDir, setSortDir] = useState<SortDir>(DEFAULT_SORT_DIR.rank);
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(DEFAULT_SORT_DIR[key]);
+    }
+  };
 
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
+  const isSuperflex = (settings?.rosterSlots.SUPERFLEX ?? 0) > 0;
   const thisSeason = settings?.year ?? String(new Date().getFullYear());
   const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   // Same authoritative on-the-clock/pick-numbering source the TV board and
@@ -66,6 +100,9 @@ export function MobileSnakeDraft({ seasonId, teams }: MobileSnakeDraftProps) {
       : "skip",
   ) as { isGeneric: boolean; rows: DraftTierRow[] } | undefined;
   const allRankings = useQuery(api.rankings.getAllRankings, { week: WEEK });
+  const standardValues = useQuery(api.standardValues.getStandardValues, {
+    season: thisSeason,
+  });
 
   const draftPick = useMutation(api.draft.picks.draftPick);
 
@@ -98,23 +135,90 @@ export function MobileSnakeDraft({ seasonId, teams }: MobileSnakeDraftProps) {
     return map;
   }, [allRankings]);
 
-  const adpForRow = (fpid: number): number | undefined => {
-    const row = adpByFpid.get(fpid);
-    if (!row || !settings) return undefined;
-    if (settings.scoring === "STD") return row.adpStd;
-    if (settings.scoring === "HALF") return row.adpHalf;
-    return row.adpPpr;
+  // Same blended ADP/our-rank this app uses everywhere else (PlayersTable.tsx
+  // pre-draft, PlayersLeftTab.tsx in-draft, SnakeDraftTab.tsx's desktop
+  // equivalent of this sheet) via lib/valueRank.ts, so this never disagrees
+  // with those on the same player.
+  const standardValueByFpid = useMemo(
+    () =>
+      buildStandardValueByFpid(
+        standardValues,
+        settings?.scoring ?? "PPR",
+        isSuperflex,
+      ),
+    [standardValues, settings, isSuperflex],
+  );
+  const blendedAdpByFpid = useMemo(
+    () =>
+      buildBlendedAdpByFpid(
+        adpByFpid,
+        standardValueByFpid,
+        isSuperflex,
+        settings?.scoring ?? "PPR",
+      ),
+    [adpByFpid, standardValueByFpid, isSuperflex, settings?.scoring],
+  );
+  const ourRankByFpid = useMemo(
+    () =>
+      buildOurRankByFpid(
+        draftBoardResult?.rows,
+        adpByFpid,
+        settings?.scoring ?? "PPR",
+      ),
+    [draftBoardResult, adpByFpid, settings?.scoring],
+  );
+
+  const sortValueFor = (
+    row: DraftTierRow,
+    key: SortKey,
+  ): number | undefined => {
+    switch (key) {
+      case "rank":
+        return ourRankByFpid.get(row.fpid);
+      case "adp":
+        return blendedAdpByFpid.get(row.fpid);
+      case "pts":
+        return row.points;
+    }
   };
 
   const availableRows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return (draftBoardResult?.rows ?? [])
+    const filtered = (draftBoardResult?.rows ?? [])
       .filter((row) => !pickedFpids.has(row.fpid))
       .filter((row) => !positionFilter || row.position === positionFilter)
-      .filter((row) => !term || row.name.toLowerCase().includes(term))
-      .sort((a, b) => b.points - a.points)
+      .filter((row) => !term || row.name.toLowerCase().includes(term));
+    // Capped to the top 100 by our own overall rank (not whatever column is
+    // currently sorted) so switching sort columns reorders this same
+    // relevant pool rather than swapping in a different set of players - see
+    // SnakeDraftTab.tsx's identical comment.
+    const capped = [...filtered]
+      .sort(
+        (a, b) =>
+          (ourRankByFpid.get(a.fpid) ?? Infinity) -
+          (ourRankByFpid.get(b.fpid) ?? Infinity),
+      )
       .slice(0, 100);
-  }, [draftBoardResult, pickedFpids, positionFilter, search]);
+    return capped.sort((a, b) => {
+      const primary = compareSortValues(
+        sortValueFor(a, sortKey),
+        sortValueFor(b, sortKey),
+        sortDir,
+      );
+      if (primary !== 0) return primary;
+      return a.name.localeCompare(b.name);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    draftBoardResult,
+    pickedFpids,
+    positionFilter,
+    search,
+    sortKey,
+    sortDir,
+    ourRankByFpid,
+    blendedAdpByFpid,
+  ]);
 
   const currentTeamId = board?.onClockTeamId ?? null;
   const effectivePickingTeamId =
@@ -243,63 +347,95 @@ export function MobileSnakeDraft({ seasonId, teams }: MobileSnakeDraftProps) {
             ))}
           </Group>
 
-          <Table striped highlightOnHover verticalSpacing={8}>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Player</Table.Th>
-                <Table.Th>Rk</Table.Th>
-                <Table.Th>ADP</Table.Th>
-                <Table.Th />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {availableRows.map((row) => {
-                const adp = adpForRow(row.fpid);
-                return (
-                  <Table.Tr key={row.fpid}>
-                    <Table.Td>
-                      <Group gap={6} wrap="nowrap">
-                        <Badge
-                          size="sm"
-                          variant="light"
-                          color={positionColorOrDefault(row.position)}
-                        >
-                          {row.position}
-                        </Badge>
-                        <Text
-                          size="sm"
-                          component="button"
-                          onClick={() => setSelectedFpid(row.fpid)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            textAlign: "left",
-                          }}
-                        >
-                          {row.name}
+          <Table.ScrollContainer minWidth={340}>
+            <Table striped highlightOnHover verticalSpacing={8}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Player</Table.Th>
+                  {(["rank", "adp", "pts"] as const).map((key) => (
+                    <Table.Th
+                      key={key}
+                      onClick={() => handleSort(key)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <Group gap={2} wrap="nowrap">
+                        <Text size="xs" fw={sortKey === key ? 700 : undefined}>
+                          {key === "rank"
+                            ? "Rk"
+                            : key === "adp"
+                              ? "ADP"
+                              : "Pts"}
                         </Text>
+                        {sortKey === key && (
+                          <SortArrow dir={sortDir} size={10} />
+                        )}
                       </Group>
-                    </Table.Td>
-                    <Table.Td>{row.positionRank}</Table.Td>
-                    <Table.Td>
-                      {adp !== undefined ? adp.toFixed(1) : "—"}
-                    </Table.Td>
-                    <Table.Td>
-                      <Button
-                        size="xs"
-                        disabled={isPicking || !effectivePickingTeamId}
-                        onClick={() => handleDraft(row.fpid)}
-                      >
-                        Draft
-                      </Button>
-                    </Table.Td>
-                  </Table.Tr>
-                );
-              })}
-            </Table.Tbody>
-          </Table>
+                    </Table.Th>
+                  ))}
+                  <Table.Th />
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {availableRows.map((row) => {
+                  const adp = blendedAdpByFpid.get(row.fpid);
+                  const ourRank = ourRankByFpid.get(row.fpid);
+                  return (
+                    <Table.Tr key={row.fpid}>
+                      <Table.Td>
+                        <Group gap={6} wrap="nowrap">
+                          <Badge
+                            size="sm"
+                            variant="light"
+                            color={positionColorOrDefault(row.position)}
+                          >
+                            {row.position}
+                          </Badge>
+                          <Text
+                            size="sm"
+                            component="button"
+                            onClick={() => setSelectedFpid(row.fpid)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: 0,
+                              textAlign: "left",
+                            }}
+                          >
+                            {row.name}
+                          </Text>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td>
+                        <AdpValueLabel
+                          ourRank={ourRank}
+                          adp={adp}
+                          showLabel={false}
+                        />
+                      </Table.Td>
+                      <Table.Td>
+                        {adp !== undefined ? adp.toFixed(1) : "—"}
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm" c="dimmed">
+                          {row.points.toFixed(1)}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Button
+                          size="xs"
+                          disabled={isPicking || !effectivePickingTeamId}
+                          onClick={() => handleDraft(row.fpid)}
+                        >
+                          Draft
+                        </Button>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
         </Stack>
       </BottomSheet>
 
