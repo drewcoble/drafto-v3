@@ -421,12 +421,13 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     );
   };
 
-  // Global ranking across every visible position, by $ Value when available
-  // (an auction draft board compares players across positions directly),
-  // falling back to raw points if no draft settings are configured yet -
-  // both the default (no column clicked) and explicit column sorts share
-  // the same positionRank-then-name tiebreak, so ties never fall back to
-  // arbitrary array order.
+  // Global ranking across every visible position, by Rank when available
+  // ($ value for auction, our own cross-position value rank for snake/
+  // linear - a draft board compares players across positions directly
+  // either way), falling back to raw points if no draft settings are
+  // configured yet - both the default (no column clicked) and explicit
+  // column sorts share the same positionRank-then-name tiebreak, so ties
+  // never fall back to arbitrary array order.
   const sortedRows = useMemo(() => {
     // Value for whichever column is currently sorted - $/vs. market/tier
     // read through draftValueByFpid (undefined until a league's selected/
@@ -478,7 +479,11 @@ export function PlayersTable({ week, selectedLeagueId }: PlayersTableProps) {
     };
 
     const rows = [...visibleRows];
-    const key: SortKey = sortKey ?? (draftValues ? "dollar" : "pts");
+    // Defaults to Rank (this app's own read on "who's best" - $ for
+    // auction, our cross-position value rank for snake/linear, see "rank"'s
+    // own case in sortValueFor above) rather than "dollar" - user request,
+    // 2026-08-30, applied the same way across every players table.
+    const key: SortKey = sortKey ?? (draftValues ? "rank" : "pts");
     const dir: SortDir = sortKey ? sortDir : defaultSortDirFor(key, isAuction);
     rows.sort((a, b) => {
       const primary = compareSortValues(

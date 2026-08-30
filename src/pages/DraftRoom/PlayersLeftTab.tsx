@@ -562,14 +562,18 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
     }
   };
 
-  // Defaults to best-value-first (dollar/ADP) rather than raw tier order -
-  // meaningful for a single combined cross-position list the way per-
-  // position tier order no longer is (tier numbers reset per position, so
-  // adjacent rows from different positions at "their own" tier 1 aren't
-  // actually comparable). Falls back to tierRank, then name, for a fully
+  // Defaults to best-value-first rather than raw tier order - meaningful for
+  // a single combined cross-position list the way per-position tier order
+  // no longer is (tier numbers reset per position, so adjacent rows from
+  // different positions at "their own" tier 1 aren't actually comparable).
+  // Auction has no separate Rank column (its $ value already is the
+  // ranking signal), so it still defaults to "dollar"; snake/linear
+  // defaults to the standalone Rank column instead of ADP, since Rank (not
+  // raw market ADP) is this app's own read on "who's actually best" - user
+  // request, 2026-08-30. Falls back to tierRank, then name, for a fully
   // deterministic order once the primary sort value ties.
   const tableRows = useMemo(() => {
-    const key: SortKey = sortKey ?? "dollar";
+    const key: SortKey = sortKey ?? (isAuction ? "dollar" : "rank");
     const dir: SortDir = sortKey ? sortDir : defaultSortDirFor(key, isAuction);
     return [...combinedRows].sort((a, b) => {
       const primary = compareSortValues(
