@@ -55,14 +55,28 @@ type Position = (typeof POSITIONS)[number];
 // Ties are averaged (this file's own percentileRank already sets this
 // precedent), NOT resolved by keeperCost.ts's plain findIndex - findIndex
 // always returns the FIRST (best-ranked) index at or below a given value,
-// so every player sharing the exact same floor dollarValue (there are
-// often dozens to hundreds once VOR hits 0 and the $ curve bottoms out at
-// $1 - see draftValues.ts) would get credited with the single best rank in
-// that entire tied group, systematically implying an earlier round than
-// almost all of them actually deserve. Averaging the tied group's rank
-// range instead means a deep bench player sitting in the middle of a huge
-// $1-floor tie lands roughly where that tier actually falls, not at its
-// front edge.
+// so every player sharing the exact same floor dollarValue would get
+// credited with the single best rank in that entire tied group,
+// systematically implying an earlier round than almost all of them
+// actually deserve.
+//
+// That said, callers should never actually invoke this for a VOR<=0 player
+// (dollarValue floored at exactly $1 - see draftValues.ts's weight =
+// VOR^FALLOFF_EXPONENT, which is exactly 0 there): `values` pools hundreds
+// of ranked players per position (Sleeper's rankings go far deeper than any
+// real roster - see computeDraftValuesForSettings' own comment), so the
+// $1-floor tie group is enormous, often several hundred players wide, not
+// merely "dozens." Even averaged, a tie group that size implies a round
+// deep into the 20s-30s for a 12-team league - which every real replacement-
+// level pick (drafted in the actual, much shallower 12-18 round range)
+// would then read as a huge reach purely from the pool being far deeper
+// than any draft goes, not from a real skill signal. There genuinely is no
+// value-curve signal left once VOR hits 0 - switching the ranking input
+// from dollarValue to raw VOR wouldn't help either (dollarValue is a
+// strictly monotonic transform of VOR - same order, same ties, same
+// oversized floor group) - so computeReportCardData excludes VOR<=0 picks
+// from roundSurplus entirely (impliedRound stays null, contributing 0/
+// neutral to grading) rather than calling this function for them.
 function valueImpliedRound(
   playerValue: number,
   sortedDescending: readonly { dollarValue: number }[],
@@ -208,7 +222,7 @@ interface RosterAward {
 // fix with no shape change (e.g. v3: excluding K/DST from steals/reaches) -
 // otherwise an already-completed draft's frozen snapshot would keep serving
 // the old, wrong callouts until someone manually clicks Regenerate.
-const REPORT_CARD_VERSION = 7;
+const REPORT_CARD_VERSION = 8;
 
 // Value surplus, VOR, and starters strength are on different scales, so each
 // is percentile-ranked against the field before blending - see gradeTeams.
@@ -523,9 +537,14 @@ async function computeReportCardData(
 
     const value = valueByFpid.get(pick.fpid);
     if (value) {
-      const impliedRound = !isAuction
-        ? valueImpliedRound(value.dollarValue, sortedByValue, season.teamCount)
-        : null;
+      // VOR<=0 (dollarValue floored at $1 - see draftValues.ts's weight =
+      // VOR^FALLOFF_EXPONENT, which is exactly 0 there) is excluded rather
+      // than ranked - see valueImpliedRound's comment on why a value curve
+      // has nothing left to say once a player hits replacement level.
+      const impliedRound =
+        !isAuction && value.valueOverReplacement > 0
+          ? valueImpliedRound(value.dollarValue, sortedByValue, season.teamCount)
+          : null;
       const roundSurplus = impliedRound !== null ? round - impliedRound : null;
       resolved.push({
         pickId: pick._id,
@@ -580,8 +599,9 @@ async function computeReportCardData(
     const keeperEstimatedValue = isKeeper
       ? estimateMarketValue(vor, valueCurveByPosition.get(pick.position))
       : null;
+    // Same VOR<=0 exclusion as the branch above.
     const impliedRound =
-      !isAuction && keeperEstimatedValue !== null
+      !isAuction && keeperEstimatedValue !== null && vor > 0
         ? valueImpliedRound(keeperEstimatedValue, sortedByValue, season.teamCount)
         : null;
     const roundSurplus = impliedRound !== null ? round - impliedRound : null;
