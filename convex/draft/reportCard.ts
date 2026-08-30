@@ -129,9 +129,9 @@ interface RosterAward {
   count: number;
 }
 
-// Bump whenever computeReportCardData's returned shape changes in a way
-// that would make an already-frozen draftReportCardSnapshots row
-// (data: v.any()) unsafe to serve as-is - readReportCardData/
+// Bump whenever computeReportCardData's returned shape OR content changes
+// in a way that would make an already-frozen draftReportCardSnapshots row
+// (data: v.any()) wrong/unsafe to serve as-is - readReportCardData/
 // ensureReportCardSnapshot compare this against each snapshot's own
 // `data.version` and transparently recompute+overwrite a mismatch, the
 // same way the "Regenerate" button forces a recompute, but automatic.
@@ -139,8 +139,11 @@ interface RosterAward {
 // the first time this shape changed twice in a row (a snapshot frozen with
 // `isAuction` but not yet `impliedRound`/`roundSurplus` passed an
 // `"isAuction" in data` check and crashed the frontend the same way a
-// pre-isAuction snapshot did).
-const REPORT_CARD_VERSION = 2;
+// pre-isAuction snapshot did). Also worth bumping for a pure content/logic
+// fix with no shape change (e.g. v3: excluding K/DST from steals/reaches) -
+// otherwise an already-completed draft's frozen snapshot would keep serving
+// the old, wrong callouts until someone manually clicks Regenerate.
+const REPORT_CARD_VERSION = 3;
 
 // Value surplus, VOR, and starters strength are on different scales, so each
 // is percentile-ranked against the field before blending - see gradeTeams.
@@ -182,6 +185,17 @@ const CATEGORY_ORDER: StarterCategory[] = [
   "DST",
   "K",
 ];
+
+// Positions the headline steals/reaches/keeper callouts are scoped to - K
+// and DST both have such thin, tightly-clustered value that the value curve
+// ranks whichever one has even a slight edge as "worth" a much earlier
+// round than the rest, while real draft behavior takes them uniformly dead
+// last regardless of that edge (a positional-strategy pick, not a value
+// one). That systematically reads as a false "steal" for the best kicker
+// in the pool - the exact bug this const fixes. Doesn't affect team grades/
+// surplus totals elsewhere (see nonKeeperResolved/keeperResolved below),
+// only which picks are eligible to headline a callout card.
+const CALLOUT_POSITIONS: Position[] = ["QB", "RB", "WR", "TE"];
 
 function letterForScore(score: number): string {
   // The last band's min is -Infinity, so find() always matches something -
@@ -595,14 +609,15 @@ async function computeReportCardData(
     };
   });
 
-  // DST excluded here (but not from team grades/surplus totals elsewhere)
-  // - a $1-2 swing on a streamable defense (or, for snake/linear, DST's
-  // inherently unreliable ADP) reads as a huge "steal" or "reach" by
-  // surplus, but nobody actually believes a defense is a real draft-day
-  // steal the way a $30 RB at $15 (or a QB1 falling three rounds past ADP)
-  // is.
+  // K/DST excluded here (but not from team grades/surplus totals elsewhere)
+  // - see CALLOUT_POSITIONS' comment for why. Nobody actually believes a
+  // kicker or streamable defense is a real draft-day steal the way a $30 RB
+  // at $15 (or a QB1 falling three rounds past his value) is.
   const nonKeeperResolved = resolved.filter(
-    (p) => !p.isKeeper && teamValueOf(p) !== null && p.position !== "DST",
+    (p) =>
+      !p.isKeeper &&
+      teamValueOf(p) !== null &&
+      CALLOUT_POSITIONS.includes(p.position),
   );
   const bySurplusDesc = [...nonKeeperResolved].sort(
     (a, b) => (teamValueOf(b) ?? 0) - (teamValueOf(a) ?? 0),
@@ -611,7 +626,10 @@ async function computeReportCardData(
   const leagueReaches = bySurplusDesc.slice(-5).reverse();
 
   const keeperResolved = resolved.filter(
-    (p) => p.isKeeper && keeperValueOf(p) !== null,
+    (p) =>
+      p.isKeeper &&
+      keeperValueOf(p) !== null &&
+      CALLOUT_POSITIONS.includes(p.position),
   );
   const byKeeperSurplusDesc = [...keeperResolved].sort(
     (a, b) => (keeperValueOf(b) ?? 0) - (keeperValueOf(a) ?? 0),
