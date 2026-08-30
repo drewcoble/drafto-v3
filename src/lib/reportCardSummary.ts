@@ -17,10 +17,19 @@ function formatSigned(amount: number): string {
   return amount >= 0 ? `+$${amount.toFixed(0)}` : `-$${Math.abs(amount).toFixed(0)}`;
 }
 
-// Snake/linear's "beat the market" threshold is in rounds, not dollars - a
-// fractional-round gap is noise (every pick has some), so this needs to be
-// a real, whole-round swing to be worth a sentence.
+// Snake/linear's team-total "beat the market" threshold is in rounds, not
+// dollars - a fractional-round gap is noise (every pick has some), so this
+// needs to be a real, whole-round swing to be worth a sentence. Gates
+// team.surplusTotal (the value-implied-round model) - see ADP_SURPLUS_
+// THRESHOLD below for the separate, ADP-based per-pick threshold.
 const ROUND_SURPLUS_THRESHOLD = 1;
+
+// Per-pick ADP surplus threshold (draft-slot spots, not rounds) - gates
+// individual pick mentions (bestPick/worstPick/bestKeeper/leagueSteals/
+// leagueReaches), which use real market ADP rather than the value-implied-
+// round model (see PickRow.adpSurplus's comment in convex/draft/
+// reportCard.ts for why the two are deliberately different metrics).
+const ADP_SURPLUS_THRESHOLD = 3;
 
 function gradeDescriptor(letter: string): string {
   if (letter.startsWith("A")) return "elite drafting";
@@ -80,11 +89,11 @@ export function buildTeamSummary(
   } else {
     if (team.surplusTotal >= ROUND_SURPLUS_THRESHOLD && team.bestPick) {
       sentences.push(
-        `They beat their draft slots by ${formatSignedNumber(team.surplusTotal)} rounds across the board, headlined by landing ${team.bestPick.name} in round ${team.bestPick.round} (${formatSignedNumber(team.bestPick.roundSurplus ?? 0)} rounds vs expected).`,
+        `They beat their draft slots by ${formatSignedNumber(team.surplusTotal)} rounds across the board, headlined by landing ${team.bestPick.name} at pick #${team.bestPick.slot} (${formatSignedNumber(team.bestPick.adpSurplus ?? 0)} vs his ADP).`,
       );
     } else if (team.surplusTotal <= -ROUND_SURPLUS_THRESHOLD && team.worstPick) {
       sentences.push(
-        `They drafted ahead of their players' actual value overall (${formatSignedNumber(team.surplusTotal)} rounds), most notably reaching on ${team.worstPick.name} in round ${team.worstPick.round} (${formatSignedNumber(team.worstPick.roundSurplus ?? 0)} rounds vs expected).`,
+        `They drafted ahead of their players' actual value overall (${formatSignedNumber(team.surplusTotal)} rounds), most notably reaching on ${team.worstPick.name} at pick #${team.worstPick.slot} (${formatSignedNumber(team.worstPick.adpSurplus ?? 0)} vs his ADP).`,
       );
     }
   }
@@ -103,10 +112,10 @@ export function buildTeamSummary(
     }
   } else if (
     team.bestKeeper &&
-    (team.bestKeeper.roundSurplus ?? 0) >= ROUND_SURPLUS_THRESHOLD
+    (team.bestKeeper.adpSurplus ?? 0) >= ADP_SURPLUS_THRESHOLD
   ) {
     sentences.push(
-      `Their sharpest move was keeping ${team.bestKeeper.name} in round ${team.bestKeeper.round} - a bargain worth ${formatSignedNumber(team.bestKeeper.roundSurplus ?? 0)} rounds.`,
+      `Their sharpest move was keeping ${team.bestKeeper.name} at pick #${team.bestKeeper.slot} - a bargain worth ${formatSignedNumber(team.bestKeeper.adpSurplus ?? 0)} vs his ADP.`,
     );
   }
 
@@ -145,21 +154,21 @@ export function buildLeagueSummary(report: ReportCard): string {
   }
 
   const steal = report.leagueSteals[0];
-  const stealValue = report.isAuction ? steal?.surplus : steal?.roundSurplus;
+  const stealValue = report.isAuction ? steal?.surplus : steal?.adpSurplus;
   if (steal && report.isAuction && (stealValue ?? 0) >= 1) {
     const stealTeam = teamNameById.get(steal.teamId) ?? "One team";
     sentences.push(
       `The steal of the draft: ${stealTeam} landed ${steal.name} for just $${steal.price}, ${formatSigned(stealValue ?? 0)} under market value.`,
     );
-  } else if (steal && !report.isAuction && (stealValue ?? 0) >= ROUND_SURPLUS_THRESHOLD) {
+  } else if (steal && !report.isAuction && (stealValue ?? 0) >= ADP_SURPLUS_THRESHOLD) {
     const stealTeam = teamNameById.get(steal.teamId) ?? "One team";
     sentences.push(
-      `The steal of the draft: ${stealTeam} landed ${steal.name} in round ${steal.round}, ${formatSignedNumber(stealValue ?? 0)} rounds later than his production justified.`,
+      `The steal of the draft: ${stealTeam} landed ${steal.name} at pick #${steal.slot}, ${formatSignedNumber(stealValue ?? 0)} spots after his ADP.`,
     );
   }
 
   const reach = report.leagueReaches[0];
-  const reachValue = report.isAuction ? reach?.surplus : reach?.roundSurplus;
+  const reachValue = report.isAuction ? reach?.surplus : reach?.adpSurplus;
   if (reach && report.isAuction && (reachValue ?? 0) <= -1) {
     const reachTeam = teamNameById.get(reach.teamId) ?? "One team";
     sentences.push(
@@ -168,11 +177,11 @@ export function buildLeagueSummary(report: ReportCard): string {
   } else if (
     reach &&
     !report.isAuction &&
-    (reachValue ?? 0) <= -ROUND_SURPLUS_THRESHOLD
+    (reachValue ?? 0) <= -ADP_SURPLUS_THRESHOLD
   ) {
     const reachTeam = teamNameById.get(reach.teamId) ?? "One team";
     sentences.push(
-      `The biggest reach: ${reachTeam} took ${reach.name} in round ${reach.round}, ${formatSignedNumber(reachValue ?? 0)} rounds earlier than his production justified.`,
+      `The biggest reach: ${reachTeam} took ${reach.name} at pick #${reach.slot}, ${formatSignedNumber(reachValue ?? 0)} spots ahead of his ADP.`,
     );
   }
 

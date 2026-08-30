@@ -20,34 +20,45 @@ function formatSigned(amount: number): string {
     : `-$${Math.round(Math.abs(amount))}`;
 }
 
-// Snake/linear's counterpart - a signed round count, never a dollar figure
-// (see formatPickFacts/buildSummaryPrompt's isAuction branch).
+// Snake/linear's counterpart - a signed round count, never a dollar figure.
+// Used ONLY for the team-level valueSurplus total (see buildSummaryPrompt) -
+// individual notable picks use formatPickFacts' ADP-based signed spot count
+// instead (formatSignedSpots below).
 function formatSignedRounds(amount: number): string {
   const rounded = Math.round(amount);
   return rounded >= 0 ? `+${rounded}` : `${rounded}`;
 }
 
+// Same signed formatting, different unit - a raw ADP-spot count for
+// formatPickFacts below.
+function formatSignedSpots(amount: number): string {
+  const rounded = Math.round(amount);
+  return rounded >= 0 ? `+${rounded}` : `${rounded}`;
+}
+
 // One-line description of a notable pick, format-aware: auction states the
-// $ paid and $ surplus (as before); snake/linear states the round it was
-// actually made in, the round its own projected value implies (see convex/
-// draft/reportCard.ts's ResolvedPick.impliedRound), and the round-based
-// surplus between them - never a $ amount, and never a raw ADP number
-// (deep-bench ADP is too noisy - see roundSurplus's own comment).
+// $ paid and $ surplus (as before); snake/linear states the pick slot it
+// was actually made at, its blended market ADP, and the ADP-based surplus
+// between them (convex/draft/reportCard.ts's ResolvedPick.adp/adpSurplus) -
+// never a $ amount. Deliberately ADP-based, not the value-implied-round
+// model team-level valueSurplus uses (see that field's own comment): raw
+// ADP is the more intuitive, market-grounded read of "was this actually a
+// steal" for an individual pick, even though it's noisier than the value
+// curve at the back of the draft - the value-curve version was reading
+// routine 16th/17th-round fliers as if they were 8th/9th-round values, a
+// philosophy difference rather than a real steal (2026-08-30).
 function formatPickFacts(
-  pick: { name: string; price: number; round: number; impliedRound: number | null },
+  pick: { name: string; price: number; slot: number; adp: number | null },
   surplus: number | null,
   isAuction: boolean,
 ): string {
   if (isAuction) {
     return `${pick.name} ($${pick.price}, ${formatSigned(surplus ?? 0)})`;
   }
-  const impliedText =
-    pick.impliedRound !== null
-      ? `worth a Round ${pick.impliedRound} pick`
-      : "no clear expected round";
+  const adpText = pick.adp !== null ? `ADP ${pick.adp.toFixed(1)}` : "no real ADP";
   const surplusText =
-    surplus !== null ? `, ${formatSignedRounds(surplus)} rounds vs expected` : "";
-  return `${pick.name} (Round ${pick.round}, ${impliedText}${surplusText})`;
+    surplus !== null ? `, ${formatSignedSpots(surplus)} vs ADP` : "";
+  return `${pick.name} (pick #${pick.slot}, ${adpText}${surplusText})`;
 }
 
 // Forces Gemini's response into { leagueRecap, teamSummaries } instead of
@@ -97,15 +108,23 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
       (p) => `${p.category}: ${p.rank}/${data.teams.length}`,
     ),
     bestPick: team.bestPick
-      ? formatPickFacts(team.bestPick, team.bestPick.surplus, isAuction)
+      ? formatPickFacts(
+          team.bestPick,
+          isAuction ? team.bestPick.surplus : team.bestPick.adpSurplus,
+          isAuction,
+        )
       : null,
     worstPick: team.worstPick
-      ? formatPickFacts(team.worstPick, team.worstPick.surplus, isAuction)
+      ? formatPickFacts(
+          team.worstPick,
+          isAuction ? team.worstPick.surplus : team.worstPick.adpSurplus,
+          isAuction,
+        )
       : null,
     bestKeeper: team.bestKeeper
       ? formatPickFacts(
           team.bestKeeper,
-          isAuction ? team.bestKeeper.keeperSurplus : team.bestKeeper.roundSurplus,
+          isAuction ? team.bestKeeper.keeperSurplus : team.bestKeeper.adpSurplus,
           isAuction,
         )
       : null,
@@ -119,14 +138,14 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
     biggestSteal: data.leagueSteals[0]
       ? formatPickFacts(
           data.leagueSteals[0],
-          isAuction ? data.leagueSteals[0].surplus : data.leagueSteals[0].roundSurplus,
+          isAuction ? data.leagueSteals[0].surplus : data.leagueSteals[0].adpSurplus,
           isAuction,
         )
       : null,
     biggestReach: data.leagueReaches[0]
       ? formatPickFacts(
           data.leagueReaches[0],
-          isAuction ? data.leagueReaches[0].surplus : data.leagueReaches[0].roundSurplus,
+          isAuction ? data.leagueReaches[0].surplus : data.leagueReaches[0].adpSurplus,
           isAuction,
         )
       : null,
@@ -152,7 +171,7 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
     ...(isAuction
       ? []
       : [
-          `This is a snake/linear draft, not an auction - there is no money involved and no ADP. NEVER mention dollars, prices, budgets, "$", or "ADP" in any form. "valueSurplus"/pick surplus numbers are a signed count of ROUNDS relative to the round each player's own projected production is actually worth: positive means the team got that player in a later round than his production justified (a value/steal), negative means they drafted him earlier than his production justified (a reach). Describe this in terms of rounds, e.g. "landed him three rounds later than he was worth" or "reached two full rounds early" - never as a dollar amount or an ADP figure.`,
+          `This is a snake/linear draft, not an auction - there is no money involved. NEVER mention dollars, prices, or budgets in any form. Two different units show up in this data, for two different things - keep them separate and use the right one: (1) each team's "valueSurplus" is a signed count of ROUNDS relative to the round their picks' own projected production is actually worth overall - describe this as e.g. "outperformed their draft slots by N rounds overall" or "reached N rounds early on average" when talking about the team's whole draft. (2) bestPick/worstPick/bestKeeper/biggestSteal/biggestReach each include an ADP (average draft position) and a signed spot count vs that ADP - describe these individual picks in terms of market ADP, e.g. "landed him three rounds after his ADP" or "reached 20 spots ahead of ADP." Never blend the two units in the same sentence (don't say a specific player was "X rounds vs expected" - that phrasing is for the team total only).`,
         ]),
     "",
     JSON.stringify(payload),

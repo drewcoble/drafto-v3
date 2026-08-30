@@ -13,6 +13,7 @@ import { POSITIONS } from "../positions";
 import {
   scoringConfigValidator,
   pointsForScoringConfig,
+  adpForScoring,
   type ScoringConfig,
 } from "../scoring";
 import {
@@ -22,6 +23,7 @@ import {
   type DraftValueRow,
 } from "../draftValues";
 import { resolveDraftType } from "../draftType";
+import { RELEVANT_ADP_CEILING } from "./tiers";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireDraftOwner } from "./auth";
 import {
@@ -65,6 +67,46 @@ function valueImpliedRound(
   const index = sortedDescending.findIndex((v) => v.dollarValue <= playerValue);
   const rank = index === -1 ? sortedDescending.length + 1 : index + 1;
   return Math.ceil(rank / teamCount);
+}
+
+// Mirrors src/lib/standardValues.ts's buildStandardValueByFpid, trimmed to
+// just the overall rank (convex/ never imports from src/ - see convex/draft/
+// tiers.ts's comment on the same duplication convention; convex/gemini/
+// preDraftInsights.ts keeps its own near-identical copy for the same
+// reason). Feeds the blended-ADP display metric below - real market ADP,
+// used ONLY for the steals/reaches/best-worst-pick callouts (see
+// CALLOUT_POSITIONS and ResolvedPick.adpSurplus), never for grading.
+async function buildEspnOverallRankByFpid(
+  ctx: QueryCtx,
+  season: string,
+  scoring: ScoringConfig["scoring"],
+  isSuperflex: boolean,
+): Promise<Map<number, number>> {
+  const loadFormat = async (format: "standard" | "ppr" | "superflex") => {
+    const rows = await ctx.db
+      .query("standardValues")
+      .withIndex("by_platform_format_season_fpid", (q) =>
+        q.eq("platform", "espn").eq("format", format).eq("season", season),
+      )
+      .collect();
+    return new Map(rows.map((row) => [row.fpid, row.rank]));
+  };
+
+  if (isSuperflex) return loadFormat("superflex");
+  if (scoring === "STD") return loadFormat("standard");
+  if (scoring === "PPR") return loadFormat("ppr");
+
+  const [std, ppr] = await Promise.all([
+    loadFormat("standard"),
+    loadFormat("ppr"),
+  ]);
+  const merged = new Map<number, number>();
+  for (const fpid of new Set([...std.keys(), ...ppr.keys()])) {
+    const a = std.get(fpid);
+    const b = ppr.get(fpid);
+    merged.set(fpid, a !== undefined && b !== undefined ? (a + b) / 2 : (a ?? b)!);
+  }
+  return merged;
 }
 
 interface ResolvedPick {
@@ -115,6 +157,20 @@ interface ResolvedPick {
   // already exists for exactly this reason (see that field's comment) and
   // feeds valueImpliedRound the same as a real pick's dollarValue.
   roundSurplus: number | null;
+  // Real market ADP (Sleeper `adpForScoring` averaged with ESPN's overall
+  // draft-kit rank, ESPN alone for superflex) - snake/linear only, and only
+  // for CALLOUT_POSITIONS with a real ADP under RELEVANT_ADP_CEILING. Used
+  // ONLY for the steals/reaches/best-worst-pick callouts below (never for
+  // grading/surplusTotal, which stay on the value-implied-round model per
+  // roundSurplus above) - raw ADP is the more intuitive, market-grounded
+  // read of "was this actually a steal," even though it's noisier than our
+  // own value curve at the back of the draft (see valueImpliedRound's
+  // comment on why grading itself avoids it).
+  adp: number | null;
+  // slot minus adp - positive means this player fell past his market ADP
+  // to land here (a value/steal), negative means he went earlier than ADP
+  // suggested (a reach). Display/callout metric only - see `adp` above.
+  adpSurplus: number | null;
   // Labeled from the *prior* season's actual weekly output
   // (playerSeasonStats), same convention the live draft board already uses
   // (see PlayersLeftTab.tsx) - the current season has no games played yet
@@ -143,7 +199,7 @@ interface RosterAward {
 // fix with no shape change (e.g. v3: excluding K/DST from steals/reaches) -
 // otherwise an already-completed draft's frozen snapshot would keep serving
 // the old, wrong callouts until someone manually clicks Regenerate.
-const REPORT_CARD_VERSION = 5;
+const REPORT_CARD_VERSION = 6;
 
 // Value surplus, VOR, and starters strength are on different scales, so each
 // is percentile-ranked against the field before blending - see gradeTeams.
@@ -301,19 +357,91 @@ async function computeReportCardData(
 
   // Team-level "value surplus" grading input: auction's real $ dollarValue
   // surplus, or snake/linear's round-based surplus (see ResolvedPick.
-  // roundSurplus) - same role, different unit, so every percentile/best-
-  // worst/steal-reach computation below reads through this instead of a
-  // hardcoded field, and never needs to branch on format itself.
+  // roundSurplus) - same role, different unit. Used ONLY for surplusTotal/
+  // surplusByPosition/percentile grading below (keepers never contribute to
+  // that total, same as auction always excluded them) - best/worst pick and
+  // keeper selection use calloutValueOf/calloutKeeperValueOf instead, see
+  // their own comment.
   const teamValueOf = (p: ResolvedPick): number | null =>
     isAuction ? p.surplus : p.roundSurplus;
-  // Keeper-specific value: auction needs keeperEstimatedValue's interpolated
-  // market $ (a kept player has no real dollarValue - see ResolvedPick's
-  // comment on dollarValue), but valueImpliedRound needs no such
-  // interpolation to compare against - it already takes keeperEstimatedValue
-  // as its input the same way it takes a real pick's dollarValue. Snake/
-  // linear just reuses roundSurplus here too.
-  const keeperValueOf = (p: ResolvedPick): number | null =>
-    isAuction ? p.keeperSurplus : p.roundSurplus;
+
+  // Blended market ADP (Sleeper's adpForScoring averaged with ESPN's
+  // overall draft-kit rank, ESPN alone for superflex) - the display-only
+  // steal/reach signal (see ResolvedPick.adp/adpSurplus), separate from the
+  // value-implied-round model teamValueOf/keeperValueOf use for grading.
+  // Mirrors convex/gemini/preDraftInsights.ts's snake branch and src/lib/
+  // valueRank.ts's buildBlendedAdpByFpid (convex/ can't import src/, so this
+  // is its own copy). Skipped entirely for auction, which has no use for it.
+  const blendedAdpByFpid = new Map<number, number>();
+  if (!isAuction) {
+    const isSuperflex = season.rosterSlots.SUPERFLEX > 0;
+    const espnRankByFpid = await buildEspnOverallRankByFpid(
+      ctx,
+      season.year,
+      args.scoringConfig.scoring,
+      isSuperflex,
+    );
+    const sleeperAdpByFpid = new Map<
+      number,
+      { adpStd: number; adpHalf: number; adpPpr: number }
+    >();
+    for (const position of CALLOUT_POSITIONS) {
+      const rankings = await ctx.db
+        .query("rankings")
+        .withIndex("by_position_week", (q) =>
+          q.eq("position", position).eq("week", args.week),
+        )
+        .collect();
+      for (const ranking of rankings) sleeperAdpByFpid.set(ranking.fpid, ranking);
+    }
+    for (const fpid of new Set([
+      ...sleeperAdpByFpid.keys(),
+      ...espnRankByFpid.keys(),
+    ])) {
+      const espnRank = espnRankByFpid.get(fpid);
+      // Superflex leagues use ESPN's superflex rank alone - Sleeper's
+      // `rankings` table has no superflex-aware ADP field at all, so
+      // blending it in would understate QBs relative to a real superflex
+      // draft (same precedent buildStandardValueByFpid sets for auction's
+      // $-vs-market column).
+      if (isSuperflex) {
+        if (espnRank !== undefined) blendedAdpByFpid.set(fpid, espnRank);
+        continue;
+      }
+      const adpRow = sleeperAdpByFpid.get(fpid);
+      const rawSleeperAdp = adpRow
+        ? adpForScoring(adpRow, args.scoringConfig.scoring)
+        : undefined;
+      const sleeperAdp =
+        rawSleeperAdp !== undefined && rawSleeperAdp < RELEVANT_ADP_CEILING
+          ? rawSleeperAdp
+          : undefined;
+      if (sleeperAdp !== undefined && espnRank !== undefined) {
+        blendedAdpByFpid.set(fpid, (sleeperAdp + espnRank) / 2);
+      } else if (sleeperAdp !== undefined) {
+        blendedAdpByFpid.set(fpid, sleeperAdp);
+      } else if (espnRank !== undefined) {
+        blendedAdpByFpid.set(fpid, espnRank);
+      }
+    }
+  }
+
+  // Steal/reach callout selector (leagueSteals/leagueReaches, each team's
+  // bestPick/worstPick) - auction's real $ surplus, or snake/linear's ADP
+  // surplus (adpSurplus). Deliberately NOT teamValueOf/roundSurplus: raw
+  // ADP is noisier at the back of the draft (see valueImpliedRound's
+  // comment), but it's also the more intuitive, market-grounded read of
+  // "was this actually a steal" that a value-curve-implied round isn't -
+  // users flagged the value-curve version reading routine 16th/17th-round
+  // fliers as if they were 8th/9th-round values, a philosophy difference
+  // rather than a real steal (2026-08-30).
+  const calloutValueOf = (p: ResolvedPick): number | null =>
+    isAuction ? p.surplus : p.adpSurplus;
+  // Keeper counterpart - ADP needs no separate interpolation step for
+  // keepers (it's real market data, available for a kept player exactly
+  // like anyone else), so snake/linear just reuses adpSurplus here too.
+  const calloutKeeperValueOf = (p: ResolvedPick): number | null =>
+    isAuction ? p.keeperSurplus : p.adpSurplus;
 
   const replacementByPosition = new Map<Position, number>();
   for (const row of values) {
@@ -359,6 +487,11 @@ async function computeReportCardData(
   for (const pick of picks) {
     const slot = pick.overallPick ?? pick.sequence;
     const round = pick.round ?? Math.ceil(slot / season.teamCount);
+    const adp =
+      !isAuction && CALLOUT_POSITIONS.includes(pick.position)
+        ? (blendedAdpByFpid.get(pick.fpid) ?? null)
+        : null;
+    const adpSurplus = adp !== null ? slot - adp : null;
 
     const value = valueByFpid.get(pick.fpid);
     if (value) {
@@ -391,6 +524,8 @@ async function computeReportCardData(
         pickInRound: pick.pickInRound ?? null,
         impliedRound,
         roundSurplus,
+        adp,
+        adpSurplus,
         consistencyLabel: consistencyByFpid.get(pick.fpid) ?? null,
       });
       continue;
@@ -448,6 +583,8 @@ async function computeReportCardData(
       pickInRound: pick.pickInRound ?? null,
       impliedRound,
       roundSurplus,
+      adp,
+      adpSurplus,
       consistencyLabel: consistencyByFpid.get(pick.fpid) ?? null,
     });
   }
@@ -480,18 +617,22 @@ async function computeReportCardData(
     // reason) they're excluded from the league-wide steals/reaches/keeper
     // callouts - see CALLOUT_POSITIONS' comment. Doesn't affect
     // surplusTotal/surplusByPosition above, which still grade every
-    // position.
+    // position. Selected via calloutValueOf/calloutKeeperValueOf (ADP-based
+    // for snake/linear), NOT teamValueOf/keeperValueOf (the value-implied-
+    // round model those use for grading) - see calloutValueOf's comment.
     const calloutEligiblePicks = nonKeeperPicks.filter((p) =>
       CALLOUT_POSITIONS.includes(p.position),
     );
     const bestPick = calloutEligiblePicks.reduce<ResolvedPick | undefined>(
       (best, p) =>
-        !best || (teamValueOf(p) ?? 0) > (teamValueOf(best) ?? 0) ? p : best,
+        !best || (calloutValueOf(p) ?? 0) > (calloutValueOf(best) ?? 0)
+          ? p
+          : best,
       undefined,
     );
     const worstPick = calloutEligiblePicks.reduce<ResolvedPick | undefined>(
       (worst, p) =>
-        !worst || (teamValueOf(p) ?? 0) < (teamValueOf(worst) ?? 0)
+        !worst || (calloutValueOf(p) ?? 0) < (calloutValueOf(worst) ?? 0)
           ? p
           : worst,
       undefined,
@@ -500,19 +641,21 @@ async function computeReportCardData(
     const keeperPicks = teamPicks.filter(
       (p) =>
         p.isKeeper &&
-        keeperValueOf(p) !== null &&
+        calloutKeeperValueOf(p) !== null &&
         CALLOUT_POSITIONS.includes(p.position),
     );
     const bestKeeper = keeperPicks.reduce<ResolvedPick | undefined>(
       (best, p) =>
-        !best || (keeperValueOf(p) ?? 0) > (keeperValueOf(best) ?? 0)
+        !best ||
+        (calloutKeeperValueOf(p) ?? 0) > (calloutKeeperValueOf(best) ?? 0)
           ? p
           : best,
       undefined,
     );
     const worstKeeper = keeperPicks.reduce<ResolvedPick | undefined>(
       (worst, p) =>
-        !worst || (keeperValueOf(p) ?? 0) < (keeperValueOf(worst) ?? 0)
+        !worst ||
+        (calloutKeeperValueOf(p) ?? 0) < (calloutKeeperValueOf(worst) ?? 0)
           ? p
           : worst,
       undefined,
@@ -642,11 +785,11 @@ async function computeReportCardData(
   const nonKeeperResolved = resolved.filter(
     (p) =>
       !p.isKeeper &&
-      teamValueOf(p) !== null &&
+      calloutValueOf(p) !== null &&
       CALLOUT_POSITIONS.includes(p.position),
   );
   const bySurplusDesc = [...nonKeeperResolved].sort(
-    (a, b) => (teamValueOf(b) ?? 0) - (teamValueOf(a) ?? 0),
+    (a, b) => (calloutValueOf(b) ?? 0) - (calloutValueOf(a) ?? 0),
   );
   const leagueSteals = bySurplusDesc.slice(0, 5);
   const leagueReaches = bySurplusDesc.slice(-5).reverse();
@@ -654,11 +797,11 @@ async function computeReportCardData(
   const keeperResolved = resolved.filter(
     (p) =>
       p.isKeeper &&
-      keeperValueOf(p) !== null &&
+      calloutKeeperValueOf(p) !== null &&
       CALLOUT_POSITIONS.includes(p.position),
   );
   const byKeeperSurplusDesc = [...keeperResolved].sort(
-    (a, b) => (keeperValueOf(b) ?? 0) - (keeperValueOf(a) ?? 0),
+    (a, b) => (calloutKeeperValueOf(b) ?? 0) - (calloutKeeperValueOf(a) ?? 0),
   );
   const leagueBestKeepers = byKeeperSurplusDesc.slice(0, 5);
   const leagueWorstKeepers = byKeeperSurplusDesc.slice(-5).reverse();
