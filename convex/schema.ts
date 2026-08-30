@@ -636,6 +636,11 @@ export default defineSchema({
     sleeperDraftScheduledAt: v.optional(v.number()),
     sleeperSyncEnabled: v.optional(v.boolean()),
     sleeperSyncGeneration: v.optional(v.number()),
+    // Deprecated - superseded by the draftSyncStatus table below. Left
+    // declared (rather than removed) so any doc that still carries a stale
+    // value from before that split stays schema-valid; nothing writes these
+    // three anymore. Do NOT resume writing to them - see draftSyncStatus's
+    // comment for why they moved off this document.
     sleeperLastSyncedAt: v.optional(v.number()),
     sleeperSyncError: v.optional(v.string()),
     sleeperSyncErrorCount: v.optional(v.number()),
@@ -644,6 +649,28 @@ export default defineSchema({
     .index("by_season", ["seasonId"])
     .index("by_season_kind", ["seasonId", "kind"])
     .index("by_season_status", ["seasonId", "status"]),
+
+  // Live-sync heartbeat, split out of `drafts` itself: convex/sleeper/
+  // draftSync.ts's poll chain writes lastSyncedAt/syncError every ~3s while
+  // a live Sleeper sync is running, whether or not a new pick came in. That
+  // used to patch the `drafts` document directly - since virtually every
+  // Draft Room query (getDraftBoard, listDraftPicks, listSeasons, etc, via
+  // requireDraftOwner/requireRealDraft) reads that same document, every
+  // heartbeat write invalidated and forced a full recompute of ALL of them,
+  // for every subscribed client, every 3 seconds - the actual cause of one
+  // live-synced snake draft reading 2.42GB in a single session. Isolating
+  // this high-churn heartbeat here (same pattern the Convex guidelines call
+  // for: separate high-churn operational data from stable profile data)
+  // means writing it only invalidates readers of THIS document - just
+  // convex/sleeper/draftSync.ts's own getSyncStatus - leaving the expensive
+  // queries to recompute only when something they actually depend on
+  // (draftPicks, draftValues, drafts' own rarely-written fields) changes.
+  draftSyncStatus: defineTable({
+    draftId: v.id("drafts"),
+    lastSyncedAt: v.optional(v.number()),
+    syncError: v.optional(v.string()),
+    syncErrorCount: v.optional(v.number()),
+  }).index("by_draft", ["draftId"]),
 
   // The season's durable team roster - one table shared by every draft in
   // the season (mock or real), so mocks can't diverge in team count/shape.

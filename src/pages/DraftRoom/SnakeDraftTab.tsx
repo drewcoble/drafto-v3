@@ -80,6 +80,10 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
 
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
+  const syncStatus = useQuery(
+    api.sleeper.draftSync.getSyncStatus,
+    settings?.sleeperSyncEnabled ? { seasonId } : "skip",
+  );
   const isSuperflex = (settings?.rosterSlots.SUPERFLEX ?? 0) > 0;
   useSleeperDraftScheduleRefresh(
     seasonId,
@@ -325,11 +329,11 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
           </Text>
         )}
       {settings?.sleeperSyncEnabled && (
-        <Text size="xs" c={settings.sleeperSyncError ? "yellow.7" : "dimmed"}>
-          {settings.sleeperSyncError
-            ? `Sleeper sync: ${settings.sleeperSyncError}`
-            : settings.sleeperLastSyncedAt
-              ? `Synced from Sleeper - last checked ${new Date(settings.sleeperLastSyncedAt).toLocaleTimeString()}`
+        <Text size="xs" c={syncStatus?.syncError ? "yellow.7" : "dimmed"}>
+          {syncStatus?.syncError
+            ? `Sleeper sync: ${syncStatus.syncError}`
+            : syncStatus?.lastSyncedAt
+              ? `Synced from Sleeper - last checked ${new Date(syncStatus.lastSyncedAt).toLocaleTimeString()}`
               : "Sleeper sync starting up..."}
         </Text>
       )}

@@ -146,6 +146,12 @@ export function LeagueDetails({
   const settings = settingsList?.find(
     (league) => league._id === selectedLeagueId,
   );
+  const syncStatus = useQuery(
+    api.sleeper.draftSync.getSyncStatus,
+    settings?.sleeperLeagueId && selectedLeagueId
+      ? { seasonId: selectedLeagueId }
+      : "skip",
+  );
   useSleeperDraftScheduleRefresh(
     settings?._id,
     settings?.sleeperLeagueId,
@@ -821,8 +827,8 @@ export function LeagueDetails({
             <Group justify="space-between">
               <Text fw={500}>Live sync from Sleeper</Text>
               {settings.sleeperSyncEnabled && (
-                <Badge variant="light" color={settings.sleeperSyncError ? "yellow" : "teal"}>
-                  {settings.sleeperSyncError ? "Sync issue" : "Live"}
+                <Badge variant="light" color={syncStatus?.syncError ? "yellow" : "teal"}>
+                  {syncStatus?.syncError ? "Sync issue" : "Live"}
                 </Badge>
               )}
             </Group>
@@ -847,8 +853,8 @@ export function LeagueDetails({
             {settings.sleeperSyncEnabled ? (
               <>
                 <Text size="sm">
-                  {settings.sleeperLastSyncedAt
-                    ? `Last checked ${new Date(settings.sleeperLastSyncedAt).toLocaleTimeString()}`
+                  {syncStatus?.lastSyncedAt
+                    ? `Last checked ${new Date(syncStatus.lastSyncedAt).toLocaleTimeString()}`
                     : "Starting up..."}
                 </Text>
                 <Button
@@ -875,9 +881,9 @@ export function LeagueDetails({
                 {liveSyncStatus}
               </Text>
             )}
-            {(settings.sleeperSyncError || liveSyncError) && (
+            {(syncStatus?.syncError || liveSyncError) && (
               <Text size="xs" c={liveSyncError ? "red" : "yellow.7"}>
-                {liveSyncError ?? settings.sleeperSyncError}
+                {liveSyncError ?? syncStatus?.syncError}
               </Text>
             )}
           </Stack>

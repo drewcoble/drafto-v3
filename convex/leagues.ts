@@ -62,11 +62,17 @@ export interface SeasonWithLeagueName extends Doc<"seasons"> {
   // schema.ts's drafts.sleeper* fields and convex/sleeper/draftSync.ts) -
   // lets SeasonSettingsTab and the Draft Room read sync state off the same
   // `settings` query they already subscribe to, instead of a second query.
+  // Deliberately excludes sleeperLastSyncedAt/sleeperSyncError: those are
+  // rewritten every ~3s during a live sync and used to live on this same
+  // `drafts` doc, which meant every query here (and everything downstream
+  // of this list, which is nearly every page in the app) got invalidated on
+  // that cadence. They now live in the draftSyncStatus table instead - read
+  // them via convex/sleeper/draftSync.ts's getSyncStatus, scoped to one
+  // season, so only the panel that actually shows them resubscribes that
+  // often. See draftSyncStatus's schema.ts comment for the full story.
   sleeperDraftId?: string;
   sleeperDraftScheduledAt?: number;
   sleeperSyncEnabled?: boolean;
-  sleeperLastSyncedAt?: number;
-  sleeperSyncError?: string;
 }
 
 // Every season across every league this user owns, each carrying its
@@ -111,12 +117,6 @@ export const listSeasons = query({
           ...(draft?.sleeperSyncEnabled !== undefined
             ? { sleeperSyncEnabled: draft.sleeperSyncEnabled }
             : {}),
-          ...(draft?.sleeperLastSyncedAt !== undefined
-            ? { sleeperLastSyncedAt: draft.sleeperLastSyncedAt }
-            : {}),
-          ...(draft?.sleeperSyncError !== undefined
-            ? { sleeperSyncError: draft.sleeperSyncError }
-            : {}),
         });
       }
     }
@@ -154,12 +154,6 @@ export const getSeasonPublic = query({
         : {}),
       ...(draft?.sleeperSyncEnabled !== undefined
         ? { sleeperSyncEnabled: draft.sleeperSyncEnabled }
-        : {}),
-      ...(draft?.sleeperLastSyncedAt !== undefined
-        ? { sleeperLastSyncedAt: draft.sleeperLastSyncedAt }
-        : {}),
-      ...(draft?.sleeperSyncError !== undefined
-        ? { sleeperSyncError: draft.sleeperSyncError }
         : {}),
     };
   },
