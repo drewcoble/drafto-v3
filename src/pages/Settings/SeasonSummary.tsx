@@ -29,6 +29,12 @@ interface SeasonSummaryProps {
 export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
   const settingsList = useQuery(api.leagues.listSeasons, {});
   const settings = settingsList?.find((s) => s._id === seasonId);
+  // AUCTION.md/SNAKE.md's standard frontend pattern - gates the $-spent
+  // figure below, the last of the three originally-named "budget-stat
+  // leakage" spots (SNAKE.md Gap #2; MyTeamTab.tsx/LeagueTab.tsx were fixed
+  // 2026-08-30). `fillPct` already reads roster fill, not $, so it needed
+  // no change.
+  const isAuction = (settings?.draftType ?? "auction") === "auction";
   const teams = useQuery(api.draft.teams.listSeasonTeams, { seasonId });
   const picks = useQuery(api.draft.picks.listDraftPicks, { seasonId });
   const allProjections = useQuery(api.projections.getAllProjections, {
@@ -126,7 +132,7 @@ export function SeasonSummary({ seasonId }: SeasonSummaryProps) {
                     {team.name}
                     {team.isSelf ? " (you)" : ""}
                   </Text>
-                  <Text fw={700}>${stats.spent}</Text>
+                  {isAuction && <Text fw={700}>${stats.spent}</Text>}
                 </Group>
                 <Text size="xs" c="dimmed">
                   {teamPicks.length}/{stats.totalSlots} filled
