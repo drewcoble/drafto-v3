@@ -20,6 +20,31 @@ function formatSigned(amount: number): string {
     : `-$${Math.round(Math.abs(amount))}`;
 }
 
+// Snake/linear's counterpart - a signed pick-slot count, never a dollar
+// figure (see formatPickFacts/buildSummaryPrompt's isAuction branch).
+function formatSignedSlots(amount: number): string {
+  const rounded = Math.round(amount);
+  return rounded >= 0 ? `+${rounded}` : `${rounded}`;
+}
+
+// One-line description of a notable pick, format-aware: auction states the
+// $ paid and $ surplus (as before); snake/linear states the overall slot it
+// was made at, its blended market ADP, and the ADP-vs-slot surplus (see
+// convex/draft/reportCard.ts's ResolvedPick.slotSurplus) - never a $ amount.
+function formatPickFacts(
+  pick: { name: string; price: number; slot: number; adp: number | null },
+  surplus: number | null,
+  isAuction: boolean,
+): string {
+  if (isAuction) {
+    return `${pick.name} ($${pick.price}, ${formatSigned(surplus ?? 0)})`;
+  }
+  const adpText = pick.adp !== null ? `ADP ${pick.adp.toFixed(1)}` : "no real ADP";
+  const surplusText =
+    surplus !== null ? `, ${formatSignedSlots(surplus)} vs ADP` : "";
+  return `${pick.name} (pick #${pick.slot}, ${adpText}${surplusText})`;
+}
+
 // Forces Gemini's response into { leagueRecap, teamSummaries } instead of
 // free-form prose - see https://ai.google.dev/gemini-api/docs/structured-output.
 // `id` is echoed back per team so the response can be matched to a team
@@ -50,11 +75,14 @@ const RESPONSE_SCHEMA = {
 // therefore the token bill) small, and gives Gemini less surface area to
 // hallucinate extra "facts" from.
 function buildSummaryPrompt(data: ReportSummaryData): string {
+  const isAuction = data.isAuction;
   const teams = data.teams.map((team) => ({
     id: team.teamId,
     name: team.teamName,
     grade: team.letter,
-    valueSurplus: formatSigned(team.surplusTotal),
+    valueSurplus: isAuction
+      ? formatSigned(team.surplusTotal)
+      : formatSignedSlots(team.surplusTotal),
     pointsAboveReplacement: Math.round(team.vorTotal),
     startersRank: team.startersRank,
     benchRank: team.benchRank,
@@ -64,13 +92,17 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
       (p) => `${p.category}: ${p.rank}/${data.teams.length}`,
     ),
     bestPick: team.bestPick
-      ? `${team.bestPick.name} ($${team.bestPick.price}, ${formatSigned(team.bestPick.surplus ?? 0)})`
+      ? formatPickFacts(team.bestPick, team.bestPick.surplus, isAuction)
       : null,
     worstPick: team.worstPick
-      ? `${team.worstPick.name} ($${team.worstPick.price}, ${formatSigned(team.worstPick.surplus ?? 0)})`
+      ? formatPickFacts(team.worstPick, team.worstPick.surplus, isAuction)
       : null,
     bestKeeper: team.bestKeeper
-      ? `${team.bestKeeper.name} ($${team.bestKeeper.price}, ${formatSigned(team.bestKeeper.keeperSurplus ?? 0)})`
+      ? formatPickFacts(
+          team.bestKeeper,
+          isAuction ? team.bestKeeper.keeperSurplus : team.bestKeeper.slotSurplus,
+          isAuction,
+        )
       : null,
     reliablePlayers: team.reliableCount,
     boomBustPlayers: team.boomBustCount,
@@ -80,10 +112,18 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
     totalTeams: data.teams.length,
     teams,
     biggestSteal: data.leagueSteals[0]
-      ? `${data.leagueSteals[0].name} for $${data.leagueSteals[0].price} (${formatSigned(data.leagueSteals[0].surplus ?? 0)})`
+      ? formatPickFacts(
+          data.leagueSteals[0],
+          isAuction ? data.leagueSteals[0].surplus : data.leagueSteals[0].slotSurplus,
+          isAuction,
+        )
       : null,
     biggestReach: data.leagueReaches[0]
-      ? `${data.leagueReaches[0].name} for $${data.leagueReaches[0].price} (${formatSigned(data.leagueReaches[0].surplus ?? 0)})`
+      ? formatPickFacts(
+          data.leagueReaches[0],
+          isAuction ? data.leagueReaches[0].surplus : data.leagueReaches[0].slotSurplus,
+          isAuction,
+        )
       : null,
     mostReliableRoster: data.mostReliableRoster
       ? `${data.mostReliableRoster.teamName} (${data.mostReliableRoster.count} reliable players)`
@@ -94,8 +134,8 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
   };
 
   return [
-    "You are writing content for a fantasy football auction draft's Report Card page, for a private league.",
-    "Use only the facts in the JSON data below - don't invent players, prices, or stats that aren't there.",
+    `You are writing content for a fantasy football ${isAuction ? "auction" : "snake"} draft's Report Card page, for a private league.`,
+    "Use only the facts in the JSON data below - don't invent players, prices, stats, or draft positions that aren't there.",
     "Respond with JSON matching the given schema: a leagueRecap paragraph, plus one teamSummaries entry per team in the data (matched back by `id`, echoed verbatim).",
     "",
     "leagueRecap: 150-250 words of plain prose (no markdown headers, no bullet lists), calling out 2-3 standout teams or picks by name. Tone: witty and a little playful, like a league commissioner's newsletter.",
@@ -104,6 +144,11 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
     "If a team is genuinely bad at something (worst or near-worst grade, worst-ranked starters/bench, a near-last rank in positionalRanks, or a big reach), you can throw in a little light, good-natured trash talk about that specific weakness - teasing, not cruel, the kind of ribbing a friend would post in the league group chat. Don't force it onto every team; a team with no clear weak spot just gets a normal, upbeat blurb.",
     "Never invent a weakness that isn't in the data, and never make it personal (about the person, not the roster).",
     `Each team's startersRank/benchRank/positionalRanks are 1-indexed league ranks out of totalTeams (1 = best) comparing roster strength, not in-season lineup decisions - a draft doesn't set an actual lineup, so don't call this "lineup efficiency" or talk about points "left on the bench".`,
+    ...(isAuction
+      ? []
+      : [
+          `This is a snake/linear draft, not an auction - there is no money involved. NEVER mention dollars, prices, budgets, or "$" in any form. "valueSurplus"/pick surplus numbers are a signed count of draft slots relative to each player's market ADP (average draft position): positive means the team got that player later than the market expected (a value/steal), negative means they reached for the player earlier than ADP suggested. Describe this in terms of draft position/ADP/rounds, e.g. "grabbed him three rounds after his ADP" or "reached 20 spots ahead of ADP" - never as a dollar amount.`,
+        ]),
     "",
     JSON.stringify(payload),
   ].join("\n");

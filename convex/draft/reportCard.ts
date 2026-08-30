@@ -13,6 +13,7 @@ import { POSITIONS } from "../positions";
 import {
   scoringConfigValidator,
   pointsForScoringConfig,
+  adpForScoring,
   type ScoringConfig,
 } from "../scoring";
 import {
@@ -21,6 +22,8 @@ import {
   getRealDraftValues,
   type DraftValueRow,
 } from "../draftValues";
+import { resolveDraftType } from "../draftType";
+import { RELEVANT_ADP_CEILING } from "./tiers";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireDraftOwner } from "./auth";
 import {
@@ -36,6 +39,51 @@ import {
 import { hasProAccess } from "../billing/entitlements";
 
 type Position = (typeof POSITIONS)[number];
+
+// ADP is only a meaningful, real market signal for these positions - same
+// list convex/valueGaps.ts's VALUE_GAP_POSITIONS and convex/gemini/
+// preDraftInsights.ts's PREMIER_POSITIONS already establish. K/DST never get
+// a real ADP worth grading a pick against.
+const ADP_POSITIONS: Position[] = ["QB", "RB", "WR", "TE"];
+
+// Mirrors src/lib/standardValues.ts's buildStandardValueByFpid, trimmed to
+// just the overall rank (convex/ never imports from src/ - see convex/draft/
+// tiers.ts's comment on the same duplication convention; convex/gemini/
+// preDraftInsights.ts keeps its own near-identical copy for the same
+// reason). Only the rank is needed here - unlike preDraftInsights.ts, this
+// has no use for ESPN's auctionValue.
+async function buildEspnOverallRankByFpid(
+  ctx: QueryCtx,
+  season: string,
+  scoring: ScoringConfig["scoring"],
+  isSuperflex: boolean,
+): Promise<Map<number, number>> {
+  const loadFormat = async (format: "standard" | "ppr" | "superflex") => {
+    const rows = await ctx.db
+      .query("standardValues")
+      .withIndex("by_platform_format_season_fpid", (q) =>
+        q.eq("platform", "espn").eq("format", format).eq("season", season),
+      )
+      .collect();
+    return new Map(rows.map((row) => [row.fpid, row.rank]));
+  };
+
+  if (isSuperflex) return loadFormat("superflex");
+  if (scoring === "STD") return loadFormat("standard");
+  if (scoring === "PPR") return loadFormat("ppr");
+
+  const [std, ppr] = await Promise.all([
+    loadFormat("standard"),
+    loadFormat("ppr"),
+  ]);
+  const merged = new Map<number, number>();
+  for (const fpid of new Set([...std.keys(), ...ppr.keys()])) {
+    const a = std.get(fpid);
+    const b = ppr.get(fpid);
+    merged.set(fpid, a !== undefined && b !== undefined ? (a + b) / 2 : (a ?? b)!);
+  }
+  return merged;
+}
 
 interface ResolvedPick {
   pickId: Id<"draftPicks">;
@@ -60,6 +108,29 @@ interface ResolvedPick {
   // keeperSurplus = keeperEstimatedValue - price (the keeper discount).
   keeperEstimatedValue: number | null;
   keeperSurplus: number | null;
+  // Overall draft slot - `overallPick` when the draft tracked round/pick-in-
+  // round metadata (snake/linear), else the same as `sequence`. Meaningless
+  // for auction (no notion of a "slot"), but set for every pick regardless
+  // of format so nothing downstream needs to branch just to read it.
+  slot: number;
+  round: number | null;
+  pickInRound: number | null;
+  // Snake/linear's analog of auction's dollarValue: blended market ADP
+  // (Sleeper's adpForScoring averaged with ESPN's overall draft-kit rank, or
+  // ESPN alone for superflex - see buildEspnOverallRankByFpid above and
+  // computeReportCardData's blendedAdpByFpid). Only ever set for snake/
+  // linear, and only for ADP_POSITIONS with a real market ADP under
+  // RELEVANT_ADP_CEILING - null for auction, K/DST, or a deep sleeper with
+  // no meaningful market read.
+  adp: number | null;
+  // Snake/linear's analog of `surplus`/`keeperSurplus`: slot minus adp -
+  // positive means this player fell past their ADP to land here (a value),
+  // negative means they were taken earlier than ADP suggested (a reach).
+  // Unlike auction's keeper handling, this needs no separate interpolation
+  // step for keepers: ADP is real market data sourced independently of this
+  // draft's own value engine, so it's available for a kept player exactly
+  // the same way it is for a fresh pick.
+  slotSurplus: number | null;
   // Labeled from the *prior* season's actual weekly output
   // (playerSeasonStats), same convention the live draft board already uses
   // (see PlayersLeftTab.tsx) - the current season has no games played yet
@@ -191,6 +262,86 @@ async function computeReportCardData(
   });
   const valueByFpid = new Map(values.map((row) => [row.fpid, row]));
 
+  const isAuction = resolveDraftType(season, draft) === "auction";
+
+  // Snake/linear's market-value signal: blended ADP (Sleeper's adpForScoring
+  // averaged with ESPN's overall draft-kit rank, both real market-consensus
+  // numbers already comparable across positions) - the analog of auction's
+  // dollarValue/market $ for "what did the market expect for this player."
+  // Mirrors convex/gemini/preDraftInsights.ts's snake branch and src/lib/
+  // valueRank.ts's buildBlendedAdpByFpid (convex/ can't import src/, so this
+  // is its own copy - see buildEspnOverallRankByFpid's comment). Skipped
+  // entirely for auction, which has no use for it.
+  const blendedAdpByFpid = new Map<number, number>();
+  if (!isAuction) {
+    const isSuperflex = season.rosterSlots.SUPERFLEX > 0;
+    const espnRankByFpid = await buildEspnOverallRankByFpid(
+      ctx,
+      season.year,
+      args.scoringConfig.scoring,
+      isSuperflex,
+    );
+    const sleeperAdpByFpid = new Map<
+      number,
+      { adpStd: number; adpHalf: number; adpPpr: number }
+    >();
+    for (const position of ADP_POSITIONS) {
+      const rankings = await ctx.db
+        .query("rankings")
+        .withIndex("by_position_week", (q) =>
+          q.eq("position", position).eq("week", args.week),
+        )
+        .collect();
+      for (const ranking of rankings) sleeperAdpByFpid.set(ranking.fpid, ranking);
+    }
+    for (const fpid of new Set([
+      ...sleeperAdpByFpid.keys(),
+      ...espnRankByFpid.keys(),
+    ])) {
+      const espnRank = espnRankByFpid.get(fpid);
+      // Superflex leagues use ESPN's superflex rank alone - Sleeper's
+      // `rankings` table has no superflex-aware ADP field at all, so
+      // blending it in would understate QBs relative to a real superflex
+      // draft (same precedent buildStandardValueByFpid sets for auction's
+      // $-vs-market column).
+      if (isSuperflex) {
+        if (espnRank !== undefined) blendedAdpByFpid.set(fpid, espnRank);
+        continue;
+      }
+      const adpRow = sleeperAdpByFpid.get(fpid);
+      const rawSleeperAdp = adpRow
+        ? adpForScoring(adpRow, args.scoringConfig.scoring)
+        : undefined;
+      const sleeperAdp =
+        rawSleeperAdp !== undefined && rawSleeperAdp < RELEVANT_ADP_CEILING
+          ? rawSleeperAdp
+          : undefined;
+      if (sleeperAdp !== undefined && espnRank !== undefined) {
+        blendedAdpByFpid.set(fpid, (sleeperAdp + espnRank) / 2);
+      } else if (sleeperAdp !== undefined) {
+        blendedAdpByFpid.set(fpid, sleeperAdp);
+      } else if (espnRank !== undefined) {
+        blendedAdpByFpid.set(fpid, espnRank);
+      }
+    }
+  }
+
+  // Team-level "value surplus" grading input: auction's real $ dollarValue
+  // surplus, or snake/linear's ADP-vs-slot surplus (see ResolvedPick.
+  // slotSurplus) - same role, different unit, so every percentile/best-worst/
+  // steal-reach computation below reads through this instead of a hardcoded
+  // field, and never needs to branch on format itself.
+  const teamValueOf = (p: ResolvedPick): number | null =>
+    isAuction ? p.surplus : p.slotSurplus;
+  // Keeper-specific value: auction needs keeperEstimatedValue's interpolated
+  // market $ (a kept player has no real dollarValue - see ResolvedPick's
+  // comment on dollarValue), but ADP needs no such interpolation - it's real
+  // market data sourced independently of this draft's own value engine, so
+  // it's available for a kept player exactly like anyone else. Snake/linear
+  // just reuses slotSurplus here too.
+  const keeperValueOf = (p: ResolvedPick): number | null =>
+    isAuction ? p.keeperSurplus : p.slotSurplus;
+
   const replacementByPosition = new Map<Position, number>();
   for (const row of values) {
     if (!replacementByPosition.has(row.position)) {
@@ -233,6 +384,13 @@ async function computeReportCardData(
 
   const resolved: ResolvedPick[] = [];
   for (const pick of picks) {
+    const slot = pick.overallPick ?? pick.sequence;
+    const adp =
+      !isAuction && ADP_POSITIONS.includes(pick.position)
+        ? (blendedAdpByFpid.get(pick.fpid) ?? null)
+        : null;
+    const slotSurplus = adp !== null ? slot - adp : null;
+
     const value = valueByFpid.get(pick.fpid);
     if (value) {
       resolved.push({
@@ -242,10 +400,9 @@ async function computeReportCardData(
         team: value.team,
         position: pick.position,
         teamId: pick.teamId,
-        // Report Card is auction-only (SNAKE_DRAFT.md §3.3/§12) - price is
-        // always real for the picks this function actually runs against;
-        // ?? 0 is just satisfying the now-optional schema type, not a
-        // meaningful fallback for a case this ever hits in practice.
+        // price is real for auction, meaningless (?? 0) for snake/linear -
+        // see teamValueOf/keeperValueOf above for how grading routes around
+        // it in that case.
         price: pick.price ?? 0,
         sequence: pick.sequence,
         planSlotKey: pick.planSlotKey,
@@ -256,6 +413,11 @@ async function computeReportCardData(
         surplus: value.dollarValue - (pick.price ?? 0),
         keeperEstimatedValue: null,
         keeperSurplus: null,
+        slot,
+        round: pick.round ?? null,
+        pickInRound: pick.pickInRound ?? null,
+        adp,
+        slotSurplus,
         consistencyLabel: consistencyByFpid.get(pick.fpid) ?? null,
       });
       continue;
@@ -289,7 +451,7 @@ async function computeReportCardData(
       team: projection?.team ?? null,
       position: pick.position,
       teamId: pick.teamId,
-      // Same auction-only reasoning as the branch above.
+      // Same reasoning as the branch above.
       price: pick.price ?? 0,
       sequence: pick.sequence,
       planSlotKey: pick.planSlotKey,
@@ -303,6 +465,11 @@ async function computeReportCardData(
         keeperEstimatedValue !== null
           ? keeperEstimatedValue - (pick.price ?? 0)
           : null,
+      slot,
+      round: pick.round ?? null,
+      pickInRound: pick.pickInRound ?? null,
+      adp,
+      slotSurplus,
       consistencyLabel: consistencyByFpid.get(pick.fpid) ?? null,
     });
   }
@@ -318,8 +485,8 @@ async function computeReportCardData(
     ) as Record<Position, number>;
     let surplusTotal = 0;
     for (const p of nonKeeperPicks) {
-      surplusTotal += p.surplus ?? 0;
-      surplusByPosition[p.position] += p.surplus ?? 0;
+      surplusTotal += teamValueOf(p) ?? 0;
+      surplusByPosition[p.position] += teamValueOf(p) ?? 0;
     }
 
     const vorByPosition = Object.fromEntries(
@@ -332,26 +499,31 @@ async function computeReportCardData(
     }
 
     const bestPick = nonKeeperPicks.reduce<ResolvedPick | undefined>(
-      (best, p) => (!best || (p.surplus ?? 0) > (best.surplus ?? 0) ? p : best),
+      (best, p) =>
+        !best || (teamValueOf(p) ?? 0) > (teamValueOf(best) ?? 0) ? p : best,
       undefined,
     );
     const worstPick = nonKeeperPicks.reduce<ResolvedPick | undefined>(
       (worst, p) =>
-        !worst || (p.surplus ?? 0) < (worst.surplus ?? 0) ? p : worst,
+        !worst || (teamValueOf(p) ?? 0) < (teamValueOf(worst) ?? 0)
+          ? p
+          : worst,
       undefined,
     );
 
     const keeperPicks = teamPicks.filter(
-      (p) => p.isKeeper && p.keeperSurplus !== null,
+      (p) => p.isKeeper && keeperValueOf(p) !== null,
     );
     const bestKeeper = keeperPicks.reduce<ResolvedPick | undefined>(
       (best, p) =>
-        !best || (p.keeperSurplus ?? 0) > (best.keeperSurplus ?? 0) ? p : best,
+        !best || (keeperValueOf(p) ?? 0) > (keeperValueOf(best) ?? 0)
+          ? p
+          : best,
       undefined,
     );
     const worstKeeper = keeperPicks.reduce<ResolvedPick | undefined>(
       (worst, p) =>
-        !worst || (p.keeperSurplus ?? 0) < (worst.keeperSurplus ?? 0)
+        !worst || (keeperValueOf(p) ?? 0) < (keeperValueOf(worst) ?? 0)
           ? p
           : worst,
       undefined,
@@ -390,7 +562,11 @@ async function computeReportCardData(
       surplusByPosition,
       vorTotal,
       vorByPosition,
-      efficiencyDollarsPerVor: vorTotal > 0 ? spent / vorTotal : null,
+      // $/VOR efficiency has no snake/linear equivalent - every team uses
+      // the same number of picks, so there's no "spent" quantity that
+      // varies the way auction dollars do.
+      efficiencyDollarsPerVor:
+        isAuction && vorTotal > 0 ? spent / vorTotal : null,
       bestPick,
       worstPick,
       bestKeeper,
@@ -470,23 +646,25 @@ async function computeReportCardData(
   });
 
   // DST excluded here (but not from team grades/surplus totals elsewhere)
-  // - a $1-2 swing on a streamable defense reads as a huge "steal" or
-  // "reach" by percentage/surplus, but nobody actually believes a defense
-  // is a real draft-day steal the way a $30 RB at $15 is.
+  // - a $1-2 swing on a streamable defense (or, for snake/linear, DST's
+  // inherently unreliable ADP) reads as a huge "steal" or "reach" by
+  // surplus, but nobody actually believes a defense is a real draft-day
+  // steal the way a $30 RB at $15 (or a QB1 falling three rounds past ADP)
+  // is.
   const nonKeeperResolved = resolved.filter(
-    (p) => !p.isKeeper && p.surplus !== null && p.position !== "DST",
+    (p) => !p.isKeeper && teamValueOf(p) !== null && p.position !== "DST",
   );
   const bySurplusDesc = [...nonKeeperResolved].sort(
-    (a, b) => (b.surplus ?? 0) - (a.surplus ?? 0),
+    (a, b) => (teamValueOf(b) ?? 0) - (teamValueOf(a) ?? 0),
   );
   const leagueSteals = bySurplusDesc.slice(0, 5);
   const leagueReaches = bySurplusDesc.slice(-5).reverse();
 
   const keeperResolved = resolved.filter(
-    (p) => p.isKeeper && p.keeperSurplus !== null,
+    (p) => p.isKeeper && keeperValueOf(p) !== null,
   );
   const byKeeperSurplusDesc = [...keeperResolved].sort(
-    (a, b) => (b.keeperSurplus ?? 0) - (a.keeperSurplus ?? 0),
+    (a, b) => (keeperValueOf(b) ?? 0) - (keeperValueOf(a) ?? 0),
   );
   const leagueBestKeepers = byKeeperSurplusDesc.slice(0, 5);
   const leagueWorstKeepers = byKeeperSurplusDesc.slice(-5).reverse();
@@ -524,6 +702,10 @@ async function computeReportCardData(
     draftId: draft._id,
     week: args.week,
     scoring: args.scoringConfig.scoring,
+    // Threaded through to the frontend/AI recap so neither has to re-derive
+    // draft format from the season/draft docs just to decide whether to
+    // show $ figures or ADP/slot ones.
+    isAuction,
     teams: teamReportCards,
     leagueSteals,
     leagueReaches,

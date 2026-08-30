@@ -20,6 +20,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { POSITION_COLORS } from "../lib/positionColors";
 import { consistencyColor } from "../lib/consistency";
+import { formatSignedNumber } from "../lib/keeperValue";
 import {
   buildLeagueSummary,
   buildTeamSummary,
@@ -198,10 +199,13 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
   }
 
   if (report.status === "requires_upgrade") {
-    return <ReportCardTeaser />;
+    return (
+      <ReportCardTeaser isAuction={(settings.draftType ?? "auction") === "auction"} />
+    );
   }
 
   const data = report.data;
+  const isAuction = data.isAuction;
   const teams = [...data.teams].sort((a, b) => b.gradeScore - a.gradeScore);
 
   return (
@@ -236,12 +240,14 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
           title="Biggest Steals"
           picks={data.leagueSteals}
           onSelectPlayer={setSelectedFpid}
+          isAuction={isAuction}
           rookieFpids={rookieFpids}
         />
         <PickCallouts
           title="Biggest Reaches"
           picks={data.leagueReaches}
           onSelectPlayer={setSelectedFpid}
+          isAuction={isAuction}
           rookieFpids={rookieFpids}
         />
       </SimpleGrid>
@@ -253,16 +259,18 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
             title="Best Keeper Value"
             picks={data.leagueBestKeepers}
             onSelectPlayer={setSelectedFpid}
-            getValue={(pick) => pick.keeperEstimatedValue}
-            getSurplus={(pick) => pick.keeperSurplus}
+            isAuction={isAuction}
+            getValue={isAuction ? (pick) => pick.keeperEstimatedValue : undefined}
+            getSurplus={isAuction ? (pick) => pick.keeperSurplus : undefined}
             rookieFpids={rookieFpids}
           />
           <PickCallouts
             title="Worst Keeper Value"
             picks={data.leagueWorstKeepers}
             onSelectPlayer={setSelectedFpid}
-            getValue={(pick) => pick.keeperEstimatedValue}
-            getSurplus={(pick) => pick.keeperSurplus}
+            isAuction={isAuction}
+            getValue={isAuction ? (pick) => pick.keeperEstimatedValue : undefined}
+            getSurplus={isAuction ? (pick) => pick.keeperSurplus : undefined}
             rookieFpids={rookieFpids}
           />
         </SimpleGrid>
@@ -291,6 +299,7 @@ export function DraftReportCard({ seasonId }: DraftReportCardProps) {
             key={team.teamId}
             team={team}
             totalTeams={teams.length}
+            isAuction={isAuction}
             expanded={expandedTeamIds.has(team.teamId)}
             onToggle={() => toggleExpanded(team.teamId)}
             onSelectPlayer={setSelectedFpid}
@@ -328,7 +337,7 @@ const TEASER_TEAMS: Array<{ name: string; letter: string }> = [
 // point is this renders even though the real data was withheld server-side
 // (getDraftReportCardPublic never sends numeric stats when the drafting
 // league's owner isn't Pro).
-function ReportCardTeaser() {
+function ReportCardTeaser({ isAuction }: { isAuction: boolean }) {
   return (
     <Box pos="relative">
       <Box
@@ -340,10 +349,9 @@ function ReportCardTeaser() {
             <Stack gap={4}>
               <Title order={4}>Recap</Title>
               <Text size="sm">
-                The Dynasty takes the top grade of the draft with an A+. The
-                steal of the draft: Auto-Draft Army landed a star well under
-                market value, while Injury Prone paid a premium across the
-                board.
+                {isAuction
+                  ? "The Dynasty takes the top grade of the draft with an A+. The steal of the draft: Auto-Draft Army landed a star well under market value, while Injury Prone paid a premium across the board."
+                  : "The Dynasty takes the top grade of the draft with an A+. The steal of the draft: Auto-Draft Army landed a star three rounds after his ADP, while Injury Prone reached well ahead of the market across the board."}
               </Text>
             </Stack>
           </Card>
@@ -359,10 +367,10 @@ function ReportCardTeaser() {
                   </Group>
                   <Group justify="space-between">
                     <Text size="sm" c="dimmed">
-                      Value surplus
+                      {isAuction ? "Value surplus" : "Surplus vs ADP"}
                     </Text>
                     <Text size="sm" fw={700}>
-                      +$24
+                      {isAuction ? "+$24" : "+18"}
                     </Text>
                   </Group>
                   <Group justify="space-between">
@@ -388,20 +396,28 @@ function PickCallouts({
   title,
   picks,
   onSelectPlayer,
-  getValue = (pick) => pick.dollarValue,
-  getSurplus = (pick) => pick.surplus,
+  isAuction,
+  getValue,
+  getSurplus,
   rookieFpids,
 }: {
   title: string;
   picks: PickRow[];
   onSelectPlayer: (fpid: number) => void;
-  // Defaults to real auction dollarValue/surplus - overridden for the
-  // keeper-value callouts, which have no real market value and instead
-  // compare price against an interpolated keeperEstimatedValue.
-  getValue?: (pick: PickRow) => number | null;
-  getSurplus?: (pick: PickRow) => number | null;
+  isAuction: boolean;
+  // Defaults to real auction dollarValue/surplus, or snake/linear's blended
+  // ADP/slotSurplus - overridden for auction's keeper-value callouts, which
+  // have no real market value and instead compare price against an
+  // interpolated keeperEstimatedValue (snake/linear needs no such override:
+  // ADP is real market data available for a kept player exactly like
+  // anyone else - see convex/draft/reportCard.ts's ResolvedPick.slotSurplus).
+  getValue?: ((pick: PickRow) => number | null) | undefined;
+  getSurplus?: ((pick: PickRow) => number | null) | undefined;
   rookieFpids: Set<number>;
 }) {
+  const resolveValue = getValue ?? ((pick) => (isAuction ? pick.dollarValue : pick.adp));
+  const resolveSurplus =
+    getSurplus ?? ((pick) => (isAuction ? pick.surplus : pick.slotSurplus));
   return (
     <Card withBorder padding="md">
       <Stack gap="xs">
@@ -412,8 +428,8 @@ function PickCallouts({
           </Text>
         )}
         {picks.map((pick) => {
-          const value = getValue(pick);
-          const surplus = getSurplus(pick);
+          const value = resolveValue(pick);
+          const surplus = resolveSurplus(pick);
           return (
             <Group key={pick.pickId} justify="space-between" wrap="nowrap">
               <Group gap={6} wrap="nowrap">
@@ -431,10 +447,14 @@ function PickCallouts({
               </Group>
               <Group gap={6} wrap="nowrap">
                 <Text size="sm" c="dimmed">
-                  ${pick.price} vs ${(value ?? 0).toFixed(0)}
+                  {isAuction
+                    ? `$${pick.price} vs $${(value ?? 0).toFixed(0)}`
+                    : `Pick #${pick.slot} vs ADP ${value === null ? "—" : value.toFixed(1)}`}
                 </Text>
                 <Text size="sm" fw={700} c={surplusColor(surplus ?? 0)}>
-                  {formatSigned(surplus ?? 0)}
+                  {isAuction
+                    ? formatSigned(surplus ?? 0)
+                    : formatSignedNumber(surplus ?? 0)}
                 </Text>
               </Group>
             </Group>
@@ -543,6 +563,7 @@ function PositionalRadarChart({
 function TeamReportCard({
   team,
   totalTeams,
+  isAuction,
   expanded,
   onToggle,
   onSelectPlayer,
@@ -550,11 +571,20 @@ function TeamReportCard({
 }: {
   team: TeamCard;
   totalTeams: number;
+  isAuction: boolean;
   expanded: boolean;
   onToggle: () => void;
   onSelectPlayer: (fpid: number) => void;
   rookieFpids: Set<number>;
 }) {
+  // Snake/linear reuses slotSurplus for both best/worst pick AND best/worst
+  // keeper - unlike auction, ADP needs no separate keeper interpolation (see
+  // convex/draft/reportCard.ts's ResolvedPick.slotSurplus comment).
+  const pickSurplus = (pick: PickRow) =>
+    isAuction ? pick.surplus : pick.slotSurplus;
+  const keeperSurplus = (pick: PickRow) =>
+    isAuction ? pick.keeperSurplus : pick.slotSurplus;
+  const formatValue = isAuction ? formatSigned : formatSignedNumber;
   return (
     <Card
       withBorder
@@ -572,14 +602,16 @@ function TeamReportCard({
             {team.letter}
           </Badge>
         </Group>
-        <Text size="sm">{team.aiSummary ?? buildTeamSummary(team, totalTeams)}</Text>
+        <Text size="sm">
+          {team.aiSummary ?? buildTeamSummary(team, totalTeams, isAuction)}
+        </Text>
         <PositionalRadarChart team={team} totalTeams={totalTeams} />
         <Group justify="space-between">
           <Text size="sm" c="dimmed">
-            Value surplus
+            {isAuction ? "Value surplus" : "Surplus vs ADP"}
           </Text>
           <Text size="sm" fw={700} c={surplusColor(team.surplusTotal)}>
-            {formatSigned(team.surplusTotal)}
+            {formatValue(team.surplusTotal)}
           </Text>
         </Group>
         <Group justify="space-between">
@@ -588,36 +620,38 @@ function TeamReportCard({
           </Text>
           <Text size="sm">{team.vorTotal.toFixed(0)}</Text>
         </Group>
-        <Group justify="space-between">
-          <Text size="sm" c="dimmed">
-            $ / VOR point
-          </Text>
-          <Text size="sm">
-            {team.efficiencyDollarsPerVor === null
-              ? "—"
-              : `$${team.efficiencyDollarsPerVor.toFixed(2)}`}
-          </Text>
-        </Group>
+        {isAuction && (
+          <Group justify="space-between">
+            <Text size="sm" c="dimmed">
+              $ / VOR point
+            </Text>
+            <Text size="sm">
+              {team.efficiencyDollarsPerVor === null
+                ? "—"
+                : `$${team.efficiencyDollarsPerVor.toFixed(2)}`}
+            </Text>
+          </Group>
+        )}
         {team.bestPick && (
           <Text size="xs" c="dimmed">
-            Best pick: {team.bestPick.name} ({formatSigned(team.bestPick.surplus ?? 0)})
+            Best pick: {team.bestPick.name} ({formatValue(pickSurplus(team.bestPick) ?? 0)})
           </Text>
         )}
         {team.worstPick && (
           <Text size="xs" c="dimmed">
-            Worst pick: {team.worstPick.name} ({formatSigned(team.worstPick.surplus ?? 0)})
+            Worst pick: {team.worstPick.name} ({formatValue(pickSurplus(team.worstPick) ?? 0)})
           </Text>
         )}
         {team.bestKeeper && (
           <Text size="xs" c="dimmed">
             Best keeper: {team.bestKeeper.name} (
-            {formatSigned(team.bestKeeper.keeperSurplus ?? 0)})
+            {formatValue(keeperSurplus(team.bestKeeper) ?? 0)})
           </Text>
         )}
         {team.worstKeeper && (
           <Text size="xs" c="dimmed">
             Worst keeper: {team.worstKeeper.name} (
-            {formatSigned(team.worstKeeper.keeperSurplus ?? 0)})
+            {formatValue(keeperSurplus(team.worstKeeper) ?? 0)})
           </Text>
         )}
 
@@ -631,9 +665,9 @@ function TeamReportCard({
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Player</Table.Th>
-                <Table.Th>Price</Table.Th>
-                <Table.Th>Value</Table.Th>
-                <Table.Th>Surplus</Table.Th>
+                <Table.Th>{isAuction ? "Price" : "Slot"}</Table.Th>
+                <Table.Th>{isAuction ? "Value" : "ADP"}</Table.Th>
+                <Table.Th>{isAuction ? "Surplus" : "vs ADP"}</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -642,9 +676,15 @@ function TeamReportCard({
                 .map((pick) => {
                   // Keepers have no real dollarValue - fall back to the
                   // interpolated keeper estimate so the table isn't just
-                  // dashes for every kept player.
-                  const value = pick.dollarValue ?? pick.keeperEstimatedValue;
-                  const surplus = pick.surplus ?? pick.keeperSurplus;
+                  // dashes for every kept player. Snake/linear needs no such
+                  // fallback: adp/slotSurplus are already set for keepers
+                  // the same way as any other pick.
+                  const value = isAuction
+                    ? (pick.dollarValue ?? pick.keeperEstimatedValue)
+                    : pick.adp;
+                  const surplus = isAuction
+                    ? (pick.surplus ?? pick.keeperSurplus)
+                    : pick.slotSurplus;
                   return (
                     <Table.Tr key={pick.pickId}>
                       <Table.Td>
@@ -675,12 +715,18 @@ function TeamReportCard({
                           )}
                         </Group>
                       </Table.Td>
-                      <Table.Td>${pick.price}</Table.Td>
                       <Table.Td>
-                        {value === null ? "—" : `$${value.toFixed(0)}`}
+                        {isAuction ? `$${pick.price}` : `#${pick.slot}`}
+                      </Table.Td>
+                      <Table.Td>
+                        {value === null
+                          ? "—"
+                          : isAuction
+                            ? `$${value.toFixed(0)}`
+                            : value.toFixed(1)}
                       </Table.Td>
                       <Table.Td c={surplusColor(surplus ?? 0)}>
-                        {surplus === null ? "—" : formatSigned(surplus)}
+                        {surplus === null ? "—" : formatValue(surplus)}
                       </Table.Td>
                     </Table.Tr>
                   );

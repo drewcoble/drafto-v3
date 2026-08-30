@@ -1,5 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
+import { formatSignedNumber } from "./keeperValue";
 
 type ReportCardResult = FunctionReturnType<
   typeof api.draft.reportCard.getDraftReportCardPublic
@@ -15,6 +16,12 @@ export type RosterAward = NonNullable<ReportCard["mostReliableRoster"]>;
 function formatSigned(amount: number): string {
   return amount >= 0 ? `+$${amount.toFixed(0)}` : `-$${Math.abs(amount).toFixed(0)}`;
 }
+
+// Snake/linear's "beat the market" threshold is in draft-slot spots, not
+// dollars - a 1-spot gap is noise (every pick has some), so this needs a
+// bigger minimum than auction's $1 to be worth a sentence. Roughly a
+// quarter of a round in a typical league.
+const SLOT_SURPLUS_THRESHOLD = 3;
 
 function gradeDescriptor(letter: string): string {
   if (letter.startsWith("A")) return "elite drafting";
@@ -52,19 +59,35 @@ export function rankDescriptor(rank: number, totalTeams: number): string {
 // option discussed for a future iteration. Reads like a few sentences of
 // prose rather than a stat block, but every number in it traces back to a
 // field already rendered elsewhere on the card.
-export function buildTeamSummary(team: TeamCard, totalTeams: number): string {
+export function buildTeamSummary(
+  team: TeamCard,
+  totalTeams: number,
+  isAuction: boolean,
+): string {
   const sentences: string[] = [
     `${team.teamName} earns a ${team.letter} - ${gradeDescriptor(team.letter)}.`,
   ];
 
-  if (team.surplusTotal >= 1 && team.bestPick) {
-    sentences.push(
-      `They beat the market by ${formatSigned(team.surplusTotal)} across the draft, headlined by ${team.bestPick.name} at $${team.bestPick.price} (${formatSigned(team.bestPick.surplus ?? 0)} value).`,
-    );
-  } else if (team.surplusTotal <= -1 && team.worstPick) {
-    sentences.push(
-      `They paid a premium overall (${formatSigned(team.surplusTotal)}), most notably reaching on ${team.worstPick.name} for $${team.worstPick.price} (${formatSigned(team.worstPick.surplus ?? 0)}).`,
-    );
+  if (isAuction) {
+    if (team.surplusTotal >= 1 && team.bestPick) {
+      sentences.push(
+        `They beat the market by ${formatSigned(team.surplusTotal)} across the draft, headlined by ${team.bestPick.name} at $${team.bestPick.price} (${formatSigned(team.bestPick.surplus ?? 0)} value).`,
+      );
+    } else if (team.surplusTotal <= -1 && team.worstPick) {
+      sentences.push(
+        `They paid a premium overall (${formatSigned(team.surplusTotal)}), most notably reaching on ${team.worstPick.name} for $${team.worstPick.price} (${formatSigned(team.worstPick.surplus ?? 0)}).`,
+      );
+    }
+  } else {
+    if (team.surplusTotal >= SLOT_SURPLUS_THRESHOLD && team.bestPick) {
+      sentences.push(
+        `They beat ADP by ${formatSignedNumber(team.surplusTotal)} draft slots across the board, headlined by landing ${team.bestPick.name} at pick #${team.bestPick.slot} (${formatSignedNumber(team.bestPick.slotSurplus ?? 0)} vs ADP).`,
+      );
+    } else if (team.surplusTotal <= -SLOT_SURPLUS_THRESHOLD && team.worstPick) {
+      sentences.push(
+        `They drafted ahead of the market overall (${formatSignedNumber(team.surplusTotal)} vs ADP), most notably reaching on ${team.worstPick.name} at pick #${team.worstPick.slot} (${formatSignedNumber(team.worstPick.slotSurplus ?? 0)} vs ADP).`,
+      );
+    }
   }
 
   if (totalTeams > 1) {
@@ -73,9 +96,18 @@ export function buildTeamSummary(team: TeamCard, totalTeams: number): string {
     );
   }
 
-  if (team.bestKeeper && (team.bestKeeper.keeperSurplus ?? 0) >= 5) {
+  if (isAuction) {
+    if (team.bestKeeper && (team.bestKeeper.keeperSurplus ?? 0) >= 5) {
+      sentences.push(
+        `Their sharpest move was keeping ${team.bestKeeper.name} for $${team.bestKeeper.price} - a bargain worth ${formatSigned(team.bestKeeper.keeperSurplus ?? 0)}.`,
+      );
+    }
+  } else if (
+    team.bestKeeper &&
+    (team.bestKeeper.slotSurplus ?? 0) >= SLOT_SURPLUS_THRESHOLD
+  ) {
     sentences.push(
-      `Their sharpest move was keeping ${team.bestKeeper.name} for $${team.bestKeeper.price} - a bargain worth ${formatSigned(team.bestKeeper.keeperSurplus ?? 0)}.`,
+      `Their sharpest move was keeping ${team.bestKeeper.name} at pick #${team.bestKeeper.slot} - a bargain worth ${formatSignedNumber(team.bestKeeper.slotSurplus ?? 0)} vs his ADP.`,
     );
   }
 
@@ -114,18 +146,34 @@ export function buildLeagueSummary(report: ReportCard): string {
   }
 
   const steal = report.leagueSteals[0];
-  if (steal && (steal.surplus ?? 0) >= 1) {
+  const stealValue = report.isAuction ? steal?.surplus : steal?.slotSurplus;
+  if (steal && report.isAuction && (stealValue ?? 0) >= 1) {
     const stealTeam = teamNameById.get(steal.teamId) ?? "One team";
     sentences.push(
-      `The steal of the draft: ${stealTeam} landed ${steal.name} for just $${steal.price}, ${formatSigned(steal.surplus ?? 0)} under market value.`,
+      `The steal of the draft: ${stealTeam} landed ${steal.name} for just $${steal.price}, ${formatSigned(stealValue ?? 0)} under market value.`,
+    );
+  } else if (steal && !report.isAuction && (stealValue ?? 0) >= SLOT_SURPLUS_THRESHOLD) {
+    const stealTeam = teamNameById.get(steal.teamId) ?? "One team";
+    sentences.push(
+      `The steal of the draft: ${stealTeam} landed ${steal.name} at pick #${steal.slot}, ${formatSignedNumber(stealValue ?? 0)} spots after his ADP.`,
     );
   }
 
   const reach = report.leagueReaches[0];
-  if (reach && (reach.surplus ?? 0) <= -1) {
+  const reachValue = report.isAuction ? reach?.surplus : reach?.slotSurplus;
+  if (reach && report.isAuction && (reachValue ?? 0) <= -1) {
     const reachTeam = teamNameById.get(reach.teamId) ?? "One team";
     sentences.push(
-      `The biggest reach: ${reachTeam} paid $${reach.price} for ${reach.name}, ${formatSigned(reach.surplus ?? 0)} over market value.`,
+      `The biggest reach: ${reachTeam} paid $${reach.price} for ${reach.name}, ${formatSigned(reachValue ?? 0)} over market value.`,
+    );
+  } else if (
+    reach &&
+    !report.isAuction &&
+    (reachValue ?? 0) <= -SLOT_SURPLUS_THRESHOLD
+  ) {
+    const reachTeam = teamNameById.get(reach.teamId) ?? "One team";
+    sentences.push(
+      `The biggest reach: ${reachTeam} took ${reach.name} at pick #${reach.slot}, ${formatSignedNumber(reachValue ?? 0)} spots ahead of his ADP.`,
     );
   }
 
