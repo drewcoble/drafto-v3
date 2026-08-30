@@ -17,9 +17,9 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PlayerDetailModal } from "../../components/PlayerDetailModal";
 import { GenericValuesNotice } from "../../components/GenericValuesNotice";
-import { AdpValueLabel } from "../../components/AdpValueLabel";
 import { SortArrow } from "../../components/SortArrow";
 import { getErrorMessage } from "../../lib/errors";
+import { formatSignedNumber, keeperValueColor } from "../../lib/keeperValue";
 import { positionColorOrDefault } from "../../lib/positionColors";
 import { scoringConfigFromSeason } from "../../lib/relevantPlayers";
 import { formatSleeperDraftSchedule } from "../../lib/sleeperDraftSchedule";
@@ -409,9 +409,10 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
               <Table striped highlightOnHover verticalSpacing={4}>
                 <Table.Thead>
                   <Table.Tr>
-                    {renderSortableTh("Player", "player")}
                     {renderSortableTh("Rank", "rank")}
+                    {renderSortableTh("Player", "player")}
                     {renderSortableTh("ADP", "adp")}
+                    <Table.Th>vs ADP</Table.Th>
                     {renderSortableTh("Pts", "pts")}
                     <Table.Th />
                   </Table.Tr>
@@ -420,8 +421,17 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
                   {availableRows.map((row) => {
                     const adp = blendedAdpByFpid.get(row.fpid);
                     const ourRank = ourRankByFpid.get(row.fpid);
+                    const diff =
+                      ourRank !== undefined && adp !== undefined
+                        ? Math.round(adp) - ourRank
+                        : undefined;
                     return (
                       <Table.Tr key={row.fpid}>
+                        <Table.Td>
+                          <Text size="sm" fw={700}>
+                            {ourRank !== undefined ? `#${ourRank}` : "—"}
+                          </Text>
+                        </Table.Td>
                         <Table.Td>
                           <Group gap={6} wrap="nowrap">
                             <Badge
@@ -448,14 +458,16 @@ export function SnakeDraftTab({ seasonId, teams }: SnakeDraftTabProps) {
                           </Group>
                         </Table.Td>
                         <Table.Td>
-                          <AdpValueLabel
-                            ourRank={ourRank}
-                            adp={adp}
-                            showLabel={false}
-                          />
+                          {adp !== undefined ? adp.toFixed(1) : "—"}
                         </Table.Td>
                         <Table.Td>
-                          {adp !== undefined ? adp.toFixed(1) : "—"}
+                          {diff !== undefined ? (
+                            <Text size="sm" fw={600} c={keeperValueColor(diff)}>
+                              {formatSignedNumber(diff)}
+                            </Text>
+                          ) : (
+                            "—"
+                          )}
                         </Table.Td>
                         <Table.Td>
                           <Text size="sm" c="dimmed">

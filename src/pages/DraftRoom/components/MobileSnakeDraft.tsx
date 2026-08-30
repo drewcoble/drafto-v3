@@ -13,11 +13,11 @@ import { useMutation, useQuery } from "convex/react";
 import { ListChecks, X } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
-import { AdpValueLabel } from "../../../components/AdpValueLabel";
 import { SortArrow } from "../../../components/SortArrow";
 import { PlayerDetailModal } from "../../../components/PlayerDetailModal";
 import { WEEK } from "../../../constants/general";
 import { getErrorMessage } from "../../../lib/errors";
+import { formatSignedNumber, keeperValueColor } from "../../../lib/keeperValue";
 import { positionColorOrDefault } from "../../../lib/positionColors";
 import { scoringConfigFromSeason } from "../../../lib/relevantPlayers";
 import { buildStandardValueByFpid } from "../../../lib/standardValues";
@@ -351,8 +351,7 @@ export function MobileSnakeDraft({ seasonId, teams }: MobileSnakeDraftProps) {
             <Table striped highlightOnHover verticalSpacing={8}>
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Player</Table.Th>
-                  {(["rank", "adp", "pts"] as const).map((key) => (
+                  {(["rank"] as const).map((key) => (
                     <Table.Th
                       key={key}
                       onClick={() => handleSort(key)}
@@ -360,11 +359,7 @@ export function MobileSnakeDraft({ seasonId, teams }: MobileSnakeDraftProps) {
                     >
                       <Group gap={2} wrap="nowrap">
                         <Text size="xs" fw={sortKey === key ? 700 : undefined}>
-                          {key === "rank"
-                            ? "Rk"
-                            : key === "adp"
-                              ? "ADP"
-                              : "Pts"}
+                          Rk
                         </Text>
                         {sortKey === key && (
                           <SortArrow dir={sortDir} size={10} />
@@ -372,6 +367,24 @@ export function MobileSnakeDraft({ seasonId, teams }: MobileSnakeDraftProps) {
                       </Group>
                     </Table.Th>
                   ))}
+                  <Table.Th>Player</Table.Th>
+                  {(["adp", "pts"] as const).map((key) => (
+                    <Table.Th
+                      key={key}
+                      onClick={() => handleSort(key)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <Group gap={2} wrap="nowrap">
+                        <Text size="xs" fw={sortKey === key ? 700 : undefined}>
+                          {key === "adp" ? "ADP" : "Pts"}
+                        </Text>
+                        {sortKey === key && (
+                          <SortArrow dir={sortDir} size={10} />
+                        )}
+                      </Group>
+                    </Table.Th>
+                  ))}
+                  <Table.Th>vs ADP</Table.Th>
                   <Table.Th />
                 </Table.Tr>
               </Table.Thead>
@@ -379,8 +392,17 @@ export function MobileSnakeDraft({ seasonId, teams }: MobileSnakeDraftProps) {
                 {availableRows.map((row) => {
                   const adp = blendedAdpByFpid.get(row.fpid);
                   const ourRank = ourRankByFpid.get(row.fpid);
+                  const diff =
+                    ourRank !== undefined && adp !== undefined
+                      ? Math.round(adp) - ourRank
+                      : undefined;
                   return (
                     <Table.Tr key={row.fpid}>
+                      <Table.Td>
+                        <Text size="sm" fw={700}>
+                          {ourRank !== undefined ? `#${ourRank}` : "—"}
+                        </Text>
+                      </Table.Td>
                       <Table.Td>
                         <Group gap={6} wrap="nowrap">
                           <Badge
@@ -407,19 +429,23 @@ export function MobileSnakeDraft({ seasonId, teams }: MobileSnakeDraftProps) {
                         </Group>
                       </Table.Td>
                       <Table.Td>
-                        <AdpValueLabel
-                          ourRank={ourRank}
-                          adp={adp}
-                          showLabel={false}
-                        />
-                      </Table.Td>
-                      <Table.Td>
-                        {adp !== undefined ? adp.toFixed(1) : "—"}
+                        <Text size="sm">
+                          {adp !== undefined ? adp.toFixed(1) : "—"}
+                        </Text>
                       </Table.Td>
                       <Table.Td>
                         <Text size="sm" c="dimmed">
                           {row.points.toFixed(1)}
                         </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        {diff !== undefined ? (
+                          <Text size="sm" fw={600} c={keeperValueColor(diff)}>
+                            {formatSignedNumber(diff)}
+                          </Text>
+                        ) : (
+                          "—"
+                        )}
                       </Table.Td>
                       <Table.Td>
                         <Button
