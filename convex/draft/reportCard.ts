@@ -40,32 +40,41 @@ import { hasProAccess } from "../billing/entitlements";
 
 type Position = (typeof POSITIONS)[number];
 
-// Mirrors src/lib/keeperCost.ts's valueImpliedRound (convex/ never imports
-// from src/ - see convex/draft/tiers.ts's comment on the same duplication
-// convention). Ranks a player's own projected dollarValue against the
-// pooled (not per-position, not ADP) value curve - "this player's actual
-// projected production is as good as a typical round-N pick this year."
-// This is snake/linear Report Card's analog of auction's market $: unlike
-// raw external ADP (which the first version of this feature used), it's
-// immune to real-world ADP noise at the back of the draft, where a deep
-// bench player's average draft position is skewed upward by all the
-// leagues shallow enough that they never draft him at all - a raw ADP
-// comparison read that noise as a huge "reach," when the same player's
-// projected value (and therefore implied round) sits right where his
-// replacement-level peers do. Comparing to the ACTUAL round drafted (not
-// raw overall slot) for the same reason keeper bargains are expressed in
-// rounds, not raw picks: rounds aren't a linear unit of value, but ranking
-// by our own value curve first (rather than raw ADP) is what actually
-// compresses the gap for deep, replacement-level picks - many of them tie
-// at the same floor value and therefore the same implied round, regardless
-// of how far apart their real overall pick numbers are.
+// Loosely mirrors src/lib/keeperCost.ts's valueImpliedRound (convex/ never
+// imports from src/ - see convex/draft/tiers.ts's comment on the same
+// duplication convention), but with different tie-handling - see below.
+// Ranks a player's own projected dollarValue against the pooled (not
+// per-position, not ADP) value curve - "this player's actual projected
+// production is as good as a typical round-N pick this year." Used for
+// grading only (ResolvedPick.roundSurplus/teamValueOf) - the callout
+// selectors (calloutValueOf/calloutKeeperValueOf) use real ADP instead and
+// only trust this as a same-direction confirmation, see their own comment
+// for why relying on either signal alone at the back of the draft is
+// wrong.
+//
+// Ties are averaged (this file's own percentileRank already sets this
+// precedent), NOT resolved by keeperCost.ts's plain findIndex - findIndex
+// always returns the FIRST (best-ranked) index at or below a given value,
+// so every player sharing the exact same floor dollarValue (there are
+// often dozens to hundreds once VOR hits 0 and the $ curve bottoms out at
+// $1 - see draftValues.ts) would get credited with the single best rank in
+// that entire tied group, systematically implying an earlier round than
+// almost all of them actually deserve. Averaging the tied group's rank
+// range instead means a deep bench player sitting in the middle of a huge
+// $1-floor tie lands roughly where that tier actually falls, not at its
+// front edge.
 function valueImpliedRound(
   playerValue: number,
   sortedDescending: readonly { dollarValue: number }[],
   teamCount: number,
 ): number {
-  const index = sortedDescending.findIndex((v) => v.dollarValue <= playerValue);
-  const rank = index === -1 ? sortedDescending.length + 1 : index + 1;
+  let better = 0;
+  let tied = 0;
+  for (const v of sortedDescending) {
+    if (v.dollarValue > playerValue) better++;
+    else if (v.dollarValue === playerValue) tied++;
+  }
+  const rank = better + (tied + 1) / 2;
   return Math.ceil(rank / teamCount);
 }
 
@@ -199,7 +208,7 @@ interface RosterAward {
 // fix with no shape change (e.g. v3: excluding K/DST from steals/reaches) -
 // otherwise an already-completed draft's frozen snapshot would keep serving
 // the old, wrong callouts until someone manually clicks Regenerate.
-const REPORT_CARD_VERSION = 6;
+const REPORT_CARD_VERSION = 7;
 
 // Value surplus, VOR, and starters strength are on different scales, so each
 // is percentile-ranked against the field before blending - see gradeTeams.
@@ -428,20 +437,39 @@ async function computeReportCardData(
 
   // Steal/reach callout selector (leagueSteals/leagueReaches, each team's
   // bestPick/worstPick) - auction's real $ surplus, or snake/linear's ADP
-  // surplus (adpSurplus). Deliberately NOT teamValueOf/roundSurplus: raw
-  // ADP is noisier at the back of the draft (see valueImpliedRound's
-  // comment), but it's also the more intuitive, market-grounded read of
-  // "was this actually a steal" that a value-curve-implied round isn't -
-  // users flagged the value-curve version reading routine 16th/17th-round
-  // fliers as if they were 8th/9th-round values, a philosophy difference
-  // rather than a real steal (2026-08-30).
-  const calloutValueOf = (p: ResolvedPick): number | null =>
-    isAuction ? p.surplus : p.adpSurplus;
-  // Keeper counterpart - ADP needs no separate interpolation step for
+  // surplus (adpSurplus), gated on agreement with roundSurplus (the
+  // grading-only value-curve signal). Neither signal is trustworthy alone
+  // at the back of a deep draft: real ADP data barely covers picks that
+  // deep (most leagues never draft that far, so it reads almost every deep
+  // pick as a reach), while the value curve's own tie-clustering at the
+  // replacement floor reads almost every deep pick as a steal (see
+  // valueImpliedRound's comment - even after averaging tied ranks there,
+  // it's still a noisier read for an individual pick than for an aggregate
+  // team total). Requiring both signals to agree on direction before
+  // calling something a steal/reach filters out exactly the noise at the
+  // tail of the draft where they'd otherwise contradict each other, while
+  // still surfacing picks both a market read AND our own projections agree
+  // on - the ADP number is what's actually displayed (more intuitive/
+  // market-grounded for an individual player), the value curve is purely a
+  // sanity-check veto here (2026-08-30, after "all reaches"/"all steals"
+  // user reports on each metric alone).
+  const calloutValueOf = (p: ResolvedPick): number | null => {
+    if (isAuction) return p.surplus;
+    if (p.adpSurplus === null || p.roundSurplus === null) return null;
+    if (Math.sign(p.adpSurplus) !== Math.sign(p.roundSurplus)) return null;
+    return p.adpSurplus;
+  };
+  // Keeper counterpart - auction keepers have no real `surplus` (only
+  // `keeperSurplus`, see that field's comment), so this can't just delegate
+  // to calloutValueOf for that branch. ADP needs no such distinction for
   // keepers (it's real market data, available for a kept player exactly
-  // like anyone else), so snake/linear just reuses adpSurplus here too.
-  const calloutKeeperValueOf = (p: ResolvedPick): number | null =>
-    isAuction ? p.keeperSurplus : p.adpSurplus;
+  // like anyone else), so snake/linear reuses the exact same gate/value.
+  const calloutKeeperValueOf = (p: ResolvedPick): number | null => {
+    if (isAuction) return p.keeperSurplus;
+    if (p.adpSurplus === null || p.roundSurplus === null) return null;
+    if (Math.sign(p.adpSurplus) !== Math.sign(p.roundSurplus)) return null;
+    return p.adpSurplus;
+  };
 
   const replacementByPosition = new Map<Position, number>();
   for (const row of values) {
