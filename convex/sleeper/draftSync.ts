@@ -31,7 +31,7 @@ import {
 //
 // Once picks are flowing; a slower cadence is used pre-draft (nothing to
 // fetch but the draft's own status/start_time).
-const FAST_INTERVAL_MS = 5_000;
+const FAST_INTERVAL_MS = 3_000;
 const SLOW_INTERVAL_MS = 60_000;
 // How far ahead of Sleeper's scheduled start_time to auto-start the in-app
 // draft, so the host doesn't have to remember to click "Start Draft".
@@ -207,7 +207,7 @@ export const linkSleeperDraft = action({
 
 // The chain notices this on its own next hop (loadSyncStateInternal below)
 // and stops rescheduling - up to one poll interval of latency, negligible at
-// the 5s fast interval, longer (up to 60s) if paused during the slow
+// the 3s fast interval, longer (up to 60s) if paused during the slow
 // pre-draft watch phase.
 export const disableLiveSync = mutation({
   args: { seasonId: v.id("seasons") },
