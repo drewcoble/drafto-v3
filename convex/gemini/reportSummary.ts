@@ -20,29 +20,34 @@ function formatSigned(amount: number): string {
     : `-$${Math.round(Math.abs(amount))}`;
 }
 
-// Snake/linear's counterpart - a signed pick-slot count, never a dollar
-// figure (see formatPickFacts/buildSummaryPrompt's isAuction branch).
-function formatSignedSlots(amount: number): string {
+// Snake/linear's counterpart - a signed round count, never a dollar figure
+// (see formatPickFacts/buildSummaryPrompt's isAuction branch).
+function formatSignedRounds(amount: number): string {
   const rounded = Math.round(amount);
   return rounded >= 0 ? `+${rounded}` : `${rounded}`;
 }
 
 // One-line description of a notable pick, format-aware: auction states the
-// $ paid and $ surplus (as before); snake/linear states the overall slot it
-// was made at, its blended market ADP, and the ADP-vs-slot surplus (see
-// convex/draft/reportCard.ts's ResolvedPick.slotSurplus) - never a $ amount.
+// $ paid and $ surplus (as before); snake/linear states the round it was
+// actually made in, the round its own projected value implies (see convex/
+// draft/reportCard.ts's ResolvedPick.impliedRound), and the round-based
+// surplus between them - never a $ amount, and never a raw ADP number
+// (deep-bench ADP is too noisy - see roundSurplus's own comment).
 function formatPickFacts(
-  pick: { name: string; price: number; slot: number; adp: number | null },
+  pick: { name: string; price: number; round: number; impliedRound: number | null },
   surplus: number | null,
   isAuction: boolean,
 ): string {
   if (isAuction) {
     return `${pick.name} ($${pick.price}, ${formatSigned(surplus ?? 0)})`;
   }
-  const adpText = pick.adp !== null ? `ADP ${pick.adp.toFixed(1)}` : "no real ADP";
+  const impliedText =
+    pick.impliedRound !== null
+      ? `worth a Round ${pick.impliedRound} pick`
+      : "no clear expected round";
   const surplusText =
-    surplus !== null ? `, ${formatSignedSlots(surplus)} vs ADP` : "";
-  return `${pick.name} (pick #${pick.slot}, ${adpText}${surplusText})`;
+    surplus !== null ? `, ${formatSignedRounds(surplus)} rounds vs expected` : "";
+  return `${pick.name} (Round ${pick.round}, ${impliedText}${surplusText})`;
 }
 
 // Forces Gemini's response into { leagueRecap, teamSummaries } instead of
@@ -82,7 +87,7 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
     grade: team.letter,
     valueSurplus: isAuction
       ? formatSigned(team.surplusTotal)
-      : formatSignedSlots(team.surplusTotal),
+      : formatSignedRounds(team.surplusTotal),
     pointsAboveReplacement: Math.round(team.vorTotal),
     startersRank: team.startersRank,
     benchRank: team.benchRank,
@@ -100,7 +105,7 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
     bestKeeper: team.bestKeeper
       ? formatPickFacts(
           team.bestKeeper,
-          isAuction ? team.bestKeeper.keeperSurplus : team.bestKeeper.slotSurplus,
+          isAuction ? team.bestKeeper.keeperSurplus : team.bestKeeper.roundSurplus,
           isAuction,
         )
       : null,
@@ -114,14 +119,14 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
     biggestSteal: data.leagueSteals[0]
       ? formatPickFacts(
           data.leagueSteals[0],
-          isAuction ? data.leagueSteals[0].surplus : data.leagueSteals[0].slotSurplus,
+          isAuction ? data.leagueSteals[0].surplus : data.leagueSteals[0].roundSurplus,
           isAuction,
         )
       : null,
     biggestReach: data.leagueReaches[0]
       ? formatPickFacts(
           data.leagueReaches[0],
-          isAuction ? data.leagueReaches[0].surplus : data.leagueReaches[0].slotSurplus,
+          isAuction ? data.leagueReaches[0].surplus : data.leagueReaches[0].roundSurplus,
           isAuction,
         )
       : null,
@@ -147,7 +152,7 @@ function buildSummaryPrompt(data: ReportSummaryData): string {
     ...(isAuction
       ? []
       : [
-          `This is a snake/linear draft, not an auction - there is no money involved. NEVER mention dollars, prices, budgets, or "$" in any form. "valueSurplus"/pick surplus numbers are a signed count of draft slots relative to each player's market ADP (average draft position): positive means the team got that player later than the market expected (a value/steal), negative means they reached for the player earlier than ADP suggested. Describe this in terms of draft position/ADP/rounds, e.g. "grabbed him three rounds after his ADP" or "reached 20 spots ahead of ADP" - never as a dollar amount.`,
+          `This is a snake/linear draft, not an auction - there is no money involved and no ADP. NEVER mention dollars, prices, budgets, "$", or "ADP" in any form. "valueSurplus"/pick surplus numbers are a signed count of ROUNDS relative to the round each player's own projected production is actually worth: positive means the team got that player in a later round than his production justified (a value/steal), negative means they drafted him earlier than his production justified (a reach). Describe this in terms of rounds, e.g. "landed him three rounds later than he was worth" or "reached two full rounds early" - never as a dollar amount or an ADP figure.`,
         ]),
     "",
     JSON.stringify(payload),

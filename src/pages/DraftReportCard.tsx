@@ -351,7 +351,7 @@ function ReportCardTeaser({ isAuction }: { isAuction: boolean }) {
               <Text size="sm">
                 {isAuction
                   ? "The Dynasty takes the top grade of the draft with an A+. The steal of the draft: Auto-Draft Army landed a star well under market value, while Injury Prone paid a premium across the board."
-                  : "The Dynasty takes the top grade of the draft with an A+. The steal of the draft: Auto-Draft Army landed a star three rounds after his ADP, while Injury Prone reached well ahead of the market across the board."}
+                  : "The Dynasty takes the top grade of the draft with an A+. The steal of the draft: Auto-Draft Army landed a star three rounds later than his production justified, while Injury Prone reached well ahead of expected value across the board."}
               </Text>
             </Stack>
           </Card>
@@ -367,7 +367,7 @@ function ReportCardTeaser({ isAuction }: { isAuction: boolean }) {
                   </Group>
                   <Group justify="space-between">
                     <Text size="sm" c="dimmed">
-                      {isAuction ? "Value surplus" : "Surplus vs ADP"}
+                      {isAuction ? "Value surplus" : "Surplus vs expected round"}
                     </Text>
                     <Text size="sm" fw={700}>
                       {isAuction ? "+$24" : "+18"}
@@ -405,19 +405,21 @@ function PickCallouts({
   picks: PickRow[];
   onSelectPlayer: (fpid: number) => void;
   isAuction: boolean;
-  // Defaults to real auction dollarValue/surplus, or snake/linear's blended
-  // ADP/slotSurplus - overridden for auction's keeper-value callouts, which
-  // have no real market value and instead compare price against an
-  // interpolated keeperEstimatedValue (snake/linear needs no such override:
-  // ADP is real market data available for a kept player exactly like
-  // anyone else - see convex/draft/reportCard.ts's ResolvedPick.slotSurplus).
+  // Defaults to real auction dollarValue/surplus, or snake/linear's
+  // value-implied round/roundSurplus - overridden for auction's keeper-value
+  // callouts, which have no real market value and instead compare price
+  // against an interpolated keeperEstimatedValue (snake/linear needs no such
+  // override: valueImpliedRound already takes keeperEstimatedValue as its
+  // input the same way it does a real pick's dollarValue - see convex/draft/
+  // reportCard.ts's ResolvedPick.roundSurplus).
   getValue?: ((pick: PickRow) => number | null) | undefined;
   getSurplus?: ((pick: PickRow) => number | null) | undefined;
   rookieFpids: Set<number>;
 }) {
-  const resolveValue = getValue ?? ((pick) => (isAuction ? pick.dollarValue : pick.adp));
+  const resolveValue =
+    getValue ?? ((pick) => (isAuction ? pick.dollarValue : pick.impliedRound));
   const resolveSurplus =
-    getSurplus ?? ((pick) => (isAuction ? pick.surplus : pick.slotSurplus));
+    getSurplus ?? ((pick) => (isAuction ? pick.surplus : pick.roundSurplus));
   return (
     <Card withBorder padding="md">
       <Stack gap="xs">
@@ -449,7 +451,7 @@ function PickCallouts({
                 <Text size="sm" c="dimmed">
                   {isAuction
                     ? `$${pick.price} vs $${(value ?? 0).toFixed(0)}`
-                    : `Pick #${pick.slot} vs ADP ${value == null ? "—" : value.toFixed(1)}`}
+                    : `Round ${pick.round} vs expected Round ${value == null ? "—" : value}`}
                 </Text>
                 <Text size="sm" fw={700} c={surplusColor(surplus ?? 0)}>
                   {isAuction
@@ -577,13 +579,14 @@ function TeamReportCard({
   onSelectPlayer: (fpid: number) => void;
   rookieFpids: Set<number>;
 }) {
-  // Snake/linear reuses slotSurplus for both best/worst pick AND best/worst
-  // keeper - unlike auction, ADP needs no separate keeper interpolation (see
-  // convex/draft/reportCard.ts's ResolvedPick.slotSurplus comment).
+  // Snake/linear reuses roundSurplus for both best/worst pick AND best/worst
+  // keeper - unlike auction, valueImpliedRound needs no separate keeper
+  // interpolation (see convex/draft/reportCard.ts's ResolvedPick.roundSurplus
+  // comment).
   const pickSurplus = (pick: PickRow) =>
-    isAuction ? pick.surplus : pick.slotSurplus;
+    isAuction ? pick.surplus : pick.roundSurplus;
   const keeperSurplus = (pick: PickRow) =>
-    isAuction ? pick.keeperSurplus : pick.slotSurplus;
+    isAuction ? pick.keeperSurplus : pick.roundSurplus;
   const formatValue = isAuction ? formatSigned : formatSignedNumber;
   return (
     <Card
@@ -608,7 +611,7 @@ function TeamReportCard({
         <PositionalRadarChart team={team} totalTeams={totalTeams} />
         <Group justify="space-between">
           <Text size="sm" c="dimmed">
-            {isAuction ? "Value surplus" : "Surplus vs ADP"}
+            {isAuction ? "Value surplus" : "Surplus vs expected round"}
           </Text>
           <Text size="sm" fw={700} c={surplusColor(team.surplusTotal)}>
             {formatValue(team.surplusTotal)}
@@ -665,9 +668,9 @@ function TeamReportCard({
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Player</Table.Th>
-                <Table.Th>{isAuction ? "Price" : "Slot"}</Table.Th>
-                <Table.Th>{isAuction ? "Value" : "ADP"}</Table.Th>
-                <Table.Th>{isAuction ? "Surplus" : "vs ADP"}</Table.Th>
+                <Table.Th>{isAuction ? "Price" : "Round"}</Table.Th>
+                <Table.Th>{isAuction ? "Value" : "Expected Round"}</Table.Th>
+                <Table.Th>{isAuction ? "Surplus" : "vs Expected"}</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -677,14 +680,14 @@ function TeamReportCard({
                   // Keepers have no real dollarValue - fall back to the
                   // interpolated keeper estimate so the table isn't just
                   // dashes for every kept player. Snake/linear needs no such
-                  // fallback: adp/slotSurplus are already set for keepers
-                  // the same way as any other pick.
+                  // fallback: impliedRound/roundSurplus are already set for
+                  // keepers the same way as any other pick.
                   const value = isAuction
                     ? (pick.dollarValue ?? pick.keeperEstimatedValue)
-                    : pick.adp;
+                    : pick.impliedRound;
                   const surplus = isAuction
                     ? (pick.surplus ?? pick.keeperSurplus)
-                    : pick.slotSurplus;
+                    : pick.roundSurplus;
                   return (
                     <Table.Tr key={pick.pickId}>
                       <Table.Td>
@@ -716,14 +719,14 @@ function TeamReportCard({
                         </Group>
                       </Table.Td>
                       <Table.Td>
-                        {isAuction ? `$${pick.price}` : `#${pick.slot}`}
+                        {isAuction ? `$${pick.price}` : pick.round}
                       </Table.Td>
                       <Table.Td>
                         {value == null
                           ? "—"
                           : isAuction
                             ? `$${value.toFixed(0)}`
-                            : value.toFixed(1)}
+                            : value}
                       </Table.Td>
                       <Table.Td c={surplusColor(surplus ?? 0)}>
                         {surplus == null ? "—" : formatValue(surplus)}

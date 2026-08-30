@@ -13,7 +13,6 @@ import { POSITIONS } from "../positions";
 import {
   scoringConfigValidator,
   pointsForScoringConfig,
-  adpForScoring,
   type ScoringConfig,
 } from "../scoring";
 import {
@@ -23,7 +22,6 @@ import {
   type DraftValueRow,
 } from "../draftValues";
 import { resolveDraftType } from "../draftType";
-import { RELEVANT_ADP_CEILING } from "./tiers";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireDraftOwner } from "./auth";
 import {
@@ -40,49 +38,33 @@ import { hasProAccess } from "../billing/entitlements";
 
 type Position = (typeof POSITIONS)[number];
 
-// ADP is only a meaningful, real market signal for these positions - same
-// list convex/valueGaps.ts's VALUE_GAP_POSITIONS and convex/gemini/
-// preDraftInsights.ts's PREMIER_POSITIONS already establish. K/DST never get
-// a real ADP worth grading a pick against.
-const ADP_POSITIONS: Position[] = ["QB", "RB", "WR", "TE"];
-
-// Mirrors src/lib/standardValues.ts's buildStandardValueByFpid, trimmed to
-// just the overall rank (convex/ never imports from src/ - see convex/draft/
-// tiers.ts's comment on the same duplication convention; convex/gemini/
-// preDraftInsights.ts keeps its own near-identical copy for the same
-// reason). Only the rank is needed here - unlike preDraftInsights.ts, this
-// has no use for ESPN's auctionValue.
-async function buildEspnOverallRankByFpid(
-  ctx: QueryCtx,
-  season: string,
-  scoring: ScoringConfig["scoring"],
-  isSuperflex: boolean,
-): Promise<Map<number, number>> {
-  const loadFormat = async (format: "standard" | "ppr" | "superflex") => {
-    const rows = await ctx.db
-      .query("standardValues")
-      .withIndex("by_platform_format_season_fpid", (q) =>
-        q.eq("platform", "espn").eq("format", format).eq("season", season),
-      )
-      .collect();
-    return new Map(rows.map((row) => [row.fpid, row.rank]));
-  };
-
-  if (isSuperflex) return loadFormat("superflex");
-  if (scoring === "STD") return loadFormat("standard");
-  if (scoring === "PPR") return loadFormat("ppr");
-
-  const [std, ppr] = await Promise.all([
-    loadFormat("standard"),
-    loadFormat("ppr"),
-  ]);
-  const merged = new Map<number, number>();
-  for (const fpid of new Set([...std.keys(), ...ppr.keys()])) {
-    const a = std.get(fpid);
-    const b = ppr.get(fpid);
-    merged.set(fpid, a !== undefined && b !== undefined ? (a + b) / 2 : (a ?? b)!);
-  }
-  return merged;
+// Mirrors src/lib/keeperCost.ts's valueImpliedRound (convex/ never imports
+// from src/ - see convex/draft/tiers.ts's comment on the same duplication
+// convention). Ranks a player's own projected dollarValue against the
+// pooled (not per-position, not ADP) value curve - "this player's actual
+// projected production is as good as a typical round-N pick this year."
+// This is snake/linear Report Card's analog of auction's market $: unlike
+// raw external ADP (which the first version of this feature used), it's
+// immune to real-world ADP noise at the back of the draft, where a deep
+// bench player's average draft position is skewed upward by all the
+// leagues shallow enough that they never draft him at all - a raw ADP
+// comparison read that noise as a huge "reach," when the same player's
+// projected value (and therefore implied round) sits right where his
+// replacement-level peers do. Comparing to the ACTUAL round drafted (not
+// raw overall slot) for the same reason keeper bargains are expressed in
+// rounds, not raw picks: rounds aren't a linear unit of value, but ranking
+// by our own value curve first (rather than raw ADP) is what actually
+// compresses the gap for deep, replacement-level picks - many of them tie
+// at the same floor value and therefore the same implied round, regardless
+// of how far apart their real overall pick numbers are.
+function valueImpliedRound(
+  playerValue: number,
+  sortedDescending: readonly { dollarValue: number }[],
+  teamCount: number,
+): number {
+  const index = sortedDescending.findIndex((v) => v.dollarValue <= playerValue);
+  const rank = index === -1 ? sortedDescending.length + 1 : index + 1;
+  return Math.ceil(rank / teamCount);
 }
 
 interface ResolvedPick {
@@ -113,24 +95,26 @@ interface ResolvedPick {
   // for auction (no notion of a "slot"), but set for every pick regardless
   // of format so nothing downstream needs to branch just to read it.
   slot: number;
-  round: number | null;
+  // The round this pick actually landed in - `pick.round` when tracked
+  // (snake/linear), else derived from `slot`/teamCount. Always set
+  // (unlike `pick.round` itself, which is schema-optional) so the round-
+  // based math below never needs a null check.
+  round: number;
   pickInRound: number | null;
-  // Snake/linear's analog of auction's dollarValue: blended market ADP
-  // (Sleeper's adpForScoring averaged with ESPN's overall draft-kit rank, or
-  // ESPN alone for superflex - see buildEspnOverallRankByFpid above and
-  // computeReportCardData's blendedAdpByFpid). Only ever set for snake/
-  // linear, and only for ADP_POSITIONS with a real market ADP under
-  // RELEVANT_ADP_CEILING - null for auction, K/DST, or a deep sleeper with
-  // no meaningful market read.
-  adp: number | null;
-  // Snake/linear's analog of `surplus`/`keeperSurplus`: slot minus adp -
-  // positive means this player fell past their ADP to land here (a value),
-  // negative means they were taken earlier than ADP suggested (a reach).
-  // Unlike auction's keeper handling, this needs no separate interpolation
-  // step for keepers: ADP is real market data sourced independently of this
-  // draft's own value engine, so it's available for a kept player exactly
-  // the same way it is for a fresh pick.
-  slotSurplus: number | null;
+  // Snake/linear's analog of auction's dollarValue: the round this player's
+  // OWN projected value (dollarValue, or keeperEstimatedValue for a keeper)
+  // implies against the season's full value curve - see valueImpliedRound
+  // above. Only ever set for snake/linear; null for auction.
+  impliedRound: number | null;
+  // Snake/linear's analog of `surplus`/`keeperSurplus`: actual round minus
+  // impliedRound - positive means this player's production was worth an
+  // earlier (more premium) round than the one they actually cost here (a
+  // value), negative means they cost an earlier round than their
+  // production justifies (a reach). Needs no separate keeper interpolation
+  // step the way auction's `keeperSurplus` does: `keeperEstimatedValue`
+  // already exists for exactly this reason (see that field's comment) and
+  // feeds valueImpliedRound the same as a real pick's dollarValue.
+  roundSurplus: number | null;
   // Labeled from the *prior* season's actual weekly output
   // (playerSeasonStats), same convention the live draft board already uses
   // (see PlayersLeftTab.tsx) - the current season has no games played yet
@@ -144,6 +128,19 @@ interface RosterAward {
   teamName: string;
   count: number;
 }
+
+// Bump whenever computeReportCardData's returned shape changes in a way
+// that would make an already-frozen draftReportCardSnapshots row
+// (data: v.any()) unsafe to serve as-is - readReportCardData/
+// ensureReportCardSnapshot compare this against each snapshot's own
+// `data.version` and transparently recompute+overwrite a mismatch, the
+// same way the "Regenerate" button forces a recompute, but automatic.
+// Deliberately NOT a "does this snapshot have field X" sniff: that broke
+// the first time this shape changed twice in a row (a snapshot frozen with
+// `isAuction` but not yet `impliedRound`/`roundSurplus` passed an
+// `"isAuction" in data` check and crashed the frontend the same way a
+// pre-isAuction snapshot did).
+const REPORT_CARD_VERSION = 2;
 
 // Value surplus, VOR, and starters strength are on different scales, so each
 // is percentile-ranked against the field before blending - see gradeTeams.
@@ -264,83 +261,31 @@ async function computeReportCardData(
 
   const isAuction = resolveDraftType(season, draft) === "auction";
 
-  // Snake/linear's market-value signal: blended ADP (Sleeper's adpForScoring
-  // averaged with ESPN's overall draft-kit rank, both real market-consensus
-  // numbers already comparable across positions) - the analog of auction's
-  // dollarValue/market $ for "what did the market expect for this player."
-  // Mirrors convex/gemini/preDraftInsights.ts's snake branch and src/lib/
-  // valueRank.ts's buildBlendedAdpByFpid (convex/ can't import src/, so this
-  // is its own copy - see buildEspnOverallRankByFpid's comment). Skipped
-  // entirely for auction, which has no use for it.
-  const blendedAdpByFpid = new Map<number, number>();
-  if (!isAuction) {
-    const isSuperflex = season.rosterSlots.SUPERFLEX > 0;
-    const espnRankByFpid = await buildEspnOverallRankByFpid(
-      ctx,
-      season.year,
-      args.scoringConfig.scoring,
-      isSuperflex,
-    );
-    const sleeperAdpByFpid = new Map<
-      number,
-      { adpStd: number; adpHalf: number; adpPpr: number }
-    >();
-    for (const position of ADP_POSITIONS) {
-      const rankings = await ctx.db
-        .query("rankings")
-        .withIndex("by_position_week", (q) =>
-          q.eq("position", position).eq("week", args.week),
-        )
-        .collect();
-      for (const ranking of rankings) sleeperAdpByFpid.set(ranking.fpid, ranking);
-    }
-    for (const fpid of new Set([
-      ...sleeperAdpByFpid.keys(),
-      ...espnRankByFpid.keys(),
-    ])) {
-      const espnRank = espnRankByFpid.get(fpid);
-      // Superflex leagues use ESPN's superflex rank alone - Sleeper's
-      // `rankings` table has no superflex-aware ADP field at all, so
-      // blending it in would understate QBs relative to a real superflex
-      // draft (same precedent buildStandardValueByFpid sets for auction's
-      // $-vs-market column).
-      if (isSuperflex) {
-        if (espnRank !== undefined) blendedAdpByFpid.set(fpid, espnRank);
-        continue;
-      }
-      const adpRow = sleeperAdpByFpid.get(fpid);
-      const rawSleeperAdp = adpRow
-        ? adpForScoring(adpRow, args.scoringConfig.scoring)
-        : undefined;
-      const sleeperAdp =
-        rawSleeperAdp !== undefined && rawSleeperAdp < RELEVANT_ADP_CEILING
-          ? rawSleeperAdp
-          : undefined;
-      if (sleeperAdp !== undefined && espnRank !== undefined) {
-        blendedAdpByFpid.set(fpid, (sleeperAdp + espnRank) / 2);
-      } else if (sleeperAdp !== undefined) {
-        blendedAdpByFpid.set(fpid, sleeperAdp);
-      } else if (espnRank !== undefined) {
-        blendedAdpByFpid.set(fpid, espnRank);
-      }
-    }
-  }
+  // The pool valueImpliedRound ranks each snake/linear pick's own value
+  // against - the season's full VBD-computed value curve (every ranked
+  // player at every position, independent of who actually got drafted),
+  // same "pool" role src/lib/keeperCost.ts's expectedValueAtRound/
+  // valueImpliedRound already play for round-mode keeper bargains. Skipped
+  // for auction, which has no use for it.
+  const sortedByValue = isAuction
+    ? []
+    : [...values].sort((a, b) => b.dollarValue - a.dollarValue);
 
   // Team-level "value surplus" grading input: auction's real $ dollarValue
-  // surplus, or snake/linear's ADP-vs-slot surplus (see ResolvedPick.
-  // slotSurplus) - same role, different unit, so every percentile/best-worst/
-  // steal-reach computation below reads through this instead of a hardcoded
-  // field, and never needs to branch on format itself.
+  // surplus, or snake/linear's round-based surplus (see ResolvedPick.
+  // roundSurplus) - same role, different unit, so every percentile/best-
+  // worst/steal-reach computation below reads through this instead of a
+  // hardcoded field, and never needs to branch on format itself.
   const teamValueOf = (p: ResolvedPick): number | null =>
-    isAuction ? p.surplus : p.slotSurplus;
+    isAuction ? p.surplus : p.roundSurplus;
   // Keeper-specific value: auction needs keeperEstimatedValue's interpolated
   // market $ (a kept player has no real dollarValue - see ResolvedPick's
-  // comment on dollarValue), but ADP needs no such interpolation - it's real
-  // market data sourced independently of this draft's own value engine, so
-  // it's available for a kept player exactly like anyone else. Snake/linear
-  // just reuses slotSurplus here too.
+  // comment on dollarValue), but valueImpliedRound needs no such
+  // interpolation to compare against - it already takes keeperEstimatedValue
+  // as its input the same way it takes a real pick's dollarValue. Snake/
+  // linear just reuses roundSurplus here too.
   const keeperValueOf = (p: ResolvedPick): number | null =>
-    isAuction ? p.keeperSurplus : p.slotSurplus;
+    isAuction ? p.keeperSurplus : p.roundSurplus;
 
   const replacementByPosition = new Map<Position, number>();
   for (const row of values) {
@@ -385,14 +330,14 @@ async function computeReportCardData(
   const resolved: ResolvedPick[] = [];
   for (const pick of picks) {
     const slot = pick.overallPick ?? pick.sequence;
-    const adp =
-      !isAuction && ADP_POSITIONS.includes(pick.position)
-        ? (blendedAdpByFpid.get(pick.fpid) ?? null)
-        : null;
-    const slotSurplus = adp !== null ? slot - adp : null;
+    const round = pick.round ?? Math.ceil(slot / season.teamCount);
 
     const value = valueByFpid.get(pick.fpid);
     if (value) {
+      const impliedRound = !isAuction
+        ? valueImpliedRound(value.dollarValue, sortedByValue, season.teamCount)
+        : null;
+      const roundSurplus = impliedRound !== null ? round - impliedRound : null;
       resolved.push({
         pickId: pick._id,
         fpid: pick.fpid,
@@ -414,10 +359,10 @@ async function computeReportCardData(
         keeperEstimatedValue: null,
         keeperSurplus: null,
         slot,
-        round: pick.round ?? null,
+        round,
         pickInRound: pick.pickInRound ?? null,
-        adp,
-        slotSurplus,
+        impliedRound,
+        roundSurplus,
         consistencyLabel: consistencyByFpid.get(pick.fpid) ?? null,
       });
       continue;
@@ -444,6 +389,11 @@ async function computeReportCardData(
     const keeperEstimatedValue = isKeeper
       ? estimateMarketValue(vor, valueCurveByPosition.get(pick.position))
       : null;
+    const impliedRound =
+      !isAuction && keeperEstimatedValue !== null
+        ? valueImpliedRound(keeperEstimatedValue, sortedByValue, season.teamCount)
+        : null;
+    const roundSurplus = impliedRound !== null ? round - impliedRound : null;
     resolved.push({
       pickId: pick._id,
       fpid: pick.fpid,
@@ -466,10 +416,10 @@ async function computeReportCardData(
           ? keeperEstimatedValue - (pick.price ?? 0)
           : null,
       slot,
-      round: pick.round ?? null,
+      round,
       pickInRound: pick.pickInRound ?? null,
-      adp,
-      slotSurplus,
+      impliedRound,
+      roundSurplus,
       consistencyLabel: consistencyByFpid.get(pick.fpid) ?? null,
     });
   }
@@ -699,6 +649,12 @@ async function computeReportCardData(
   }
 
   return {
+    // Bump whenever ResolvedPick/ReportCardData's shape changes - the only
+    // thing readReportCardData/ensureReportCardSnapshot trust to tell a
+    // fresh snapshot from a stale one now (see REPORT_CARD_VERSION's own
+    // comment; a field-presence sniff like "does it have `isAuction`" broke
+    // the first time this shape changed twice in a row).
+    version: REPORT_CARD_VERSION,
     draftId: draft._id,
     week: args.week,
     scoring: args.scoringConfig.scoring,
@@ -740,13 +696,16 @@ async function readReportCardData(
         .eq("scoring", args.scoringConfig.scoring),
     )
     .unique();
-  // A snapshot frozen before ResolvedPick grew its `isAuction`/`adp`/`slot`/
-  // `slotSurplus` fields (2026-08-29's snake/linear Report Card analog) is
-  // missing them entirely (undefined, not null) - stale shape, not just
-  // stale numbers. Falls through to a fresh live computation the same way
-  // "no snapshot yet" does, rather than serving an old-shape payload the
-  // frontend/Gemini prompt builder will crash reading `.toFixed()` off of.
-  if (snapshot && "isAuction" in (snapshot.data as object)) {
+  // A snapshot frozen under an older REPORT_CARD_VERSION has an
+  // incompatible shape (missing fields entirely - undefined, not null),
+  // not just stale numbers. Falls through to a fresh live computation the
+  // same way "no snapshot yet" does, rather than serving an old-shape
+  // payload the frontend/Gemini prompt builder will crash reading e.g.
+  // `.toFixed()` off of.
+  if (
+    snapshot &&
+    (snapshot.data as { version?: number }).version === REPORT_CARD_VERSION
+  ) {
     return snapshot.data as ReportCardData;
   }
   return await computeReportCardData(ctx, draft, season, args);
@@ -789,10 +748,13 @@ async function ensureReportCardSnapshot(
         .eq("scoring", args.scoringConfig.scoring),
     )
     .unique();
-  // Same stale-shape check as readReportCardData above - an old snapshot
-  // missing `isAuction` gets recomputed and overwritten in place (not a
-  // second row) rather than served as-is.
-  if (existing && "isAuction" in (existing.data as object)) {
+  // Same stale-shape check as readReportCardData above - a snapshot from an
+  // older REPORT_CARD_VERSION gets recomputed and overwritten in place (not
+  // a second row) rather than served as-is.
+  if (
+    existing &&
+    (existing.data as { version?: number }).version === REPORT_CARD_VERSION
+  ) {
     return existing.data as ReportCardData;
   }
 
