@@ -127,7 +127,10 @@ async function buildEspnOverallRankByFpid(
   for (const fpid of new Set([...std.keys(), ...ppr.keys()])) {
     const a = std.get(fpid);
     const b = ppr.get(fpid);
-    merged.set(fpid, a !== undefined && b !== undefined ? (a + b) / 2 : (a ?? b)!);
+    merged.set(
+      fpid,
+      a !== undefined && b !== undefined ? (a + b) / 2 : (a ?? b)!,
+    );
   }
   return merged;
 }
@@ -222,7 +225,7 @@ interface RosterAward {
 // fix with no shape change (e.g. v3: excluding K/DST from steals/reaches) -
 // otherwise an already-completed draft's frozen snapshot would keep serving
 // the old, wrong callouts until someone manually clicks Regenerate.
-const REPORT_CARD_VERSION = 8;
+const REPORT_CARD_VERSION = 9;
 
 // Value surplus, VOR, and starters strength are on different scales, so each
 // is percentile-ranked against the field before blending - see gradeTeams.
@@ -415,7 +418,8 @@ async function computeReportCardData(
           q.eq("position", position).eq("week", args.week),
         )
         .collect();
-      for (const ranking of rankings) sleeperAdpByFpid.set(ranking.fpid, ranking);
+      for (const ranking of rankings)
+        sleeperAdpByFpid.set(ranking.fpid, ranking);
     }
     for (const fpid of new Set([
       ...sleeperAdpByFpid.keys(),
@@ -543,7 +547,11 @@ async function computeReportCardData(
       // has nothing left to say once a player hits replacement level.
       const impliedRound =
         !isAuction && value.valueOverReplacement > 0
-          ? valueImpliedRound(value.dollarValue, sortedByValue, season.teamCount)
+          ? valueImpliedRound(
+              value.dollarValue,
+              sortedByValue,
+              season.teamCount,
+            )
           : null;
       const roundSurplus = impliedRound !== null ? round - impliedRound : null;
       resolved.push({
@@ -594,7 +602,12 @@ async function computeReportCardData(
       ? pointsForScoringConfig(projection, args.scoringConfig)
       : 0;
     const replacementPoints = replacementByPosition.get(pick.position) ?? 0;
-    const vor = Math.max(points - replacementPoints, 0);
+    // Unclamped (can go negative for a below-replacement keeper) - matches
+    // draftValues.ts's valueOverReplacement, which stopped flooring at 0 for
+    // the same reason (see that file's comment). estimateMarketValue already
+    // floors its own output at the curve's $1 anchor regardless of a
+    // negative input, so this needs no separate clamp before that call.
+    const vor = points - replacementPoints;
     const isKeeper = pick.isKeeper ?? false;
     const keeperEstimatedValue = isKeeper
       ? estimateMarketValue(vor, valueCurveByPosition.get(pick.position))
@@ -602,7 +615,11 @@ async function computeReportCardData(
     // Same VOR<=0 exclusion as the branch above.
     const impliedRound =
       !isAuction && keeperEstimatedValue !== null && vor > 0
-        ? valueImpliedRound(keeperEstimatedValue, sortedByValue, season.teamCount)
+        ? valueImpliedRound(
+            keeperEstimatedValue,
+            sortedByValue,
+            season.teamCount,
+          )
         : null;
     const roundSurplus = impliedRound !== null ? round - impliedRound : null;
     resolved.push({

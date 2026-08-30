@@ -256,11 +256,21 @@ async function computeDraftValuesForSettings(
   const weightByFpid = new Map<number, number>();
   for (const pos of activePositions) {
     for (const row of byPosition.get(pos) ?? []) {
-      const vor = Math.max(
-        pointsForScoringConfig(row, scoringConfig) - replacementPoints[pos],
-        0,
-      );
-      const weight = Math.pow(vor, FALLOFF_EXPONENT);
+      // valueOverReplacement is genuinely unclamped (can go negative for a
+      // below-replacement player) - only the $ side floors it. `weight`
+      // can't take a negative base: it's a fractional power
+      // (VOR^FALLOFF_EXPONENT), and Math.pow of a negative number to a
+      // fractional exponent is NaN (no real-valued fractional root of a
+      // negative number), so the auction $ formula clamps its OWN input to
+      // 0 right here rather than relying on vor already being floored
+      // upstream - dollarValue still floors at exactly $1 for any
+      // at-or-below-replacement player, unchanged from before. See
+      // src/lib/valueRank.ts's buildOurRankByFpid for why ranking wants the
+      // unclamped value instead: $1 offers zero signal for telling two
+      // below-replacement players apart, but real (negative) VOR still does.
+      const vor =
+        pointsForScoringConfig(row, scoringConfig) - replacementPoints[pos];
+      const weight = Math.pow(Math.max(vor, 0), FALLOFF_EXPONENT);
       vorByFpid.set(row.fpid, vor);
       weightByFpid.set(row.fpid, weight);
       totalWeight += weight;
@@ -861,4 +871,3 @@ export const clearDraftValues = internalMutation({
     }
   },
 });
-

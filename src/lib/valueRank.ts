@@ -26,30 +26,18 @@ export function sortValuesDescending(
   return [...values].sort((a, b) => b.dollarValue - a.dollarValue);
 }
 
-// fpid -> 1-indexed rank within the pool sortValuesDescending returns -
-// PlayersTable.tsx's "our rank" needs O(1) lookup per row, unlike
-// keeperCost.ts's valueImpliedRound/expectedValueAtRound, which operate on
-// the raw sorted array directly (findIndex/slice against a specific target
-// value or round band).
-//
-// Ties are averaged (and rounded), not resolved by whichever entry happens
-// to sort first - Array.sort is stable, so a plain `index + 1` assignment
-// used to hand out ranks purely by each entry's ORIGINAL position in the
-// unsorted input for any group of tied dollarValues. Once VOR hits 0, the
-// $ curve floors at exactly $1 for every replacement-level player
-// regardless of position (see draftValues.ts's weight = VOR^FALLOFF_EXPONENT),
-// so a deep-bench player's "our rank" ended up depending on which position
-// happened to be iterated first when the input array was built rather than
-// any real value signal - e.g. a QB with 0 projected points (last at his
-// position) reading as the league's overall #79 purely because QB rows
-// were assembled before RB/WR/TE ones, not because he's actually the 79th
-// best player (user report, 2026-08-30). Averaging the tied group's rank
-// range instead means everyone sharing that floor value lands at roughly
-// where that floor tier actually falls, same "half credit for ties"
-// convention convex/draft/reportCard.ts's valueImpliedRound already uses
-// for the identical underlying problem on the backend.
-export function rankByDollarValue(
-  sortedDescending: readonly ValueRankEntry[],
+// Shared by rankByDollarValue and buildOurRankByFpid below - 1-indexed rank
+// within whatever pool the caller already sorted descending by its own
+// value key, with ties averaged (and rounded) rather than resolved by
+// whichever entry happens to sort first. Array.sort is stable, so a plain
+// `index + 1` assignment hands out ranks purely by each entry's ORIGINAL
+// position in the unsorted input for any group of tied values - see
+// buildOurRankByFpid's own comment for the concrete bug this caused
+// (2026-08-30) and why a continuous ranking key mostly avoids needing this
+// at all now. Kept as a fallback regardless: a genuine exact tie should
+// still read as a tie, not an arbitrary ordering.
+function assignAveragedRanks(
+  sortedDescending: readonly { fpid: number; value: number }[],
 ): Map<number, number> {
   const map = new Map<number, number>();
   let i = 0;
@@ -57,7 +45,7 @@ export function rankByDollarValue(
     let j = i + 1;
     while (
       j < sortedDescending.length &&
-      sortedDescending[j]!.dollarValue === sortedDescending[i]!.dollarValue
+      sortedDescending[j]!.value === sortedDescending[i]!.value
     ) {
       j++;
     }
@@ -69,6 +57,22 @@ export function rankByDollarValue(
     i = j;
   }
   return map;
+}
+
+// fpid -> 1-indexed rank within the pool sortValuesDescending returns -
+// PlayersTable.tsx's "our rank" needs O(1) lookup per row, unlike
+// keeperCost.ts's valueImpliedRound/expectedValueAtRound, which operate on
+// the raw sorted array directly (findIndex/slice against a specific target
+// value or round band).
+export function rankByDollarValue(
+  sortedDescending: readonly ValueRankEntry[],
+): Map<number, number> {
+  return assignAveragedRanks(
+    sortedDescending.map((entry) => ({
+      fpid: entry.fpid,
+      value: entry.dollarValue,
+    })),
+  );
 }
 
 // Positions "our rank"/"vs ADP" are scoped to - same PREMIER_POSITIONS list
@@ -135,11 +139,39 @@ export function buildBlendedAdpByFpid(
   return map;
 }
 
+// Mirrors convex/draftValues.ts's FALLOFF_EXPONENT (convex/ and src/ each
+// keep their own copy - see convex/draft/tiers.ts's comment on this
+// duplication convention). Used only to extend that same $ curve shape
+// symmetrically into negative VOR for ranking purposes below - never for
+// anything $-denominated, which stays exactly as draftValues.ts computes it.
+const FALLOFF_EXPONENT = 0.7;
+
+// draftValues.ts's dollarValue floors at exactly $1 for any at-or-below-
+// replacement player (VOR<=0) - real for auction pricing, but useless as a
+// ranking key below that floor: hundreds of players can share it, so
+// ranking by dollarValue there just reflects array order, not any signal
+// (2026-08-30 bug: a QB with 0 projected points read as the league's
+// overall rank 79 this way). valueOverReplacement itself is NOT floored
+// (draftValues.ts stopped clamping it at 0 for exactly this reason - a
+// below-replacement player's raw point deficit still differs meaningfully
+// from another's). This applies the SAME curve shape dollarValue uses
+// above replacement (VOR^FALLOFF_EXPONENT) symmetrically below zero
+// (sign-preserving), rather than ranking by raw VOR directly - raw VOR
+// isn't cross-position comparable (a below-replacement QB's raw point
+// deficit is on a different scale than a TE's), which is exactly why the
+// curve exists in the first place; extending it keeps that same
+// normalization in both directions instead of reintroducing the scale
+// mismatch just below the floor.
+function signedCurveValue(vor: number): number {
+  return Math.sign(vor) * Math.pow(Math.abs(vor), FALLOFF_EXPONENT);
+}
+
 // Snake/linear's "our rank" for the vs-ADP diff: every relevant active-
-// position player pooled by dollarValue descending (sortValuesDescending/
-// rankByDollarValue above) - dollarValue is already normalized VOR to be
-// comparable across positions, used purely as an internal cross-position
-// ranking key ($ itself is never displayed for a snake/linear league).
+// position player pooled by this signed-curve value descending - the same
+// cross-position normalization dollarValue provides above replacement,
+// extended symmetrically below it so a below-replacement player still ranks
+// on a real, continuous signal instead of tying at the $ floor with
+// everyone else at or below replacement (see signedCurveValue's comment).
 // Restricted to PREMIER_POSITIONS with a real, non-sentinel ADP - without
 // this, "our rank" would be computed over a much deeper pool than blended
 // ADP realistically covers, which can make a legitimately late-round
@@ -149,7 +181,12 @@ export function buildBlendedAdpByFpid(
 // board (not just currently-visible/undrafted rows) so this rank stays a
 // fixed, value-based ordering independent of live draft progress.
 export function buildOurRankByFpid(
-  draftValues: readonly (ValueRankEntry & { position: Position })[] | undefined,
+  draftValues:
+    | readonly (ValueRankEntry & {
+        position: Position;
+        valueOverReplacement: number;
+      })[]
+    | undefined,
   adpByFpid: ReadonlyMap<number, AdpRow>,
   scoring: ScoringFormat,
 ): Map<number, number> {
@@ -160,5 +197,15 @@ export function buildOurRankByFpid(
     const sleeperAdp = adpRow ? adpForScoring(adpRow, scoring) : undefined;
     return sleeperAdp !== undefined && sleeperAdp < RELEVANT_ADP_CEILING;
   });
-  return rankByDollarValue(sortValuesDescending(relevantValues));
+  const sortedDescending = [...relevantValues]
+    .sort(
+      (a, b) =>
+        signedCurveValue(b.valueOverReplacement) -
+        signedCurveValue(a.valueOverReplacement),
+    )
+    .map((row) => ({
+      fpid: row.fpid,
+      value: signedCurveValue(row.valueOverReplacement),
+    }));
+  return assignAveragedRanks(sortedDescending);
 }
