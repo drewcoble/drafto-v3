@@ -76,8 +76,13 @@ function getStoredView(): BoardView {
 // Table-view-only column sort (see PlayersLeftTab's table-view rendering
 // below) - Bar view stays tier-grouped regardless, per its own column-chart
 // layout. "tier" is included so a click flattens straight into tier order
-// without touching bar view's grouping.
-type SortKey = "player" | "tier" | "dollar" | "market" | "pts";
+// without touching bar view's grouping. "rank" (this app's own cross-
+// position rank) is snake/linear-only - its own standalone column ahead of
+// Player, not combined with "market"'s vs-ADP diff into one cell (see
+// PlayerTableRow.tsx/PlayerTableRowMobile.tsx's adpDiff - user feedback,
+// 2026-08-30, same split already applied to SnakeDraftTab.tsx/
+// MobileSnakeDraft.tsx).
+type SortKey = "player" | "tier" | "dollar" | "market" | "pts" | "rank";
 
 // Direction a column sorts to the first time it's clicked - numeric value
 // columns default to "best first" (highest $/points, lowest/best tier),
@@ -88,6 +93,7 @@ const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
   dollar: "desc",
   market: "desc",
   pts: "desc",
+  rank: "asc",
 };
 
 // "dollar" is auction's $ value (highest first) but snake/linear's ADP
@@ -533,6 +539,8 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
         return row.name;
       case "tier":
         return row.tier;
+      case "rank":
+        return ourRankByFpid.get(row.fpid);
       case "dollar":
         return isAuction ? row.dollarValue : blendedAdpByFpid.get(row.fpid);
       case "market": {
@@ -866,6 +874,7 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th></Table.Th>
+                    {!isAuction && renderSortableTh("Rank", "rank")}
                     {renderSortableTh("Player", "player")}
                     <Table.Th>Pos</Table.Th>
                     {renderSortableTh("Tier", "tier")}
@@ -925,6 +934,11 @@ export function PlayersLeftTab({ seasonId, selfTeamId }: PlayersLeftTabProps) {
                   borderBottom: "1px solid var(--mantine-color-default-border)",
                 }}
               >
+                {!isAuction &&
+                  renderSortableLabel("Rank", "rank", {
+                    width: 30,
+                    flexShrink: 0,
+                  })}
                 {renderSortableLabel("Player", "player", { flex: 1 })}
                 {renderSortableLabel(isAuction ? "$" : "ADP", "dollar", {
                   width: 36,

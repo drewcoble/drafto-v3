@@ -31,7 +31,7 @@ import type { StandardValueRow } from "../../../lib/standardValues";
 import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
 import { RookieBadge } from "../../../components/RookieBadge";
 import { StandardValueLabel } from "../../../components/StandardValueLabel";
-import { AdpValueLabel } from "../../../components/AdpValueLabel";
+import { formatSignedNumber, keeperValueColor } from "../../../lib/keeperValue";
 import { useSwipeReveal } from "../../../hooks/useSwipeReveal";
 
 // Same icon choices PlayerTableRow.tsx/PlayerBar.tsx use for the same
@@ -104,6 +104,13 @@ export function PlayerTableRowMobile({
     ? CONSISTENCY_ICON[consistency]
     : undefined;
   const swipeHandlers = useSwipeReveal(onSwipeOpen, onCloseSwipe);
+  // Snake/linear's vs-ADP diff - its own column now (see the Rank column,
+  // added ahead of the name below), not combined with the rank number the
+  // way AdpValueLabel.tsx does for rows with no separate Rank column.
+  const adpDiff =
+    !isAuction && ourRank !== undefined && adp !== undefined
+      ? Math.round(adp) - ourRank
+      : undefined;
 
   return (
     <Box style={{ position: "relative", overflow: "hidden" }}>
@@ -190,6 +197,20 @@ export function PlayerTableRowMobile({
           touchAction: "pan-y",
         }}
       >
+        {!isAuction && (
+          <Box
+            style={{
+              width: 28,
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            <Text size="sm" fw={700}>
+              {ourRank !== undefined ? `#${ourRank}` : "—"}
+            </Text>
+          </Box>
+        )}
         <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
           <Group gap={4} wrap="nowrap">
             {valueGap?.direction === "undervalued" ? (
@@ -290,7 +311,11 @@ export function PlayerTableRowMobile({
               showLabel={false}
             />
           ) : (
-            <AdpValueLabel ourRank={ourRank} adp={adp} showLabel={false} />
+            adpDiff !== undefined && (
+              <Text size="sm" fw={600} c={keeperValueColor(adpDiff)}>
+                {formatSignedNumber(adpDiff)}
+              </Text>
+            )
           )}
         </Box>
         <Box

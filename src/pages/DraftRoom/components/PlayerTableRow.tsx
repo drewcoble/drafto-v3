@@ -37,7 +37,7 @@ import type { DraftBoardRow, PlayerTag, ValueGap } from "../../../types";
 import type { StandardValueRow } from "../../../lib/standardValues";
 import { RookieBadge } from "../../../components/RookieBadge";
 import { StandardValueLabel } from "../../../components/StandardValueLabel";
-import { AdpValueLabel } from "../../../components/AdpValueLabel";
+import { formatSignedNumber, keeperValueColor } from "../../../lib/keeperValue";
 
 // Matches the icon choices PlayerBar.tsx/PlayerBarDetails.tsx use for the
 // same consistency ratings - kept in sync there rather than imported, same
@@ -83,8 +83,10 @@ interface PlayerTableRowProps {
 // Player, Pos, Tier, $/ADP, vs. market/vs ADP, Pts, status-icon flags,
 // chevron - kept in sync with the header column count in
 // PlayersLeftTab.tsx so the expanded actions row's colSpan always spans the
-// full table width.
-const COLUMN_COUNT = 8;
+// full table width. Snake/linear gets one more (a standalone Rank column,
+// see below) than auction.
+const AUCTION_COLUMN_COUNT = 8;
+const SNAKE_COLUMN_COUNT = 9;
 
 // Table-view alternative to PlayerBar.tsx for the same DraftBoardRow data -
 // same status icons/actions (nominate/draft, target/avoid), but as a plain
@@ -124,6 +126,14 @@ export function PlayerTableRow({
   const ConsistencyIcon = consistency
     ? CONSISTENCY_ICON[consistency]
     : undefined;
+  // Snake/linear's vs-ADP diff - shown in its own column now (see the Rank
+  // column, added ahead of Player below), not combined with the rank number
+  // the way AdpValueLabel.tsx does for tables with no separate Rank column.
+  const adpDiff =
+    !isAuction && ourRank !== undefined && adp !== undefined
+      ? Math.round(adp) - ourRank
+      : undefined;
+  const columnCount = isAuction ? AUCTION_COLUMN_COUNT : SNAKE_COLUMN_COUNT;
 
   return (
     <Fragment>
@@ -188,6 +198,13 @@ export function PlayerTableRow({
             )}
           </Group>
         </Table.Td>
+        {!isAuction && (
+          <Table.Td>
+            <Text size="sm" fw={700}>
+              {ourRank !== undefined ? `#${ourRank}` : "—"}
+            </Text>
+          </Table.Td>
+        )}
         <Table.Td>
           {/* mih matches a two-line wrapped name (e.g. "Jacory
               Croskey-Merritt") so every row - wrapped or not - shares
@@ -257,7 +274,11 @@ export function PlayerTableRow({
               showLabel={false}
             />
           ) : (
-            <AdpValueLabel ourRank={ourRank} adp={adp} showLabel={false} />
+            adpDiff !== undefined && (
+              <Text size="sm" fw={600} c={keeperValueColor(adpDiff)}>
+                {formatSignedNumber(adpDiff)}
+              </Text>
+            )
           )}
         </Table.Td>
         <Table.Td visibleFrom="sm">
@@ -278,7 +299,7 @@ export function PlayerTableRow({
       </Table.Tr>
       {isExpanded && (
         <Table.Tr>
-          <Table.Td colSpan={COLUMN_COUNT}>
+          <Table.Td colSpan={columnCount}>
             <Group justify="space-between" wrap="wrap" py={4}>
               <Group gap={6} wrap="wrap">
                 <Button
