@@ -207,7 +207,7 @@ export function PlayerTableRowMobile({
             }}
           >
             <Text size="sm" fw={700}>
-              {ourRank !== undefined ? `#${ourRank}` : "—"}
+              {ourRank !== undefined ? ourRank : "—"}
             </Text>
           </Box>
         )}

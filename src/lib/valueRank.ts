@@ -31,11 +31,43 @@ export function sortValuesDescending(
 // keeperCost.ts's valueImpliedRound/expectedValueAtRound, which operate on
 // the raw sorted array directly (findIndex/slice against a specific target
 // value or round band).
+//
+// Ties are averaged (and rounded), not resolved by whichever entry happens
+// to sort first - Array.sort is stable, so a plain `index + 1` assignment
+// used to hand out ranks purely by each entry's ORIGINAL position in the
+// unsorted input for any group of tied dollarValues. Once VOR hits 0, the
+// $ curve floors at exactly $1 for every replacement-level player
+// regardless of position (see draftValues.ts's weight = VOR^FALLOFF_EXPONENT),
+// so a deep-bench player's "our rank" ended up depending on which position
+// happened to be iterated first when the input array was built rather than
+// any real value signal - e.g. a QB with 0 projected points (last at his
+// position) reading as the league's overall #79 purely because QB rows
+// were assembled before RB/WR/TE ones, not because he's actually the 79th
+// best player (user report, 2026-08-30). Averaging the tied group's rank
+// range instead means everyone sharing that floor value lands at roughly
+// where that floor tier actually falls, same "half credit for ties"
+// convention convex/draft/reportCard.ts's valueImpliedRound already uses
+// for the identical underlying problem on the backend.
 export function rankByDollarValue(
   sortedDescending: readonly ValueRankEntry[],
 ): Map<number, number> {
   const map = new Map<number, number>();
-  sortedDescending.forEach((entry, index) => map.set(entry.fpid, index + 1));
+  let i = 0;
+  while (i < sortedDescending.length) {
+    let j = i + 1;
+    while (
+      j < sortedDescending.length &&
+      sortedDescending[j]!.dollarValue === sortedDescending[i]!.dollarValue
+    ) {
+      j++;
+    }
+    // 1-indexed ranks [i+1, j] belong to this tied group - average them.
+    const averageRank = Math.round((i + 1 + j) / 2);
+    for (let k = i; k < j; k++) {
+      map.set(sortedDescending[k]!.fpid, averageRank);
+    }
+    i = j;
+  }
   return map;
 }
 

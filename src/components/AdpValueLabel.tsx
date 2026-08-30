@@ -22,7 +22,7 @@ interface AdpValueLabelProps {
 // a potential value if they last that long. Negative = ADP drafts them
 // EARLIER than our math justifies - a reach at ADP.
 //
-// The rank itself (`#N`) is real, always-visible text, not a hover Tooltip
+// The rank itself is real, always-visible text, not a hover Tooltip
 // like the diff-only version this replaced - a Tooltip is unreachable on a
 // touch device with no hover state, which made "what does our own math
 // actually rank this guy" invisible mid-draft on mobile, exactly when
@@ -37,7 +37,7 @@ export function AdpValueLabel({
   return (
     <Stack gap={0} align="flex-start" style={{ lineHeight: 1.15 }}>
       <Text size="xs" fw={700} span>
-        #{ourRank}
+        {ourRank}
       </Text>
       <Text size="9px" fw={600} c={keeperValueColor(diff)} span>
         {showLabel ? "vs ADP " : ""}

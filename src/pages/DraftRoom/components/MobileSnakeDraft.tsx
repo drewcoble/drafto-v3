@@ -400,7 +400,7 @@ export function MobileSnakeDraft({ seasonId, teams }: MobileSnakeDraftProps) {
                     <Table.Tr key={row.fpid}>
                       <Table.Td>
                         <Text size="sm" fw={700}>
-                          {ourRank !== undefined ? `#${ourRank}` : "—"}
+                          {ourRank !== undefined ? ourRank : "—"}
                         </Text>
                       </Table.Td>
                       <Table.Td>
