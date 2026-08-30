@@ -143,18 +143,32 @@ interface RosterAward {
 // fix with no shape change (e.g. v3: excluding K/DST from steals/reaches) -
 // otherwise an already-completed draft's frozen snapshot would keep serving
 // the old, wrong callouts until someone manually clicks Regenerate.
-const REPORT_CARD_VERSION = 4;
+const REPORT_CARD_VERSION = 5;
 
 // Value surplus, VOR, and starters strength are on different scales, so each
 // is percentile-ranked against the field before blending - see gradeTeams.
-// Surplus is the primary driver (bargain-hunting is the most direct
-// reading of "beat the market"); VOR rewards raw talent regardless of $;
-// starters strength rewards drafting a roster whose best players (by the
-// optimizer's own read of the roster) actually make up the starting lineup.
-// Tunable, same convention as draftValues.ts's FALLOFF_EXPONENT.
-const SURPLUS_WEIGHT = 0.5;
-const VOR_WEIGHT = 0.3;
-const LINEUP_WEIGHT = 0.2;
+// Surplus is the primary driver for auction (bargain-hunting is the most
+// direct reading of "beat the market"); VOR rewards raw talent regardless
+// of $; starters strength rewards drafting a roster whose best players (by
+// the optimizer's own read of the roster) actually make up the starting
+// lineup. Tunable, same convention as draftValues.ts's FALLOFF_EXPONENT.
+const AUCTION_GRADE_WEIGHTS = {
+  surplus: 0.5,
+  vor: 0.3,
+  lineup: 0.2,
+};
+// Snake/linear weights VOR higher and surplus lower than auction - a $
+// surplus reading directly means "you got more than you paid," but a
+// round-based surplus (see ResolvedPick.roundSurplus) is a noisier signal
+// even after the value-curve fix (a late-round bench "reach" still swings
+// more than an early-round one), so raw production (VOR) is trusted more
+// heavily here. User-requested weighting (2026-08-30) - independently
+// tunable from auction's.
+const SNAKE_GRADE_WEIGHTS = {
+  surplus: 0.25,
+  vor: 0.5,
+  lineup: 0.25,
+};
 
 // Cutoffs are deliberately centered around a percentile-normalized 50 (an
 // exactly-average team across all three inputs) landing on a B, not a
@@ -598,14 +612,15 @@ async function computeReportCardData(
     ]),
   );
 
+  const gradeWeights = isAuction ? AUCTION_GRADE_WEIGHTS : SNAKE_GRADE_WEIGHTS;
   const teamReportCards = rawTeams.map((team) => {
     const surplusPct = percentileRank(team.surplusTotal, surplusValues);
     const vorPct = percentileRank(team.vorTotal, vorValues);
     const lineupPct = percentileRank(team.lineup.efficiencyPct, lineupValues);
     const gradeScore = Math.round(
-      SURPLUS_WEIGHT * surplusPct +
-        VOR_WEIGHT * vorPct +
-        LINEUP_WEIGHT * lineupPct,
+      gradeWeights.surplus * surplusPct +
+        gradeWeights.vor * vorPct +
+        gradeWeights.lineup * lineupPct,
     );
     return {
       ...team,
