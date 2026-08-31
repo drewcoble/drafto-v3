@@ -124,6 +124,67 @@ export const listSeasons = query({
   },
 });
 
+// infinileague-facing counterpart to listSeasons - identical shape, but
+// filtered to seasons actually linked to a real external league (Sleeper or
+// Yahoo). infinileague's whole feature set (waiver/FAAB/trade recommendations
+// off real roster data) is meaningless for a season the user built from
+// scratch here in infinidraft - there's no external roster to sync, and
+// infinileague must never show one of those "custom" leagues at all (see
+// infinidraft/INFINILEAGUE.md). Gated on "linked to any provider" rather than
+// "linked to Sleeper" specifically - Yahoo is just not connectable yet
+// (pending API access), not excluded on purpose, so a Yahoo-linked season
+// should start appearing here automatically once that lands, with no change
+// needed to this query.
+export const listLinkedSeasons = query({
+  args: {},
+  handler: async (ctx): Promise<SeasonWithLeagueName[]> => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("You must be signed in.");
+    }
+    const leagues = await ctx.db
+      .query("leagues")
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+      .collect();
+    const result: SeasonWithLeagueName[] = [];
+    for (const league of leagues) {
+      const seasons = await ctx.db
+        .query("seasons")
+        .withIndex("by_league", (q) => q.eq("leagueId", league._id))
+        .collect();
+      for (const season of seasons) {
+        if (
+          season.sleeperLeagueId === undefined &&
+          season.yahooLeagueKey === undefined
+        ) {
+          continue;
+        }
+        const draft = await ctx.db
+          .query("drafts")
+          .withIndex("by_season_kind", (q) =>
+            q.eq("seasonId", season._id).eq("kind", "real"),
+          )
+          .first();
+        result.push({
+          ...season,
+          name: league.name,
+          draftStatus: draft?.status ?? "pre_draft",
+          ...(draft?.sleeperDraftId !== undefined
+            ? { sleeperDraftId: draft.sleeperDraftId }
+            : {}),
+          ...(draft?.sleeperDraftScheduledAt !== undefined
+            ? { sleeperDraftScheduledAt: draft.sleeperDraftScheduledAt }
+            : {}),
+          ...(draft?.sleeperSyncEnabled !== undefined
+            ? { sleeperSyncEnabled: draft.sleeperSyncEnabled }
+            : {}),
+        });
+      }
+    }
+    return result;
+  },
+});
+
 // Read-only, no-ownership-check counterpart to listSeasons for a single
 // season - powers the TV board (src/pages/DraftBoard/DraftBoard.tsx), which
 // is meant to be viewable by anyone with the link (e.g. a draft-night TV),
