@@ -31,6 +31,27 @@ export const getPlayer = query({
   },
 });
 
+// Bulk counterpart to getPlayer, for a roster-sized list of fpids (e.g.
+// convex/season/teamRoster.ts joining a team's ~15-20 players against their
+// name/position/team). No indexed "IN" query exists in Convex, and nothing
+// else in this codebase does a bulk-by-indexed-field lookup either - a
+// Promise.all of individual by_fpid point lookups is plenty fast at this
+// size and keeps this consistent with getPlayer's own index usage.
+export const getPlayersByFpids = query({
+  args: { fpids: v.array(v.number()) },
+  handler: async (ctx, args) => {
+    const players = await Promise.all(
+      args.fpids.map((fpid) =>
+        ctx.db
+          .query("players")
+          .withIndex("by_fpid", (q) => q.eq("fpid", fpid))
+          .first(),
+      ),
+    );
+    return players.filter((player) => player !== null);
+  },
+});
+
 export const upsertPlayers = mutation({
   args: {
     rows: v.array(

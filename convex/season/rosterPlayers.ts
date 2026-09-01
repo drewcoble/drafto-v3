@@ -36,6 +36,53 @@ export const requireOwnedSeasonForSync = internalQuery({
   },
 });
 
+// Team-scoped counterpart to requireOwnedSeasonForSync - for
+// convex/season/teamRoster.ts's getTeamRosterForWeek, which only has a
+// teamId (not a seasonId) and, being an action, can't call the
+// QueryCtx/MutationCtx-typed requireSeasonOwner directly either.
+export const requireOwnedTeamForRead = internalQuery({
+  args: { teamId: v.id("seasonTeams") },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ team: Doc<"seasonTeams">; season: Doc<"seasons"> }> => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("You must be signed in.");
+    }
+    const team = await ctx.db.get(args.teamId);
+    if (!team) {
+      throw new Error("Team not found.");
+    }
+    const season = await ctx.db.get(team.seasonId);
+    if (!season) {
+      throw new Error("Season not found.");
+    }
+    const league = await ctx.db.get(season.leagueId);
+    if (!league) {
+      throw new Error("League not found.");
+    }
+    if (league.ownerId !== userId) {
+      throw new Error("Not authorized to view this team.");
+    }
+    return { team, season };
+  },
+});
+
+// Fallback data source for convex/season/teamRoster.ts's
+// getTeamRosterForWeek, when a team isn't Sleeper-linked (no per-week
+// matchup data available at all) - the current synced roster.
+export const listRosterFpidsForTeam = internalQuery({
+  args: { teamId: v.id("seasonTeams") },
+  handler: async (ctx, args): Promise<number[]> => {
+    const rows = await ctx.db
+      .query("rosterPlayers")
+      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
+      .collect();
+    return rows.map((row) => row.fpid);
+  },
+});
+
 // Shared write path for both provider syncs (convex/sleeper/league.ts's
 // syncLeagueRoster and convex/yahoo/league.ts's syncYahooLeagueRoster) -
 // replace-all-on-sync for one team's roster. See schema.ts's rosterPlayers
@@ -46,6 +93,16 @@ export const replaceRosterForTeam = internalMutation({
     teamId: v.id("seasonTeams"),
     fpids: v.array(v.number()),
     faabSpent: v.number(),
+    // Current-season standings, synced alongside the roster itself - see
+    // convex/season/standings.ts and schema.ts's seasonTeams comment.
+    // waiverPosition is genuinely absent for a FAAB league (not just 0),
+    // so it stays optional; the others always come back from Sleeper.
+    wins: v.number(),
+    losses: v.number(),
+    ties: v.number(),
+    pointsFor: v.number(),
+    pointsAgainst: v.number(),
+    waiverPosition: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -64,7 +121,36 @@ export const replaceRosterForTeam = internalMutation({
         syncedAt,
       });
     }
-    await ctx.db.patch(args.teamId, { faabSpent: args.faabSpent });
+    await ctx.db.patch(args.teamId, {
+      faabSpent: args.faabSpent,
+      wins: args.wins,
+      losses: args.losses,
+      ties: args.ties,
+      pointsFor: args.pointsFor,
+      pointsAgainst: args.pointsAgainst,
+      ...(args.waiverPosition !== undefined
+        ? { waiverPosition: args.waiverPosition }
+        : {}),
+    });
+  },
+});
+
+// Companion to replaceRosterForTeam - season-level (not per-team) waiver
+// settings, re-written on every sync rather than only at connect time (see
+// convex/sleeper/league.ts's syncLeagueRoster for why). Provider-agnostic
+// shape (just patches season fields) even though only the Sleeper sync
+// calls it today - same convention as replaceRosterForTeam.
+export const updateSeasonWaiverSettings = internalMutation({
+  args: {
+    seasonId: v.id("seasons"),
+    waiverType: v.union(v.literal("faab"), v.literal("priority")),
+    faabBudget: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.seasonId, {
+      waiverType: args.waiverType,
+      ...(args.faabBudget !== undefined ? { faabBudget: args.faabBudget } : {}),
+    });
   },
 });
 

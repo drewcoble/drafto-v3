@@ -35,7 +35,11 @@ export interface MappedRosterSlots {
 // live league's `roster_positions` field while implementing the rest of
 // Part 4/Yahoo - the codes below are from general knowledge of Sleeper's
 // API, not a confirmed live response.
-const SLOT_CODE_MAP: Record<
+// Exported for convex/season/teamRoster.ts's per-starter slot labeling
+// (which starting slot each starters[] index actually occupies) - same
+// translation table, different consumer (that one needs the per-code
+// category, not the aggregated counts mapRosterPositions below produces).
+export const SLOT_CODE_MAP: Record<
   string,
   keyof MappedRosterSlots["rosterSlots"] | "FLEX" | "SUPERFLEX"
 > = {

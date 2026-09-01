@@ -539,6 +539,14 @@ export default defineSchema({
     sleeperLeagueId: v.optional(v.string()),
     yahooLeagueKey: v.optional(v.string()),
     faabBudget: v.optional(v.number()),
+    // Which waiver system this league actually uses - determines whether
+    // infinileague's standings page shows remaining FAAB $ or waiver order
+    // (see convex/season/standings.ts). Provider-agnostic values, not raw
+    // Sleeper's numeric waiver_type - set/refreshed by convex/sleeper/
+    // league.ts's syncLeagueRoster on every sync (not just at connect time),
+    // so a season connected before this field existed self-heals on its
+    // next sync, and a mid-season commissioner change doesn't go stale.
+    waiverType: v.optional(v.union(v.literal("faab"), v.literal("priority"))),
     useKeepers: v.optional(v.boolean()),
     keeperRules: v.optional(keeperRulesValidator),
     createdAt: v.number(),
@@ -699,6 +707,20 @@ export default defineSchema({
     faabSpent: v.optional(v.number()),
     // Overrides seasons.faabBudget for this team only.
     faabBudgetOverride: v.optional(v.number()),
+    // Current-season standings, synced from the linked provider roster
+    // alongside faabSpent above (see convex/sleeper/league.ts's
+    // syncLeagueRoster) - powers convex/season/standings.ts. All absent
+    // until the first sync, same as faabSpent. pointsFor/pointsAgainst are
+    // real decimal totals (provider APIs commonly split whole/hundredths
+    // internally - already combined by the time it lands here).
+    wins: v.optional(v.number()),
+    losses: v.optional(v.number()),
+    ties: v.optional(v.number()),
+    pointsFor: v.optional(v.number()),
+    pointsAgainst: v.optional(v.number()),
+    // Only meaningful when seasons.waiverType is "priority" - lower means
+    // higher priority (1 = first). Absent for a FAAB league.
+    waiverPosition: v.optional(v.number()),
   }).index("by_season", ["seasonId"]),
 
   // One team's currently-rostered players, synced from whichever provider

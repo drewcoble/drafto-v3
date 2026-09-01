@@ -25,8 +25,23 @@ interface SleeperRoster {
   // selections. Absent/null means the league doesn't use Sleeper's keeper
   // feature, or this owner hasn't picked any yet.
   keepers?: string[] | null;
+  // Standings/waiver fields, verified live against a real league
+  // (GET /league/{id}/rosters) - wins/losses/ties/waiver_position are
+  // always present once a roster exists; fpts/fpts_decimal default to 0
+  // pre-season but fpts_against/fpts_against_decimal are omitted entirely
+  // (not just zero) until games have actually been played, hence optional.
+  // fpts/fpts_against are split whole-number + hundredths pairs, not one
+  // decimal field - see syncLeagueRoster's combination of the two.
   settings?: {
     waiver_budget_used?: number;
+    wins?: number;
+    losses?: number;
+    ties?: number;
+    fpts?: number;
+    fpts_decimal?: number;
+    fpts_against?: number;
+    fpts_against_decimal?: number;
+    waiver_position?: number;
   };
 }
 
@@ -79,6 +94,12 @@ function toFpids(players: string[] | null): number[] {
 // each. Manually triggered only (a "Sync Roster & FAAB" button) - unlike the
 // daily projections cron, in-season rosters don't need to be fresh on a
 // schedule, just fresh whenever the user is about to check bid suggestions.
+// Sleeper's fpts/fpts_against are whole-number + hundredths pairs rather
+// than one decimal field - combine once here instead of at every call site.
+function combinePoints(whole: number | undefined, decimal: number | undefined): number {
+  return (whole ?? 0) + (decimal ?? 0) / 100;
+}
+
 export const syncLeagueRoster = action({
   args: { seasonId: v.id("seasons") },
   handler: async (ctx: ActionCtx, args): Promise<{ syncedTeams: number }> => {
@@ -90,13 +111,24 @@ export const syncLeagueRoster = action({
       throw new Error("This league isn't linked to a Sleeper league yet.");
     }
 
-    const rosters = await fetchSleeperLeagueJson<SleeperRoster[]>(
-      season.sleeperLeagueId,
-      "/rosters",
-    );
+    const [rosters, leagueSettings] = await Promise.all([
+      fetchSleeperLeagueJson<SleeperRoster[]>(season.sleeperLeagueId, "/rosters"),
+      fetchSleeperLeagueSettings(season.sleeperLeagueId),
+    ]);
     const rosterById = new Map(
       rosters.map((roster) => [String(roster.roster_id), roster]),
     );
+
+    // Re-read every sync, not just at connect time - self-heals a season
+    // connected before this field existed, and keeps up with a mid-season
+    // commissioner change to waiver settings instead of going stale.
+    await ctx.runMutation(internal.season.rosterPlayers.updateSeasonWaiverSettings, {
+      seasonId: args.seasonId,
+      waiverType: mapWaiverType(leagueSettings.settings?.waiver_type),
+      ...(leagueSettings.settings?.waiver_budget !== undefined
+        ? { faabBudget: leagueSettings.settings.waiver_budget }
+        : {}),
+    });
 
     const teams: Doc<"seasonTeams">[] = await ctx.runQuery(
       internal.draft.teams.listSeasonTeamsInternal,
@@ -114,6 +146,17 @@ export const syncLeagueRoster = action({
         teamId: team._id as Id<"seasonTeams">,
         fpids: toFpids(roster.players),
         faabSpent: roster.settings?.waiver_budget_used ?? 0,
+        wins: roster.settings?.wins ?? 0,
+        losses: roster.settings?.losses ?? 0,
+        ties: roster.settings?.ties ?? 0,
+        pointsFor: combinePoints(roster.settings?.fpts, roster.settings?.fpts_decimal),
+        pointsAgainst: combinePoints(
+          roster.settings?.fpts_against,
+          roster.settings?.fpts_against_decimal,
+        ),
+        ...(roster.settings?.waiver_position !== undefined
+          ? { waiverPosition: roster.settings.waiver_position }
+          : {}),
       });
       syncedTeams += 1;
     }
@@ -292,6 +335,31 @@ interface SleeperLeagueSettings {
   scoring_settings?: { rec?: number };
   previous_league_id?: string | null;
   draft_id?: string | null;
+  // waiver_budget is present (defaulted to 100) even for a league that
+  // doesn't use FAAB at all - verified live - so it's only meaningful
+  // alongside waiver_type actually being FAAB (see mapWaiverType below).
+  // waiver_type's 0/1/2 meaning isn't documented by Sleeper's own docs.
+  // An initial pass here trusted a third-party adapter (mistakia/league's
+  // sleeper.mjs) claiming 1 = FAAB, 0/2 = priority - that was wrong, caught
+  // when a real connected league (Sleeper waiver_type 2) that's actually
+  // FAAB showed up as waiver-priority in the app. Corrected against a
+  // second, more precise third-party reference (paul-macfarlane/sleepy's
+  // references/sleeper-api.md: "waiver_type: 0=none/rolling, 1=reversed
+  // record, 2=FAAB") AND empirically confirmed across 5 real leagues (one
+  // user-verified as FAAB, matching its waiver_type=2; the other four's
+  // values were internally consistent with this same rule). 0 and 1 are
+  // both priority-based (rolling vs. reverse-standings - both use
+  // roster.settings.waiver_position), only 2 is FAAB.
+  settings?: {
+    waiver_type?: number;
+    waiver_budget?: number;
+  };
+}
+
+export function mapWaiverType(
+  sleeperWaiverType: number | undefined,
+): "faab" | "priority" {
+  return sleeperWaiverType === 2 ? "faab" : "priority";
 }
 
 export async function fetchSleeperLeagueSettings(

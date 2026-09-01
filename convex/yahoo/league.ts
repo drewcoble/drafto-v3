@@ -250,11 +250,22 @@ export const syncYahooLeagueRoster = action({
           // Leave faabSpent at 0.
         }
 
+        // Standings fields (wins/losses/ties/pointsFor/pointsAgainst) aren't
+        // fetched from Yahoo yet - infinileague's standings feature only
+        // supports Sleeper-linked leagues today (see convex/sleeper/
+        // league.ts's syncLeagueRoster for the real implementation). Zeroed
+        // here rather than left unset so a Yahoo-linked season's standings
+        // read as "no games yet" instead of undefined/missing.
         await ctx.runMutation(internal.season.rosterPlayers.replaceRosterForTeam, {
           seasonId: args.seasonId,
           teamId: team._id as Id<"seasonTeams">,
           fpids,
           faabSpent,
+          wins: 0,
+          losses: 0,
+          ties: 0,
+          pointsFor: 0,
+          pointsAgainst: 0,
         });
         syncedTeams += 1;
       }
